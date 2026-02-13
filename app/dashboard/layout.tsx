@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useSearchParams, usePathname } from 'next/navigation'
 import { useAuth } from '@/app/lib/auth-context'
-import { LayoutDashboard, Building2, Users, DollarSign, Wrench, MessageSquare, FileText, Settings, LogOut, Menu, X, Bell, Search, Moon, Sun, ChevronDown, BarChart3, ItalicIcon as AnalyticsIcon, HelpCircle, Home } from 'lucide-react'
+import { LayoutDashboard, Building2, Users, DollarSign, Wrench, MessageSquare, FileText, Settings, LogOut, Menu, X, Bell, Search, Moon, Sun, ChevronDown, BarChart3, ItalicIcon as AnalyticsIcon, HelpCircle, Home, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface NavItem {
@@ -96,6 +96,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { label: 'Properties', href: '/dashboard/properties', icon: <Building2 className="w-4 h-4" /> },
         { label: 'Tenants', href: '/dashboard/tenants', icon: <Users className="w-4 h-4" /> },
         { label: 'Maintenance', href: '/dashboard/maintenance', icon: <Wrench className="w-4 h-4" />, badge: 3 },
+        { label: 'Map', href: '/dashboard/map', icon: <MapPin className="w-4 h-4" /> },
       ],
     },
     {

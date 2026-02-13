@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import {
   LineChart,
   Line,
@@ -26,10 +27,13 @@ import {
   TrendingUp,
   ArrowRight,
   Users,
+  MapPin,
 } from 'lucide-react'
 import { chartData, expenseBreakdown, occupancyData, sampleProperties, sampleTenants, sampleTransactions } from '@/app/lib/sample-data'
 
 export default function DashboardPage() {
+  const router = useRouter()
+  
   // Calculate metrics
   const totalProperties = sampleProperties.length
   const totalUnits = sampleProperties.reduce((sum, p) => sum + p.units, 0)
@@ -254,6 +258,14 @@ export default function DashboardPage() {
               <Button variant="outline" className="w-full border-border text-foreground justify-start bg-transparent">
                 <Users className="w-4 h-4 mr-2" />
                 Add Tenant
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full border-border text-foreground justify-start bg-transparent"
+                onClick={() => router.push('/dashboard/map')}
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                View Properties Map
               </Button>
             </div>
           </Card>
