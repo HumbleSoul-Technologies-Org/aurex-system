@@ -13,7 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
   signup: (email: string, password: string, name: string) => Promise<void>
   logout: () => void
   setUser: (user: User | null) => void
@@ -24,13 +24,30 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
 
+  // Default/demo credentials
+  const defaultUsers: Array<{ email: string; password: string; role: string; name: string }> = [
+    { email: 'admin@example.com', password: 'adminpass', role: 'admin', name: 'Admin User' },
+    { email: 'tenant@example.com', password: 'tenantpass', role: 'tenant', name: 'Tenant User' },
+  ]
+
   const login = async (email: string, password: string) => {
-    // Placeholder: In a real app, this would call an API
+    // In a real app, replace this with API authentication
+    const match = defaultUsers.find((u) => u.email === email && u.password === password)
+    if (!match) {
+      throw new Error('Invalid credentials')
+    }
     setUser({
-      id: '1',
-      email,
-      name: email.split('@')[0],
+      id: match.email,
+      email: match.email,
+      name: match.name,
+      role: match.role,
     })
+    return {
+      id: match.email,
+      email: match.email,
+      name: match.name,
+      role: match.role,
+    }
   }
 
   const signup = async (email: string, password: string, name: string) => {

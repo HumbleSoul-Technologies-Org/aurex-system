@@ -1,6 +1,7 @@
 'use client'
 
 import React, { Suspense, useState } from 'react'
+import { useAuth } from '@/app/lib/auth-context'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -35,6 +36,19 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const pathname = usePathname()
+
+  const { user: authUser, isAuthenticated } = useAuth()
+
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      // Not authenticated -> send to login
+      window.location.href = '/auth/login'
+      return
+    }
+    if (authUser?.role !== 'tenant') {
+      window.location.href = '/auth/login'
+    }
+  }, [isAuthenticated, authUser])
 
   const unreadNotifications = notifications.filter((n) => !n.read).length
 

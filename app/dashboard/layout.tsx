@@ -7,9 +7,8 @@ import React, { Suspense } from "react"
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useSearchParams } from 'next/navigation'
-import { useAuth } from '@/hooks/useAuth' // Import useAuth hook
-import { logout } from '@/utils/auth' // Declare the logout function
+import { useSearchParams, usePathname } from 'next/navigation'
+import { useAuth } from '@/app/lib/auth-context'
 import { LayoutDashboard, Building2, Users, DollarSign, Wrench, MessageSquare, FileText, Settings, LogOut, Menu, X, Bell, Search, Moon, Sun, ChevronDown, BarChart3, ItalicIcon as AnalyticsIcon, HelpCircle, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -27,7 +26,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const [isDarkMode, setIsDarkMode] = useState(false)
   const searchParams = useSearchParams()
+  const pathname = usePathname()
   const user = { name: 'Alex Johnson', email: 'alex@example.com' }
+
+  const { user: authUser, isAuthenticated } = useAuth()
+
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/auth/login')
+      return
+    }
+    if (authUser?.role !== 'admin') {
+      router.push('/auth/login')
+    }
+  }, [isAuthenticated, authUser, router])
 
   // Sample notifications
   const notifications = [
@@ -71,70 +83,60 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const unreadNotifications = notifications.filter((n) => !n.read).length
 
-  const navItems: NavItem[] = [
+  const navGroups: Array<{ label?: string; items: NavItem[] }> = [
     {
-      label: 'Dashboard',
-      href: '/dashboard',
-      icon: <LayoutDashboard className="w-4 h-4" />,
+      label: undefined,
+      items: [
+        { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+      ],
     },
     {
-      label: 'Properties',
-      href: '/dashboard/properties',
-      icon: <Building2 className="w-4 h-4" />,
-    },
-    {
-      label: 'Tenants',
-      href: '/dashboard/tenants',
-      icon: <Users className="w-4 h-4" />,
+      label: 'Property Management',
+      items: [
+        { label: 'Properties', href: '/dashboard/properties', icon: <Building2 className="w-4 h-4" /> },
+        { label: 'Tenants', href: '/dashboard/tenants', icon: <Users className="w-4 h-4" /> },
+        { label: 'Maintenance', href: '/dashboard/maintenance', icon: <Wrench className="w-4 h-4" />, badge: 3 },
+      ],
     },
     {
       label: 'Finances',
-      href: '/dashboard/finances',
-      icon: <DollarSign className="w-4 h-4" />,
-      badge: 2,
-    },
-    {
-      label: 'Maintenance',
-      href: '/dashboard/maintenance',
-      icon: <Wrench className="w-4 h-4" />,
-      badge: 3,
+      items: [
+        { label: 'Finances', href: '/dashboard/finances', icon: <DollarSign className="w-4 h-4" />, badge: 2 },
+        { label: 'Reports', href: '/dashboard/reports', icon: <FileText className="w-4 h-4" /> },
+      ],
     },
     {
       label: 'Communications',
-      href: '/dashboard/communications',
-      icon: <MessageSquare className="w-4 h-4" />,
+      items: [
+        { label: 'Communications', href: '/dashboard/communications', icon: <MessageSquare className="w-4 h-4" /> },
+        { label: 'Documents', href: '/dashboard/documents', icon: <FileText className="w-4 h-4" /> },
+      ],
     },
     {
-      label: 'Documents',
-      href: '/dashboard/documents',
-      icon: <FileText className="w-4 h-4" />,
-    },
-    {
-      label: 'Analytics',
-      href: '/dashboard/analytics',
-      icon: <BarChart3 className="w-4 h-4" />,
-    },
-    {
-      label: 'Reports',
-      href: '/dashboard/reports',
-      icon: <FileText className="w-4 h-4" />,
-    },
-    {
-      label: 'Tenant Portal',
-      href: '/dashboard/tenant-portal',
-      icon: <Home className="w-4 h-4" />,
+      label: undefined,
+      items: [
+        { label: 'Analytics', href: '/dashboard/analytics', icon: <BarChart3 className="w-4 h-4" /> },
+        { label: 'Tenant Portal', href: '/dashboard/tenant-portal', icon: <Home className="w-4 h-4" /> },
+      ],
     },
     {
       label: 'Settings',
-      href: '/dashboard/settings',
-      icon: <Settings className="w-4 h-4" />,
-    },
-    {
-      label: 'Help & Support',
-      href: '/dashboard/help',
-      icon: <HelpCircle className="w-4 h-4" />,
+      items: [
+        { label: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-4 h-4" /> },
+        { label: 'Help & Support', href: '/dashboard/help', icon: <HelpCircle className="w-4 h-4" /> },
+      ],
     },
   ]
+
+  // Determine the best matching nav item for the current pathname.
+  // We prefer an exact match, otherwise the longest prefix match so deeper routes activate their specific item.
+  const flatItems = navGroups.flatMap((g) => g.items)
+  const activeHref = flatItems.reduce((best: string, item) => {
+    if (!pathname) return best
+    if (pathname === item.href) return item.href
+    if (pathname.startsWith(item.href) && item.href.length > (best?.length || 0)) return item.href
+    return best
+  }, '')
 
   const handleLogout = () => {
     router.push('/')
@@ -172,24 +174,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors group"
-                >
-                  <span className="text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground">
-                    {item.icon}
-                  </span>
-                  <span className="flex-1 text-sm font-medium">{item.label}</span>
-                  {item.badge && (
-                    <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
-                      {item.badge}
-                    </span>
+            <nav className="flex-1 overflow-y-auto p-4">
+              {navGroups.map((group, gi) => (
+                <div key={gi} className="mb-4">
+                  {group.label && (
+                    <div className="px-4 mb-2 text-xs font-semibold text-muted-foreground uppercase">
+                      {group.label}
+                    </div>
                   )}
-                </Link>
+                  <div className="space-y-2">
+                    {group.items.map((item) => {
+                      const isActive = item.href === activeHref
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors group ${
+                            isActive
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                          }`}
+                        >
+                          <span className={`${isActive ? 'text-accent-foreground' : 'text-sidebar-foreground/70'} group-hover:text-sidebar-accent-foreground`}>
+                            {item.icon}
+                          </span>
+                          <span className="flex-1 text-sm font-medium">{item.label}</span>
+                          {item.badge && (
+                            <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
+                              {item.badge}
+                            </span>
+                          )}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
               ))}
             </nav>
 

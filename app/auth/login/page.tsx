@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const { login } = useAuth()
+  const { login, user } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,8 +25,14 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      await login(email, password)
-      router.push('/onboarding')
+      const newUser = await login(email, password)
+      if (newUser?.role === 'admin') {
+        router.push('/dashboard')
+      } else if (newUser?.role === 'tenant') {
+        router.push('/tenant')
+      } else {
+        router.push('/onboarding')
+      }
     } catch (err) {
       setError('Invalid email or password')
     } finally {
@@ -181,6 +187,12 @@ export default function LoginPage() {
                   Create one
                 </Link>
               </p>
+            </div>
+            {/* Demo credentials */}
+            <div className="mt-4 text-xs text-muted-foreground">
+              <p className="mb-1">Demo credentials:</p>
+              <p>Admin: <span className="font-medium">admin@example.com</span> / <span className="font-medium">adminpass</span></p>
+              <p>Tenant: <span className="font-medium">tenant@example.com</span> / <span className="font-medium">tenantpass</span></p>
             </div>
           </div>
         </Card>
