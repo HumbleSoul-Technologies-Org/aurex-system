@@ -5,8 +5,8 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import AddExpenseForm from '@/components/forms/add-expense-form'
-import { sampleTransactions, sampleTenants } from '@/app/lib/sample-data'
+import { sampleTransactions, sampleTenants, getEnrichedTenants, sampleProperties } from '@/app/lib/sample-data'
+import Link from 'next/link'
 import {
   Plus,
   Filter,
@@ -23,41 +23,47 @@ import {
 
 export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState('rent-collection')
-  const [showAddExpense, setShowAddExpense] = useState(false)
-  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all')
+  const allTenants = getEnrichedTenants()
 
-  // Calculate financial metrics
-  const totalRevenue = sampleTransactions
-    .filter((t) => t.type === 'payment')
-    .reduce((sum, t) => sum + t.amount, 0)
-
-  const totalExpenses = sampleTransactions
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0)
-
-  const overdueTenants = sampleTenants.filter((t) => t.balance > 0)
-  const totalOverdue = overdueTenants.reduce((sum, t) => sum + t.balance, 0)
-
-  // Rent collection data
-  const rentPayments = sampleTransactions.filter((t) => t.type === 'payment')
-  const filteredPayments = rentPayments.filter((payment) => {
-    if (filterStatus === 'paid') return payment.status === 'completed'
-    if (filterStatus === 'pending') return payment.status === 'pending'
-    if (filterStatus === 'overdue') return payment.status === 'pending' // Simulating overdue
-    return true
+  // Enrich transactions with tenant and property data
+  const enrichedTransactions = sampleTransactions.map((transaction) => {
+    const tenant = allTenants.find((t) => t.id === transaction.tenantId)
+    const property = sampleProperties.find((p) => p.id === transaction.propertyId)
+    return {
+      ...transaction,
+      tenantName: tenant?.name || 'Unknown Tenant',
+      propertyName: property?.name || 'Unknown Property',
+    }
   })
 
-  const handleAddExpense = (data: any) => {
-    console.log('New expense:', data)
-  }
+  // Calculate financial metrics
+  const rentPayments = enrichedTransactions.filter((t) => t.type === 'rent')
+  const completedPayments = rentPayments.filter((t) => t.status === 'completed')
+  const pendingPayments = rentPayments.filter((t) => t.status === 'pending')
+  
+  const totalRevenue = completedPayments.reduce((sum, t) => sum + t.amount, 0)
+  const totalExpenses = enrichedTransactions
+    .filter((t) => t.type === 'expense')
+    .reduce((sum, t) => sum + t.amount, 0)
+  const totalPending = pendingPayments.reduce((sum, t) => sum + t.amount, 0)
+
+  // Filter payments by status
+  const filteredPayments = rentPayments.filter((payment) => {
+    const matchesStatus = filterStatus === 'all' || payment.status === filterStatus
+    const matchesSearch = !searchQuery || 
+      payment.tenantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      payment.propertyName.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesStatus && matchesSearch
+  })
+
+  const expenseTransactions = enrichedTransactions
+    .filter((t) => t.type === 'expense')
+    .filter((expense) => !searchQuery || expense.description.toLowerCase().includes(searchQuery.toLowerCase()))
 
   return (
     <div className="space-y-6">
-      <AddExpenseForm 
-        isOpen={showAddExpense}
-        onClose={() => setShowAddExpense(false)}
-        onSubmit={handleAddExpense}
-      />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -97,11 +103,11 @@ export default function FinancesPage() {
         </Card>
 
         <Card className="border border-border p-6">
-          <p className="text-sm text-muted-foreground mb-2">Overdue Payments</p>
-          <p className="text-3xl font-bold text-red-600 dark:text-red-400 mb-2">
-            ${totalOverdue.toLocaleString()}
+          <p className="text-sm text-muted-foreground mb-2">Pending Payments</p>
+          <p className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-2">
+            ${totalPending.toLocaleString()}
           </p>
-          <p className="text-xs text-muted-foreground">{overdueTenants.length} tenants</p>
+          <p className="text-xs text-muted-foreground">{pendingPayments.length} payments</p>
         </Card>
       </div>
 
@@ -116,17 +122,9 @@ export default function FinancesPage() {
               Expenses
             </TabsTrigger>
             <TabsTrigger
-              value="expenses"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <TrendingUp className="w-4 h-4 mr-2" />
-              Expenses
-            </TabsTrigger>
-            <TabsTrigger
               value="reports"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
             >
-              <Eye className="w-4 h-4 mr-2" />
               Reports
             </TabsTrigger>
           </TabsList>
@@ -141,13 +139,20 @@ export default function FinancesPage() {
         <TabsContent value="rent-collection" className="p-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1 relative">
-              <Input placeholder="Filter by tenant..." />
+              <Input 
+                placeholder="Filter by tenant or property..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-            <select className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground">
+            <select 
+              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+            >
               <option value="all">All Status</option>
-              <option value="paid">Paid</option>
+              <option value="completed">Paid</option>
               <option value="pending">Pending</option>
-              <option value="overdue">Overdue</option>
             </select>
             <Button size="sm">
               <Plus className="w-4 h-4 mr-2" />
@@ -156,37 +161,45 @@ export default function FinancesPage() {
           </div>
 
           <div className="space-y-3">
-            {filteredPayments.map((payment) => (
-              <div
-                key={payment.id}
-                className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
-              >
-                <div className="flex items-center gap-4 flex-1">
-                  <div>
-                    {payment.status === 'completed' ? (
-                      <CheckCircle className="w-6 h-6 text-green-600" />
-                    ) : (
-                      <Clock className="w-6 h-6 text-orange-600" />
-                    )}
+            {filteredPayments.length > 0 ? (
+              filteredPayments.map((payment: any) => (
+                <div
+                  key={payment.id}
+                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-center gap-4 flex-1">
+                    <div>
+                      {payment.status === 'completed' ? (
+                        <CheckCircle className="w-6 h-6 text-green-600" />
+                      ) : (
+                        <Clock className="w-6 h-6 text-orange-600" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">{payment.tenantName}</p>
+                      <p className="text-sm text-muted-foreground">{payment.propertyName}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{payment.tenant}</p>
-                    <p className="text-sm text-muted-foreground">{payment.property}</p>
+
+                  <div className="text-right">
+                    <p className="font-bold text-foreground">${payment.amount.toLocaleString()}</p>
+                    <p className={`text-xs font-semibold ${payment.status === 'completed' ? 'text-green-600' : 'text-orange-600'}`}>
+                      {payment.status === 'completed' ? 'Paid' : 'Pending'}
+                    </p>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <p className="font-bold text-foreground">${payment.amount}</p>
-                  <p className={`text-xs font-semibold ${payment.status === 'completed' ? 'text-green-600' : 'text-orange-600'}`}>
-                    {payment.status === 'completed' ? 'Paid' : 'Pending'}
-                  </p>
+                  <Link href={`/dashboard/tenants/${payment.tenantId}`}>
+                    <Button variant="ghost" size="sm" className="ml-4">
+                      View
+                    </Button>
+                  </Link>
                 </div>
-
-                <Button variant="ghost" size="sm" className="ml-4">
-                  View
-                </Button>
+              ))
+            ) : (
+              <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
+                <p className="text-muted-foreground">No rent payments found</p>
               </div>
-            ))}
+            )}
           </div>
         </TabsContent>
 
@@ -194,7 +207,11 @@ export default function FinancesPage() {
         <TabsContent value="expenses" className="p-6 space-y-4">
           <div className="flex gap-4 mb-6">
             <div className="flex-1 relative">
-              <Input placeholder="Filter by description..." />
+              <Input 
+                placeholder="Filter by description..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
             <Button size="sm">
               <Plus className="w-4 h-4 mr-2" />
@@ -203,24 +220,30 @@ export default function FinancesPage() {
           </div>
 
           <div className="space-y-3">
-            {sampleTransactions
-              .filter((t) => t.type === 'expense')
-              .map((expense) => (
+            {expenseTransactions.length > 0 ? (
+              expenseTransactions.map((expense: any) => (
                 <div
                   key={expense.id}
                   className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
                 >
                   <div className="flex-1">
                     <p className="font-semibold text-foreground">{expense.description}</p>
-                    <p className="text-sm text-muted-foreground">{expense.property}</p>
+                    <p className="text-sm text-muted-foreground">{expense.propertyName}</p>
                   </div>
 
                   <div className="text-right">
-                    <p className="font-bold text-red-600 dark:text-red-400">-${expense.amount}</p>
-                    <p className="text-xs text-muted-foreground">{expense.date}</p>
+                    <p className="font-bold text-red-600 dark:text-red-400">-${expense.amount.toLocaleString()}</p>
+                    <p className={`text-xs font-semibold ${expense.status === 'completed' ? 'text-green-600' : expense.status === 'pending' ? 'text-orange-600' : 'text-red-600'}`}>
+                      {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
+                    </p>
                   </div>
                 </div>
-              ))}
+              ))
+            ) : (
+              <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
+                <p className="text-muted-foreground">No expenses found</p>
+              </div>
+            )}
           </div>
         </TabsContent>
 

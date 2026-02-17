@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,7 +12,6 @@ import {
   Search,
   LayoutGrid,
   List,
-  Filter,
   ArrowRight,
   Home,
   MapPin,
@@ -24,15 +22,14 @@ import {
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
 
   const filteredProperties = sampleProperties.filter((prop) => {
     const matchesSearch =
       prop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prop.address.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesFilter = filterStatus === 'all' || prop.status === filterStatus
-    return matchesSearch && matchesFilter
+      prop.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      prop.city.toLowerCase().includes(searchQuery.toLowerCase())
+    return matchesSearch
   })
 
   const handleAddProperty = (data: any) => {
@@ -69,25 +66,11 @@ export default function PropertiesPage() {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search properties..."
+              placeholder="Search properties by name, address, or city..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
-          </div>
-
-          {/* Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
           </div>
 
           {/* View Toggle */}
@@ -117,12 +100,15 @@ export default function PropertiesPage() {
                 {/* Property Image */}
                 <div className="relative h-48 bg-secondary overflow-hidden">
                   <img
-                    src={property.image || "/placeholder.svg"}
+                    src={property.images?.[0] || "/placeholder.svg"}
                     alt={property.name}
                     className="w-full h-full object-cover hover:scale-105 transition-transform"
                   />
                   <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    {property.occupancy}% Occupied
+                    {property.occupancy}
+                  </div>
+                  <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
+                    {property.type}
                   </div>
                 </div>
 
@@ -133,7 +119,7 @@ export default function PropertiesPage() {
                       <h3 className="font-bold text-foreground text-lg">{property.name}</h3>
                       <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
                         <MapPin className="w-4 h-4" />
-                        {property.city}, {property.state}
+                        {property.city}, {property.country}
                       </div>
                     </div>
                   </div>
@@ -143,16 +129,23 @@ export default function PropertiesPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground flex items-center gap-2">
                         <Home className="w-4 h-4" />
-                        Units
+                        Available Units
                       </span>
-                      <span className="font-semibold text-foreground">{property.units}</span>
+                      <span className="font-semibold text-foreground">{property.units_available}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground flex items-center gap-2">
                         <DollarSign className="w-4 h-4" />
-                        Monthly Revenue
+                        Price per Unit
                       </span>
-                      <span className="font-semibold text-foreground">${property.monthlyRevenue.toLocaleString()}</span>
+                      <span className="font-semibold text-foreground">${property.price_per_unit.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Tenants
+                      </span>
+                      <span className="font-semibold text-foreground">{property.tenants.length}</span>
                     </div>
                   </div>
 
@@ -177,10 +170,11 @@ export default function PropertiesPage() {
                 <tr className="border-b border-border bg-secondary">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Property</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Location</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Units</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Type</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Available Units</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Occupancy</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Monthly Revenue</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Price per Unit</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Tenants</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
                 </tr>
               </thead>
@@ -189,28 +183,21 @@ export default function PropertiesPage() {
                   <tr key={property.id} className="border-b border-border hover:bg-secondary transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground">{property.name}</td>
                     <td className="px-6 py-4 text-muted-foreground text-sm">
-                      {property.city}, {property.state}
+                      {property.city}, {property.country}
                     </td>
-                    <td className="px-6 py-4 text-foreground">{property.units}</td>
+                    <td className="px-6 py-4 text-foreground capitalize text-sm">{property.type}</td>
+                    <td className="px-6 py-4 text-foreground">{property.units_available}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-primary"
-                            style={{ width: `${property.occupancy}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-foreground w-12 text-right">
-                          {property.occupancy}%
-                        </span>
-                      </div>
+                      <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-full">
+                        {property.occupancy}
+                      </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
-                      ${property.monthlyRevenue.toLocaleString()}
+                      ${property.price_per_unit.toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-semibold rounded-full">
-                        {property.status === 'active' ? 'Active' : 'Inactive'}
+                      <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-semibold rounded-full">
+                        {property.tenants.length}
                       </span>
                     </td>
                     <td className="px-6 py-4">

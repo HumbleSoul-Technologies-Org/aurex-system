@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AddTenantForm from '@/components/forms/add-tenant-form'
-import { sampleTenants } from '@/app/lib/sample-data'
+import { getEnrichedTenants } from '@/app/lib/sample-data'
 import {
   Plus,
   Search,
@@ -22,36 +22,58 @@ import {
 
 export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'current' | 'past-due' | 'moving-out'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'due' | 'moving-out'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
 
-  const filteredTenants = sampleTenants.filter((tenant) => {
+  const enrichedTenants = getEnrichedTenants()
+
+  const filteredTenants = enrichedTenants.filter((tenant) => {
     const matchesSearch =
       tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchQuery.toLowerCase())
+      tenant.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tenant.unit.toLowerCase().includes(searchQuery.toLowerCase())
 
     let matchesStatus = true
-    if (filterStatus === 'current') {
-      matchesStatus = tenant.status === 'current'
-    } else if (filterStatus === 'past-due') {
-      matchesStatus = tenant.balance > 0
+    if (filterStatus === 'paid') {
+      matchesStatus = tenant.status === 'paid'
+    } else if (filterStatus === 'due') {
+      matchesStatus = tenant.status === 'due'
     } else if (filterStatus === 'moving-out') {
-      matchesStatus = tenant.status === 'moving-out'
+      matchesStatus = tenant.status === 'moving out'
     }
 
     return matchesSearch && matchesStatus
   })
 
-  const getStatusColor = (tenant: typeof sampleTenants[0]) => {
-    if (tenant.status === 'moving-out') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
-    if (tenant.balance > 0) return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+  const getStatusColor = (tenant: ReturnType<typeof getEnrichedTenants>[0]) => {
+    if (tenant.status === 'moving out') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+    if (tenant.status === 'due') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
     return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
   }
 
-  const getStatusLabel = (tenant: typeof sampleTenants[0]) => {
-    if (tenant.status === 'moving-out') return 'Moving Out'
-    if (tenant.balance > 0) return 'Past Due'
-    return 'Current'
+  const getStatusLabel = (tenant: ReturnType<typeof getEnrichedTenants>[0]) => {
+    if (tenant.status === 'moving out') return 'leaving'
+    if (tenant.status === 'due') return 'Due'
+    return 'Paid'
+  }
+
+  const calculateLeaseEnd = (leaseStart: string, leaseType: string) => {
+    const startDate = new Date(leaseStart)
+    let months = 1
+
+    if (leaseType === 'full year') {
+      months = 12
+    } else if (leaseType === '6mnths') {
+      months = 6
+    } else if (leaseType === '3mnths') {
+      months = 3
+    } else if (leaseType === 'monthly') {
+      months = 1
+    }
+
+    const leaseEnd = new Date(startDate)
+    leaseEnd.setMonth(leaseEnd.getMonth() + months)
+    return leaseEnd
   }
 
   const handleAddTenant = (data: any) => {
@@ -103,8 +125,8 @@ export default function TenantsPage() {
               className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
             >
               <option value="all">All Status</option>
-              <option value="current">Current</option>
-              <option value="past-due">Past Due</option>
+              <option value="paid">Rent Paid</option>
+              <option value="due">Payment Due</option>
               <option value="moving-out">Moving Out</option>
             </select>
           </div>
@@ -118,11 +140,14 @@ export default function TenantsPage() {
             <thead>
               <tr className="border-b border-border bg-secondary">
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Tenant</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Property/Unit</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Contact</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Rent</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Property</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Unit</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Email</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Phone</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Monthly Rent</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease Type</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Balance</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease Start</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease End</th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
               </tr>
@@ -131,47 +156,37 @@ export default function TenantsPage() {
               {filteredTenants.map((tenant) => (
                 <tr key={tenant.id} className="border-b border-border hover:bg-secondary transition-colors">
                   <td className="px-6 py-4 font-semibold text-foreground">{tenant.name}</td>
-                  <td className="px-6 py-4 text-muted-foreground text-sm">
-                    Unit {tenant.unit}
+                  <td className="px-6 py-4 text-sm font-medium text-blue-600">
+                    {tenant.property?.name || 'Unknown'}
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                        <Mail className="w-4 h-4" />
-                        <a href={`mailto:${tenant.email}`}>{tenant.email}</a>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted-foreground hover:text-foreground">
-                        <Phone className="w-4 h-4" />
-                        <a href={`tel:${tenant.phone}`}>{tenant.phone}</a>
-                      </div>
-                    </div>
+                  <td className="px-6 py-4 text-muted-foreground text-sm">{tenant.unit}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <a href={`mailto:${tenant.email}`} className="text-blue-600 hover:underline">
+                      {tenant.email}
+                    </a>
                   </td>
-                  <td className="px-6 py-4 font-semibold text-foreground">${tenant.rentAmount}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <a href={`tel:${tenant.phone}`} className="text-blue-600 hover:underline">
+                      {tenant.phone}
+                    </a>
+                  </td>
+                  <td className="px-6 py-4 font-semibold text-foreground">${tenant.rentAmount.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-sm text-foreground capitalize">{tenant.lease_type}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(tenant)}`}>
                       {getStatusLabel(tenant)}
                     </span>
                   </td>
-                  <td className={`px-6 py-4 font-semibold ${tenant.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {tenant.balance > 0 ? (
-                      <div className="flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
-                        ${tenant.balance}
-                      </div>
-                    ) : (
-                      <span>$0</span>
-                    )}
+                  <td className="px-6 py-4 text-sm text-muted-foreground">
+                    {new Date(tenant.lease_start).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground text-sm">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {new Date(tenant.leaseEnd).toLocaleDateString()}
-                    </div>
+                  <td className="px-6 py-4 text-sm text-muted-foreground">
+                    {calculateLeaseEnd(tenant.lease_start, tenant.lease_type).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4">
                     <Link href={`/dashboard/tenants/${tenant.id}`}>
                       <Button size="sm" variant="outline" className="border-border bg-transparent">
-                        <Eye className="w-4 h-4" />
+                        View
                       </Button>
                     </Link>
                   </td>

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { sampleMaintenanceRequests } from '@/app/lib/sample-data'
+import { sampleMaintenanceRequests, getEnrichedTenants, sampleProperties, sampleTransactions } from '@/app/lib/sample-data'
+import Link from 'next/link'
 import {
   Plus,
   Wrench,
@@ -19,32 +20,58 @@ import {
 interface MaintenanceRequest {
   id: string
   property: string
+  propertyId: string
   unit: string
-  tenant: string
+  tenantName: string
+  tenantId: string
   description: string
-  priority: 'high' | 'medium' | 'low'
-  status: 'requested' | 'assigned' | 'in-progress' | 'completed'
+  priority: 'high' | 'medium' | 'low' | 'critical'
+  status: 'pending' | 'assigned' | 'completed'
   createdDate: string
+  completedDate: string | null
   assignedTo: string | null
-  estimatedCost: number
+  actualCost: number
+  transactionId: string | null
 }
 
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
-  const [selectedRequest, setSelectedRequest] = useState<MaintenanceRequest | null>(null)
+  const allTenants = getEnrichedTenants()
 
-  const requests = sampleMaintenanceRequests as MaintenanceRequest[]
+  const requests: MaintenanceRequest[] = sampleMaintenanceRequests.map((req: any) => {
+    const tenant = allTenants.find((t) => t.id === req.tenantId)
+    const property = sampleProperties.find((p) => p.id === req.property)
+    const transaction = sampleTransactions.find((t) => t.maintenanceId === req.id)
+
+    return {
+      id: req.id,
+      property: property?.name || req.property,
+      propertyId: req.property,
+      unit: req.unit,
+      tenantName: tenant?.name || 'Unknown Tenant',
+      tenantId: req.tenantId,
+      description: req.description,
+      priority: req.priority,
+      status: req.status,
+      createdDate: req.createdAt,
+      completedDate: req.completedAt,
+      assignedTo: req.assignedTo || null,
+      actualCost: req.cost,
+      transactionId: transaction?.id || null,
+    }
+  })
 
   // Group requests by status
   const groupedRequests = {
-    requested: requests.filter((r) => r.status === 'requested'),
+    pending: requests.filter((r) => r.status === 'pending'),
     assigned: requests.filter((r) => r.status === 'assigned'),
-    'in-progress': requests.filter((r) => r.status === 'in-progress'),
     completed: requests.filter((r) => r.status === 'completed'),
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
+      case 'critical':
+        return 'bg-red-200 dark:bg-red-900/40 text-red-800 dark:text-red-300'
       case 'high':
         return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
       case 'medium':
@@ -58,12 +85,10 @@ export default function MaintenancePage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'requested':
+      case 'pending':
         return <AlertCircle className="w-4 h-4 text-yellow-600" />
       case 'assigned':
         return <Clock className="w-4 h-4 text-blue-600" />
-      case 'in-progress':
-        return <Wrench className="w-4 h-4 text-purple-600" />
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-600" />
       default:
@@ -81,26 +106,33 @@ export default function MaintenancePage() {
               {request.property} - Unit {request.unit}
             </p>
           </div>
-          <span className={`px-2 py-1 text-xs font-semibold rounded capitalize ${getPriorityColor(request.priority)}`}>
+          <span className={`px-2 py-1 text-xs font-semibold rounded capitalize whitespace-nowrap ${getPriorityColor(request.priority)}`}>
             {request.priority}
           </span>
         </div>
 
         <div className="pt-2 border-t border-border space-y-2">
-          {request.tenant && request.tenant !== 'Unknown' && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <User className="w-3 h-3" />
-              {request.tenant}
-            </div>
-          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <DollarSign className="w-3 h-3" />
-            Est. ${request.estimatedCost}
+            <User className="w-3 h-3 flex-shrink-0" />
+            <Link href={`/dashboard/tenants/${request.tenantId}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+              {request.tenantName}
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <DollarSign className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
+            <span className="text-muted-foreground">Cost: </span>
+            <span className="font-semibold text-foreground">${request.actualCost.toLocaleString()}</span>
           </div>
           {request.assignedTo && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <CheckCircle className="w-3 h-3" />
+              <CheckCircle className="w-3 h-3 flex-shrink-0" />
               {request.assignedTo}
+            </div>
+          )}
+          {request.completedDate && (
+            <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+              <Calendar className="w-3 h-3 flex-shrink-0" />
+              Completed: {new Date(request.completedDate).toLocaleDateString()}
             </div>
           )}
         </div>
@@ -120,6 +152,46 @@ export default function MaintenancePage() {
           <Plus className="w-4 h-4 mr-2" />
           Create Work Order
         </Button>
+      </div>
+
+      {/* Statistics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Total Requests</p>
+              <p className="text-2xl font-bold text-foreground">{requests.length}</p>
+            </div>
+            <Wrench className="w-8 h-8 text-primary/60" />
+          </div>
+        </Card>
+        <Card className="border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Pending</p>
+              <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{groupedRequests.pending.length}</p>
+            </div>
+            <AlertCircle className="w-8 h-8 text-yellow-600/60" />
+          </div>
+        </Card>
+        <Card className="border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Assigned</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{groupedRequests.assigned.length}</p>
+            </div>
+            <Clock className="w-8 h-8 text-blue-600/60" />
+          </div>
+        </Card>
+        <Card className="border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Total Cost</p>
+              <p className="text-2xl font-bold text-foreground">${requests.reduce((sum, r) => sum + r.actualCost, 0).toLocaleString()}</p>
+            </div>
+            <DollarSign className="w-8 h-8 text-primary/60" />
+          </div>
+        </Card>
       </div>
 
       {/* View Toggle */}
@@ -142,18 +214,18 @@ export default function MaintenancePage() {
 
       {/* Kanban View */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Requested Column */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Pending Column */}
           <div>
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
               <AlertCircle className="w-5 h-5 text-yellow-600" />
-              <h3 className="font-bold text-foreground">Requested</h3>
+              <h3 className="font-bold text-foreground">Pending</h3>
               <span className="ml-auto px-2 py-1 bg-secondary text-foreground text-xs font-semibold rounded-full">
-                {groupedRequests.requested.length}
+                {groupedRequests.pending.length}
               </span>
             </div>
             <div className="space-y-3">
-              {groupedRequests.requested.map((request) => (
+              {groupedRequests.pending.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))}
             </div>
@@ -170,22 +242,6 @@ export default function MaintenancePage() {
             </div>
             <div className="space-y-3">
               {groupedRequests.assigned.map((request) => (
-                <RequestCard key={request.id} request={request} />
-              ))}
-            </div>
-          </div>
-
-          {/* In Progress Column */}
-          <div>
-            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-border">
-              <Wrench className="w-5 h-5 text-purple-600" />
-              <h3 className="font-bold text-foreground">In Progress</h3>
-              <span className="ml-auto px-2 py-1 bg-secondary text-foreground text-xs font-semibold rounded-full">
-                {groupedRequests['in-progress'].length}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {groupedRequests['in-progress'].map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))}
             </div>
@@ -218,11 +274,12 @@ export default function MaintenancePage() {
                 <tr className="border-b border-border bg-secondary">
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Description</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Property</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Tenant</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Priority</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Assigned To</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Est. Cost</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Date</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Cost</th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,6 +287,11 @@ export default function MaintenancePage() {
                   <tr key={request.id} className="border-b border-border hover:bg-secondary transition-colors">
                     <td className="px-6 py-4 font-semibold text-foreground text-sm">{request.description}</td>
                     <td className="px-6 py-4 text-muted-foreground text-sm">{request.property}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <Link href={`/dashboard/tenants/${request.tenantId}`} className="text-blue-600 dark:text-blue-400 hover:underline">
+                        {request.tenantName}
+                      </Link>
+                    </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 text-xs font-semibold rounded capitalize ${getPriorityColor(request.priority)}`}>
                         {request.priority}
@@ -246,8 +308,8 @@ export default function MaintenancePage() {
                     <td className="px-6 py-4 text-sm text-muted-foreground">
                       {request.assignedTo || '-'}
                     </td>
-                    <td className="px-6 py-4 font-semibold text-foreground">${request.estimatedCost}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{request.createdDate}</td>
+                    <td className="px-6 py-4 font-semibold text-foreground">${request.actualCost.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(request.createdDate).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>

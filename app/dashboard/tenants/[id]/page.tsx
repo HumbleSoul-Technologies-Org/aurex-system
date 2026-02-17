@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { use } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { sampleTenants, sampleTransactions } from '@/app/lib/sample-data'
+import { getEnrichedTenants, sampleProperties, getTenantRentPayments } from '@/app/lib/sample-data'
 import {
   ArrowLeft,
   Mail,
@@ -17,17 +19,73 @@ import {
   Calendar,
   Edit,
   Send,
+  Home,
+  User,
+  DollarSign,
+  CheckCircle,
+  Clock,
+  XCircle,
 } from 'lucide-react'
 
 interface TenantDetailPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
-  const tenant = sampleTenants.find((t) => t.id === params.id)
+  const { id } = use(params)
+  const allTenants = getEnrichedTenants()
+  const tenant = allTenants.find((t) => t.id === id)
   const [activeTab, setActiveTab] = useState('overview')
+
+  const calculateLeaseEnd = (leaseStart: string, leaseType: string) => {
+    const startDate = new Date(leaseStart)
+    let months = 1
+
+    if (leaseType === 'full year') {
+      months = 12
+    } else if (leaseType === '6mnths') {
+      months = 6
+    } else if (leaseType === '3mnths') {
+      months = 3
+    } else if (leaseType === 'monthly') {
+      months = 1
+    }
+
+    const leaseEnd = new Date(startDate)
+    leaseEnd.setMonth(leaseEnd.getMonth() + months)
+    return leaseEnd
+  }
+
+  const calculateTotalPaid = (leaseStart: string, rentAmount: number) => {
+    const startDate = new Date(leaseStart)
+    const today = new Date()
+    
+    // Calculate the number of months between lease start and today
+    let months = 0
+    let current = new Date(startDate)
+    
+    while (current < today) {
+      months++
+      current.setMonth(current.getMonth() + 1)
+    }
+    
+    // Total paid is months × monthly rent
+    return months * rentAmount
+  }
+
+  const getStatusColor = (status: string) => {
+    if (status === 'moving out') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+    if (status === 'due') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+    return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+  }
+
+  const getStatusLabel = (status: string) => {
+    if (status === 'moving out') return 'Moving Out'
+    if (status === 'due') return 'Payment Due'
+    return 'Rent Paid'
+  }
 
   if (!tenant) {
     return (
@@ -45,9 +103,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     )
   }
 
-  const tenantPayments = sampleTransactions.filter(
-    (t) => t.type === 'payment' && t.tenant === tenant.name
-  )
+  const leaseEnd = calculateLeaseEnd(tenant.lease_start, tenant.lease_type)
 
   return (
     <div className="space-y-6">
@@ -68,38 +124,53 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
       {/* Tenant Info Card */}
       <Card className="border border-border p-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          {/* Tenant Details */}
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-4">{tenant.name}</h1>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Mail className="w-4 h-4" />
-                <a href={`mailto:${tenant.email}`} className="hover:text-foreground">
-                  {tenant.email}
-                </a>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Phone className="w-4 h-4" />
-                <a href={`tel:${tenant.phone}`} className="hover:text-foreground">
-                  {tenant.phone}
-                </a>
+          {/* Avatar & Tenant Details */}
+          <div className="flex items-start gap-4">
+            <Image
+              src={tenant.image}
+              alt={tenant.name}
+              width={100}
+              height={100}
+              className="rounded-lg object-cover"
+            />
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-1">{tenant.name}</h1>
+              {tenant.gender && (
+                <p className="text-sm text-muted-foreground mb-3 capitalize">Gender: {tenant.gender}</p>
+              )}
+              {tenant.bio && (
+                <p className="text-sm text-muted-foreground mb-3 max-w-md">{tenant.bio}</p>
+              )}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="w-4 h-4" />
+                  <a href={`mailto:${tenant.email}`} className="hover:text-foreground text-sm">
+                    {tenant.email}
+                  </a>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="w-4 h-4" />
+                  <a href={`tel:${tenant.phone}`} className="hover:text-foreground text-sm">
+                    {tenant.phone}
+                  </a>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Status & Balance */}
+          {/* Status & Property */}
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Lease Status</p>
-              <span className="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-sm font-semibold inline-block">
-                {tenant.status === 'current' ? 'Current' : 'Moving Out'}
+              <span className={`px-4 py-2 rounded-lg text-sm font-semibold inline-block ${getStatusColor(tenant.status)}`}>
+                {getStatusLabel(tenant.status)}
               </span>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Account Balance</p>
-              <p className={`text-2xl font-bold ${tenant.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                ${tenant.balance}
-              </p>
+              <p className="text-sm text-muted-foreground mb-1">Property</p>
+              <Link href={`/dashboard/properties/${tenant.propertyId}`} className="text-blue-600 hover:underline font-semibold text-sm">
+                {tenant.property?.name || 'Unknown'}
+              </Link>
             </div>
           </div>
         </div>
@@ -141,36 +212,58 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="p-6 space-y-6">
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Unit</p>
                 <p className="text-lg font-semibold text-foreground">{tenant.unit}</p>
               </div>
               <div>
+                <p className="text-sm text-muted-foreground mb-1">Property</p>
+                <Link href={`/dashboard/properties/${tenant.propertyId}`} className="text-blue-600 hover:underline">
+                  {tenant.property?.name || 'Unknown'}
+                </Link>
+              </div>
+              <div>
                 <p className="text-sm text-muted-foreground mb-1">Monthly Rent</p>
-                <p className="text-lg font-semibold text-foreground">${tenant.rentAmount}</p>
+                <p className="text-lg font-semibold text-foreground">${tenant.rentAmount.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Lease Type</p>
+                <p className="text-lg font-semibold text-foreground capitalize">{tenant.lease_type}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Lease Start</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {new Date(tenant.leaseStart).toLocaleDateString()}
+                  {new Date(tenant.lease_start).toLocaleDateString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Lease End</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {new Date(tenant.leaseEnd).toLocaleDateString()}
+                  {leaseEnd.toLocaleDateString()}
                 </p>
               </div>
             </div>
 
-            {tenant.balance > 0 && (
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+            {tenant.status === 'due' && (
+              <div className="p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg flex gap-3">
+                <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-red-900 dark:text-red-200">Payment Overdue</p>
+                  <p className="font-semibold text-orange-900 dark:text-orange-200">Payment Due</p>
+                  <p className="text-sm text-orange-800 dark:text-orange-300">
+                    Rent payment is due. Please follow up with the tenant.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {tenant.status === 'moving out' && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-900 dark:text-red-200">Tenant Moving Out</p>
                   <p className="text-sm text-red-800 dark:text-red-300">
-                    This tenant has an outstanding balance of ${tenant.balance}. Consider sending a payment reminder.
+                    This tenant is planning to vacate the property. Schedule an exit inspection.
                   </p>
                 </div>
               </div>
@@ -179,58 +272,141 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
           {/* Payments Tab */}
           <TabsContent value="payments" className="p-6">
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Monthly Rent</p>
+                  <p className="text-2xl font-bold text-foreground">${tenant.rentAmount.toLocaleString()}</p>
+                </Card>
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Annual Rent</p>
+                  <p className="text-2xl font-bold text-foreground">${(tenant.rentAmount * 12).toLocaleString()}</p>
+                </Card>
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Total Paid</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">${calculateTotalPaid(tenant.lease_start, tenant.rentAmount).toLocaleString()}</p>
+                </Card>
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Payment Status</p>
+                  <span className={`px-3 py-1 text-xs font-semibold rounded-full inline-block ${getStatusColor(tenant.status)}`}>
+                    {getStatusLabel(tenant.status)}
+                  </span>
+                </Card>
+              </div>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-foreground">Payment History</h3>
                 <Button size="sm">Record Payment</Button>
               </div>
-              <div className="space-y-3">
-                {tenantPayments.length > 0 ? (
-                  tenantPayments.map((payment) => (
-                    <div
-                      key={payment.id}
-                      className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
-                    >
-                      <div>
-                        <p className="font-semibold text-foreground">Rent Payment</p>
-                        <p className="text-sm text-muted-foreground">{payment.date}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-green-600 dark:text-green-400">+${payment.amount}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{payment.status}</p>
-                      </div>
+              
+              {(() => {
+                const transactions = getTenantRentPayments(tenant.id)
+                
+                if (transactions.length === 0) {
+                  return (
+                    <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
+                      <p className="text-muted-foreground">No payment records found</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground text-center py-8">No payment history</p>
-                )}
-              </div>
+                  )
+                }
+                
+                return (
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-secondary/50 border-b border-border">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Transaction ID</th>
+                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Amount</th>
+                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Description</th>
+                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {transactions.map((transaction) => (
+                          <tr key={transaction.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                            <td className="px-4 py-3 text-sm text-foreground font-medium">{transaction.id}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className="font-semibold text-green-600 dark:text-green-400">
+                                ${transaction.amount.toLocaleString()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-muted-foreground">{transaction.description}</td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded inline-flex items-center gap-1 ${
+                                transaction.status === 'completed'
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                  : transaction.status === 'pending'
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                              }`}>
+                                {transaction.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                                {transaction.status === 'pending' && <Clock className="w-3 h-3" />}
+                                {transaction.status === 'failed' && <XCircle className="w-3 h-3" />}
+                                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
             </div>
           </TabsContent>
 
           {/* Documents Tab */}
           <TabsContent value="documents" className="p-6">
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground mb-4">No documents uploaded</p>
-              <Button>Upload Document</Button>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Maintenance Requests</p>
+                  <p className="text-2xl font-bold text-foreground">{tenant.maintainances?.length || 0}</p>
+                </Card>
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Messages</p>
+                  <p className="text-2xl font-bold text-foreground">{tenant.messages?.length || 0}</p>
+                </Card>
+                <Card className="border border-border p-4">
+                  <p className="text-sm text-muted-foreground mb-2">Reports</p>
+                  <p className="text-2xl font-bold text-foreground">{tenant.reports?.length || 0}</p>
+                </Card>
+              </div>
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-muted-foreground mb-4">Document management coming soon</p>
+                <Button>Upload Document</Button>
+              </div>
             </div>
           </TabsContent>
 
           {/* Messages Tab */}
           <TabsContent value="messages" className="p-6">
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-foreground">Tenant Messages</h3>
+                <h3 className="font-bold text-foreground">Tenant Communication</h3>
                 <Button size="sm">
                   <Send className="w-4 h-4 mr-2" />
-                  Send Message
+                  New Message
                 </Button>
               </div>
-              <div className="text-center py-12">
-                <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">No messages yet</p>
-              </div>
+              {tenant.messages && tenant.messages.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {tenant.messages.length} message{tenant.messages.length !== 1 ? 's' : ''} on record
+                  </p>
+                  {tenant.messages.map((msgId, index) => (
+                    <div key={index} className="p-4 border border-border rounded-lg hover:bg-secondary transition-colors">
+                      <p className="font-semibold text-foreground text-sm">{msgId}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Message ID: {msgId}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">No messages yet</p>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
