@@ -24,21 +24,21 @@ export default function MapContent() {
 
     // Calculate center coordinates for map
     const lats = sampleProperties
-      .map((p) => p.location?.latitude || 0)
+      .map((p) => p.location?.lat || 0)
       .filter((lat) => lat !== 0)
     const longs = sampleProperties
-      .map((p) => p.location?.longitude || 0)
+      .map((p) => p.location?.long || 0)
       .filter((long) => long !== 0)
 
     const centerLat =
-      lats.length > 0 ? lats.reduce((a, b) => a + b) / lats.length : 20
+      lats.length > 0 ? lats.reduce((a, b) => a + b) / lats.length : 0
     const centerLong =
-      longs.length > 0 ? longs.reduce((a, b) => a + b) / longs.length : 0
+      longs.length > 0 ? longs.reduce((a, b) => a + b) / longs.length : 20
 
     // Initialize map
     const map = L.map(mapContainer.current, {
       center: [centerLat, centerLong],
-      zoom: 3,
+      zoom: 5,
     })
 
     // Add tile layer
@@ -50,34 +50,36 @@ export default function MapContent() {
 
     // Add markers for each property
     sampleProperties.forEach((property) => {
-      if (property.location?.latitude && property.location?.longitude) {
+      if (property.location?.lat && property.location?.long) {
         const marker = L.marker([
-          property.location.latitude,
-          property.location.longitude,
+          property.location.lat,
+          property.location.long,
         ]).addTo(map)
 
+        const monthlyRevenue = property.price_per_unit * property.units_available
+
         const popupContent = `
-          <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 250px;">
+          <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 260px;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">${property.name}</h3>
             <p style="margin: 4px 0; font-size: 13px; color: #666;">${property.address}</p>
-            <p style="margin: 4px 0; font-size: 13px; color: #666;">${property.location.city}, ${property.location.country}</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #666;">${property.city}, ${property.country}</p>
             <div style="margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #e0e0e0;">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
                 <div>
                   <p style="margin: 0; color: #999;"><strong>Units</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">${property.units}</p>
+                  <p style="margin: 4px 0 0 0; color: #333;">${property.units_available}</p>
                 </div>
                 <div>
                   <p style="margin: 0; color: #999;"><strong>Type</strong></p>
                   <p style="margin: 4px 0 0 0; color: #333;">${property.type}</p>
                 </div>
                 <div>
-                  <p style="margin: 0; color: #999;"><strong>Revenue</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">$${property.monthlyRevenue.toLocaleString()}</p>
+                  <p style="margin: 0; color: #999;"><strong>Monthly Income</strong></p>
+                  <p style="margin: 4px 0 0 0; color: #333;">$${monthlyRevenue.toLocaleString()}</p>
                 </div>
                 <div>
                   <p style="margin: 0; color: #999;"><strong>Occupancy</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">${property.occupancy}%</p>
+                  <p style="margin: 4px 0 0 0; color: #333;">${property.occupancy}</p>
                 </div>
               </div>
             </div>
