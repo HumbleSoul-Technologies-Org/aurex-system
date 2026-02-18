@@ -98,7 +98,7 @@ export default function PropertiesPage() {
             <Link key={property.id} href={`/dashboard/properties/${property.id}`}>
               <Card className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
                 {/* Property Image */}
-                <div className="relative h-48 bg-secondary overflow-hidden">
+                <div className="relative h-96 bg-secondary overflow-hidden">
                   <img
                     src={property.images?.[0] || "/placeholder.svg"}
                     alt={property.name}

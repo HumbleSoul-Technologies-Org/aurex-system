@@ -1,150 +1,229 @@
-'use client'
+"use client";
 
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-import React, { Suspense } from "react"
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useSearchParams, usePathname } from 'next/navigation'
-import { useAuth } from '@/app/lib/auth-context'
-import { LayoutDashboard, Building2, Users, DollarSign, Wrench, MessageSquare, FileText, Settings, LogOut, Menu, X, Bell, Search, Moon, Sun, ChevronDown, BarChart3, ItalicIcon as AnalyticsIcon, HelpCircle, Home, MapPin } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import React, { Suspense } from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
+import { useAuth } from "@/app/lib/auth-context";
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  DollarSign,
+  Wrench,
+  MessageSquare,
+  FileText,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Bell,
+  Search,
+  Moon,
+  Sun,
+  ChevronDown,
+  BarChart3,
+  ItalicIcon as AnalyticsIcon,
+  HelpCircle,
+  Home,
+  MapPin,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface NavItem {
-  label: string
-  href: string
-  icon: React.ReactNode
-  badge?: number
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  badge?: number;
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const router = useRouter()
-  const [isDarkMode, setIsDarkMode] = useState(false)
-  const searchParams = useSearchParams()
-  const pathname = usePathname()
-  const user = { name: 'Alex Johnson', email: 'alex@example.com' }
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const router = useRouter();
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const user = { name: "Alex Johnson", email: "alex@example.com" };
 
-  const { user: authUser, isAuthenticated } = useAuth()
+  const { user: authUser, isAuthenticated } = useAuth();
 
   React.useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/auth/login')
-      return
+      router.push("/auth/login");
+      return;
     }
-    if (authUser?.role !== 'admin') {
-      router.push('/auth/login')
+    if (authUser?.role !== "admin") {
+      router.push("/auth/login");
     }
-  }, [isAuthenticated, authUser, router])
+  }, [isAuthenticated, authUser, router]);
 
   // Sample notifications
   const notifications = [
     {
       id: 1,
-      title: 'Rent Payment Received',
-      message: 'Payment of $2,500 received from Unit 301',
-      type: 'Payment',
+      title: "Rent Payment Received",
+      message: "Payment of $2,500 received from Unit 301",
+      type: "Payment",
       read: false,
       date: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      actionUrl: '/dashboard/finances',
+      actionUrl: "/dashboard/finances",
     },
     {
       id: 2,
-      title: 'Maintenance Request',
-      message: 'Urgent: Broken HVAC in Unit 201',
-      type: 'Maintenance',
+      title: "Maintenance Request",
+      message: "Urgent: Broken HVAC in Unit 201",
+      type: "Maintenance",
       read: false,
       date: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      actionUrl: '/dashboard/maintenance',
+      actionUrl: "/dashboard/maintenance",
     },
     {
       id: 3,
-      title: 'Payment Overdue',
-      message: 'Unit 402 - Rent overdue by 5 days',
-      type: 'Payment',
+      title: "Payment Overdue",
+      message: "Unit 402 - Rent overdue by 5 days",
+      type: "Payment",
       read: true,
       date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      actionUrl: '/dashboard/finances',
+      actionUrl: "/dashboard/finances",
     },
     {
       id: 4,
-      title: 'Tenant Application',
-      message: 'New tenant application for Unit 105',
-      type: 'General',
+      title: "Tenant Application",
+      message: "New tenant application for Unit 105",
+      type: "General",
       read: true,
       date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      actionUrl: '/dashboard/tenants',
+      actionUrl: "/dashboard/tenants",
     },
-  ]
+  ];
 
-  const unreadNotifications = notifications.filter((n) => !n.read).length
+  const unreadNotifications = notifications.filter((n) => !n.read).length;
 
   const navGroups: Array<{ label?: string; items: NavItem[] }> = [
     {
       label: undefined,
       items: [
-        { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+        {
+          label: "Dashboard",
+          href: "/dashboard",
+          icon: <LayoutDashboard className="w-4 h-4" />,
+        },
       ],
     },
     {
-      label: 'Property Management',
+      label: "Property Management",
       items: [
-        { label: 'Properties', href: '/dashboard/properties', icon: <Building2 className="w-4 h-4" /> },
-        { label: 'Tenants', href: '/dashboard/tenants', icon: <Users className="w-4 h-4" /> },
-        { label: 'Maintenance', href: '/dashboard/maintenance', icon: <Wrench className="w-4 h-4" />, badge: 3 },
-        { label: 'Map', href: '/dashboard/map', icon: <MapPin className="w-4 h-4" /> },
+        {
+          label: "Properties",
+          href: "/dashboard/properties",
+          icon: <Building2 className="w-4 h-4" />,
+        },
+        {
+          label: "Tenants",
+          href: "/dashboard/tenants",
+          icon: <Users className="w-4 h-4" />,
+        },
+        {
+          label: "Maintenance",
+          href: "/dashboard/maintenance",
+          icon: <Wrench className="w-4 h-4" />,
+          badge: 3,
+        },
+        {
+          label: "Map",
+          href: "/dashboard/map",
+          icon: <MapPin className="w-4 h-4" />,
+        },
       ],
     },
     {
-      label: 'Finances',
+      label: "Finances",
       items: [
-        { label: 'Finances', href: '/dashboard/finances', icon: <DollarSign className="w-4 h-4" />, badge: 2 },
-        { label: 'Reports', href: '/dashboard/reports', icon: <FileText className="w-4 h-4" /> },
+        {
+          label: "Finances",
+          href: "/dashboard/finances",
+          icon: <DollarSign className="w-4 h-4" />,
+          badge: 2,
+        },
       ],
     },
     {
-      label: 'Communications',
+      label: "Communications",
       items: [
-        { label: 'Communications', href: '/dashboard/communications', icon: <MessageSquare className="w-4 h-4" /> },
-        { label: 'Documents', href: '/dashboard/documents', icon: <FileText className="w-4 h-4" /> },
+        {
+          label: "Communications",
+          href: "/dashboard/communications",
+          icon: <MessageSquare className="w-4 h-4" />,
+        },
+        {
+          label: "Documents",
+          href: "/dashboard/documents",
+          icon: <FileText className="w-4 h-4" />,
+        },
       ],
     },
     {
       label: undefined,
       items: [
-        { label: 'Analytics', href: '/dashboard/analytics', icon: <BarChart3 className="w-4 h-4" /> },
-        { label: 'Tenant Portal', href: '/dashboard/tenant-portal', icon: <Home className="w-4 h-4" /> },
+        {
+          label: "Analytics",
+          href: "/dashboard/analytics",
+          icon: <BarChart3 className="w-4 h-4" />,
+        },
+        {
+          label: "Tenant Portal",
+          href: "/dashboard/tenant-portal",
+          icon: <Home className="w-4 h-4" />,
+        },
       ],
     },
     {
-      label: 'Settings',
+      label: "Settings",
       items: [
-        { label: 'Settings', href: '/dashboard/settings', icon: <Settings className="w-4 h-4" /> },
-        { label: 'Help & Support', href: '/dashboard/help', icon: <HelpCircle className="w-4 h-4" /> },
+        {
+          label: "Settings",
+          href: "/dashboard/settings",
+          icon: <Settings className="w-4 h-4" />,
+        },
+        {
+          label: "Help & Support",
+          href: "/dashboard/help",
+          icon: <HelpCircle className="w-4 h-4" />,
+        },
       ],
     },
-  ]
+  ];
 
   // Determine the best matching nav item for the current pathname.
   // We prefer an exact match, otherwise the longest prefix match so deeper routes activate their specific item.
-  const flatItems = navGroups.flatMap((g) => g.items)
+  const flatItems = navGroups.flatMap((g) => g.items);
   const activeHref = flatItems.reduce((best: string, item) => {
-    if (!pathname) return best
-    if (pathname === item.href) return item.href
-    if (pathname.startsWith(item.href) && item.href.length > (best?.length || 0)) return item.href
-    return best
-  }, '')
+    if (!pathname) return best;
+    if (pathname === item.href) return item.href;
+    if (
+      pathname.startsWith(item.href) &&
+      item.href.length > (best?.length || 0)
+    )
+      return item.href;
+    return best;
+  }, "");
 
   const handleLogout = () => {
-    router.push('/')
-  }
+    router.push("/");
+  };
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
+    <div className={isDarkMode ? "dark" : ""}>
       <Suspense fallback={<div>Loading...</div>}>
         <div className="flex h-screen bg-background text-foreground">
           {/* Mobile Menu Overlay */}
@@ -158,18 +237,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Sidebar */}
           <aside
             className={`fixed md:relative w-64 h-screen bg-sidebar border-r border-sidebar-border flex flex-col transition-transform z-30 md:z-0 ${
-              mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+              mobileMenuOpen
+                ? "translate-x-0"
+                : "-translate-x-full md:translate-x-0"
             }`}
           >
             {/* Sidebar Header */}
             <div className="p-6 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
-                  <span className="text-sidebar-primary-foreground font-bold">PM</span>
+                  <span className="text-sidebar-primary-foreground font-bold">
+                    PM
+                  </span>
                 </div>
                 <div>
-                  <p className="font-bold text-sidebar-foreground">PropManager</p>
-                  <p className="text-xs text-sidebar-foreground/60">Property Management</p>
+                  <p className="font-bold text-sidebar-foreground">
+                    PropManager
+                  </p>
+                  <p className="text-xs text-sidebar-foreground/60">
+                    Property Management
+                  </p>
                 </div>
               </div>
             </div>
@@ -185,7 +272,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   )}
                   <div className="space-y-2">
                     {group.items.map((item) => {
-                      const isActive = item.href === activeHref
+                      const isActive = item.href === activeHref;
                       return (
                         <Link
                           key={item.href}
@@ -193,21 +280,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors group ${
                             isActive
-                              ? 'bg-accent text-accent-foreground'
-                              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                              ? "bg-accent text-accent-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           }`}
                         >
-                          <span className={`${isActive ? 'text-accent-foreground' : 'text-sidebar-foreground/70'} group-hover:text-sidebar-accent-foreground`}>
+                          <span
+                            className={`${isActive ? "text-accent-foreground" : "text-sidebar-foreground/70"} group-hover:text-sidebar-accent-foreground`}
+                          >
                             {item.icon}
                           </span>
-                          <span className="flex-1 text-sm font-medium">{item.label}</span>
+                          <span className="flex-1 text-sm font-medium">
+                            {item.label}
+                          </span>
                           {item.badge && (
                             <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
                               {item.badge}
                             </span>
                           )}
                         </Link>
-                      )
+                      );
                     })}
                   </div>
                 </div>
@@ -283,7 +374,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {/* User Menu */}
                 <button className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg transition-colors">
                   <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold">
-                    {user?.name?.[0] ?? 'U'}
+                    {user?.name?.[0] ?? "U"}
                   </div>
                   <ChevronDown className="w-4 h-4 opacity-50" />
                 </button>
@@ -328,8 +419,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         onClick={() => setNotificationsOpen(false)}
                       >
                         <Card
-                          className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
-                            notif.read ? 'border-border' : 'border-primary bg-primary/5'
+                          className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
+                            notif.read
+                              ? "border-border"
+                              : "border-primary bg-primary/5"
                           }`}
                         >
                           <div className="flex items-start gap-3">
@@ -392,8 +485,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         onClick={() => setNotificationsOpen(false)}
                       >
                         <Card
-                          className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
-                            notif.read ? 'border-border' : 'border-primary bg-primary/5'
+                          className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
+                            notif.read
+                              ? "border-border"
+                              : "border-primary bg-primary/5"
                           }`}
                         >
                           <div className="flex items-start gap-3">
@@ -437,5 +532,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </Suspense>
     </div>
-  )
+  );
 }

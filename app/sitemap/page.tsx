@@ -87,13 +87,6 @@ export default function SitemapPage() {
       category: 'analytics',
     },
     {
-      title: 'Reports',
-      description: 'Generate comprehensive reports and export data',
-      href: '/dashboard/reports',
-      icon: <FileText className="w-6 h-6" />,
-      category: 'analytics',
-    },
-    {
       title: 'Tenant Portal',
       description: 'Manage tenant portal access and features',
       href: '/dashboard/tenant-portal',
