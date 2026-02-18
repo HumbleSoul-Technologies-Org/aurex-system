@@ -7,7 +7,7 @@ import React, { Suspense } from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSearchParams, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/lib/auth-context";
 import {
   LayoutDashboard,
@@ -51,7 +51,6 @@ export default function DashboardLayout({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const searchParams = useSearchParams();
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
 
