@@ -40,7 +40,7 @@ export default function PaymentHistoryPage() {
             Monthly Rent
           </p>
           <p className="text-2xl md:text-3xl font-bold text-foreground">
-            ${currentTenant.monthlyRent}
+            ${currentTenant?.monthlyRent || 0}
           </p>
         </Card>
 

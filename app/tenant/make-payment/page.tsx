@@ -11,7 +11,7 @@ export default function MakePaymentPage() {
   const [step, setStep] = useState<'amount' | 'method' | 'confirm' | 'success'>(
     'amount'
   )
-  const [amount, setAmount] = useState(currentTenant.monthlyRent)
+  const [amount, setAmount] = useState(currentTenant?.monthlyRent || 0)
   const [method, setMethod] = useState('bank-transfer')
   const [processing, setProcessing] = useState(false)
 
@@ -34,7 +34,7 @@ export default function MakePaymentPage() {
 
   const handleReset = () => {
     setStep('amount')
-    setAmount(currentTenant.monthlyRent)
+    setAmount(currentTenant?.monthlyRent || 0)
     setMethod('bank-transfer')
   }
 
@@ -96,8 +96,8 @@ export default function MakePaymentPage() {
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
                   {[
-                    { label: 'Monthly Rent', value: currentTenant.monthlyRent },
-                    { label: 'Half', value: currentTenant.monthlyRent / 2 },
+                    { label: 'Monthly Rent', value: currentTenant?.monthlyRent || 0 },
+                    { label: 'Half', value: (currentTenant?.monthlyRent || 0) / 2 },
                     { label: 'Custom', value: 0 },
                   ].map((option) => (
                     <Button
@@ -326,7 +326,7 @@ export default function MakePaymentPage() {
             </div>
 
             <p className="text-xs md:text-sm text-muted-foreground">
-              A confirmation email has been sent to {currentTenant.email}
+              A confirmation email has been sent to {currentTenant?.email || 'your email'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-4">

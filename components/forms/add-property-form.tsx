@@ -1,67 +1,128 @@
 'use client'
 
-import React from "react"
-
-import { useState } from 'react'
+import React, { useState, useRef, useEffect } from "react"
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { X, MapPin, Home, DollarSign } from 'lucide-react'
+import { X, MapPin, Home, DollarSign, Loader2 } from 'lucide-react'
 
 interface AddPropertyFormProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit?: (data: PropertyFormData) => void
+  onSubmit?: (data: PropertyFormData, file?: File | null) => void
+  isLoading?: boolean
 }
 
 interface PropertyFormData {
   name: string
   address: string
   city: string
-  state: string
-  zipCode: string
+  country: string
   units: number
-  rentPerUnit: number
+  pricePerUnit: number
   propertyType: string
+  geography: string
+  location: {
+    lat: number | ''
+    lng: number | ''
+  }
+  features: string[]
+  imageUrl?: string
   description: string
 }
 
-export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddPropertyFormProps) {
+export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading = false }: AddPropertyFormProps) {
   const [formData, setFormData] = useState<PropertyFormData>({
     name: '',
     address: '',
     city: '',
-    state: '',
-    zipCode: '',
+    country: '',
     units: 1,
-    rentPerUnit: 0,
+    pricePerUnit: 0,
     propertyType: 'apartment',
+    geography: '',
+    location: { lat: '', lng: '' },
+    features: [],
+    imageUrl: '',
     description: '',
   })
 
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedImage) {
+      setPreviewUrl(null)
+      return
+    }
+
+    const url = URL.createObjectURL(selectedImage)
+    setPreviewUrl(url)
+
+    return () => {
+      URL.revokeObjectURL(url)
+    }
+  }, [selectedImage])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'units' || name === 'rentPerUnit' ? Number(value) : value,
-    }))
+
+    // nested fields like location.lat
+    if (name.includes('.')) {
+      const [parent, child] = name.split('.')
+      setFormData((prev: any) => ({
+        ...prev,
+        [parent]: {
+          ...(prev as any)[parent],
+          [child]: child === 'lat' || child === 'lng' ? (value === '' ? '' : Number(value)) : value,
+        },
+      }))
+      return
+    }
+
+    if (name === 'units' || name === 'pricePerUnit') {
+      setFormData((prev) => ({ ...prev, [name]: Number(value) }))
+      return
+    }
+
+    if (name === 'features') {
+      const arr = value.split(',').map((s) => s.trim()).filter(Boolean)
+      setFormData((prev) => ({ ...prev, features: arr }))
+      return
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null
+    setSelectedImage(file)
+  }
+
+  const triggerFileSelect = () => {
+    fileInputRef.current?.click()
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit?.(formData)
+    onSubmit?.(formData, selectedImage)
     setFormData({
       name: '',
       address: '',
       city: '',
-      state: '',
-      zipCode: '',
+      country: '',
       units: 1,
-      rentPerUnit: 0,
+      pricePerUnit: 0,
       propertyType: 'apartment',
+      geography: '',
+      location: { lat: '', lng: '' },
+      features: [],
+      imageUrl: '',
       description: '',
     })
+    setSelectedImage(null)
     onClose()
   }
 
@@ -126,8 +187,8 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddProper
               />
             </div>
 
-            {/* City, State, Zip */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* City, Country */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">City</label>
                 <Input
@@ -139,22 +200,12 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddProper
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">State</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Country</label>
                 <Input
-                  name="state"
-                  value={formData.state}
+                  name="country"
+                  value={formData.country}
                   onChange={handleChange}
-                  placeholder="State"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">ZIP Code</label>
-                <Input
-                  name="zipCode"
-                  value={formData.zipCode}
-                  onChange={handleChange}
-                  placeholder="12345"
+                  placeholder="Country"
                   required
                 />
               </div>
@@ -178,16 +229,18 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddProper
               </select>
             </div>
 
-            {/* Units and Rent */}
+           
+
+            {/* Units and Price per Unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Number of Units</label>
                 <Input
-                  type="number"
+                  
                   name="units"
                   value={formData.units}
                   onChange={handleChange}
-                  min="1"
+                   
                   required
                 />
               </div>
@@ -195,22 +248,108 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddProper
                 <label className="block text-sm font-medium text-foreground mb-2">
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-primary" />
-                    Rent Per Unit
+                    Price Per Unit
                   </div>
                 </label>
                 <Input
-                  type="number"
-                  name="rentPerUnit"
-                  value={formData.rentPerUnit}
+                 
+                  name="pricePerUnit"
+                  value={formData.pricePerUnit}
                   onChange={handleChange}
                   placeholder="2500"
-                  min="0"
-                  step="100"
+                   
                   required
                 />
               </div>
             </div>
 
+            {/* Geography */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Geography</label>
+              <Input
+                name="geography"
+                value={formData.geography}
+                onChange={handleChange}
+                placeholder="e.g., urban, suburban, rural"
+              />
+            </div>
+
+            {/* Location (lat, lng) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
+                <Input
+                  type="number"
+                  name="location.lat"
+                  value={formData.location.lat as any}
+                  onChange={handleChange}
+                  step="any"
+                  placeholder="e.g., 37.7749"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
+                <Input
+                  type="number"
+                  name="location.lng"
+                  value={formData.location.lng as any}
+                  onChange={handleChange}
+                  step="any"
+                  placeholder="e.g., -122.4194"
+                />
+              </div>
+            </div>
+
+            {/* Features */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Features (comma separated)</label>
+              <Textarea
+                name="features"
+                value={formData.features.join(', ')}
+                onChange={handleChange}
+                placeholder="Pool, Elevator, Parking"
+                className="h-20"
+              />
+            </div>
+            {/* Image URL or Upload */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
+              <Input
+                name="imageUrl"
+                value={formData.imageUrl || ''}
+                onChange={handleChange}
+                placeholder="https://example.com/image.jpg"
+              />
+
+              <div className="mt-3">
+                <p className="text-sm text-muted-foreground mb-2">Or upload from your computer</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <Button type="button" variant="outline" onClick={triggerFileSelect} className="px-3">
+                    Upload Image
+                  </Button>
+                  <span className="text-sm text-foreground">{selectedImage ? selectedImage.name : 'No file selected'}</span>
+                  {selectedImage && (
+                    <Button type="button" variant="ghost" onClick={() => setSelectedImage(null)} className="text-sm">
+                      Remove
+                    </Button>
+                  )}
+                </div>
+
+                {previewUrl && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-foreground mb-2">Preview</p>
+                    <img src={previewUrl} alt="Selected preview" className="max-h-40 w-auto rounded border" />
+                  </div>
+                )}
+              </div>
+            </div>
             {/* Description */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Description</label>
@@ -233,8 +372,19 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit }: AddProper
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-white">
-                Add Property
+              <Button 
+                type="submit" 
+                className="flex-1 bg-primary hover:bg-primary/90 text-white"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  'Add Property'
+                )}
               </Button>
             </div>
           </form>

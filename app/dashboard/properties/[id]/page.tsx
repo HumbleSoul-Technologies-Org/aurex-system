@@ -1,13 +1,28 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { use } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { sampleProperties, sampleTenants } from '@/app/lib/sample-data'
+import { useState, useRef, useEffect } from "react";
+import { use } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import AddTenantForm from "@/components/forms/add-tenant-form";
+import { createTenant, TenantRecord } from "@/lib/services/tenants";
+import { updateProperty } from "@/lib/services/properties";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getProperty } from "@/lib/services/properties";
+import { listTenants } from "@/lib/services/tenants";
 import {
   ArrowLeft,
   MapPin,
@@ -17,35 +32,94 @@ import {
   Settings,
   Edit,
   Home,
-} from 'lucide-react'
+  ImagePlus,
+  Copy,
+  Check,
+  Loader2,
+  Trash,
+  X,
+} from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 
 interface PropertyDetailPageProps {
   params: Promise<{
-    id: string
-  }>
+    id: string;
+  }>;
 }
 
-export default function PropertyDetailPage({ params }: PropertyDetailPageProps) {
-  const { id } = use(params)
-  const property:any = sampleProperties.find((p:any) => p.id === id)
-  const propertyTenants = sampleTenants.filter((t) => t.propertyId === id)
-  const [activeTab, setActiveTab] = useState('overview')
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+export default function PropertyDetailPage({
+  params,
+}: PropertyDetailPageProps) {
+  const { id } = use(params);
+  const property: any = getProperty(id) ?? {
+    images: [],
+    tenants: [],
+    features: [],
+    name: "Unknown",
+    address: "",
+    city: "",
+    country: "",
+    units_available: 0,
+    price_per_unit: 0,
+  };
+  const propertyTenants = listTenants().filter((t) => t.propertyId === id);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [images, setImages] = useState<string[]>(property.images || []);
+
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showAddTenant, setShowAddTenant] = useState(false);
+
+  useEffect(() => {
+    let url = uploadPreview;
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [uploadPreview]);
 
   // Income Calculations
-  const totalMonthlyIncome = propertyTenants.reduce((sum, tenant) => sum + tenant.rentAmount, 0)
-  const totalAnnualIncome = totalMonthlyIncome * 12
-  const occupiedUnits = propertyTenants.length
-  const averageIncomePerUnit = occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0
-  const potentialMonthlyIncome = property?.price_per_unit ? property.price_per_unit * property?.units_available : 0
-  const occupancyPercentage = property?.units_available > 0 ? Math.round((occupiedUnits / property.units_available) * 100) : 0
-  const incomeUtilization = potentialMonthlyIncome > 0 ? Math.round((totalMonthlyIncome / potentialMonthlyIncome) * 100) : 0
+  const tenantMonthly = propertyTenants.reduce(
+    (sum, tenant) => sum + (tenant.rentAmount || 0),
+    0,
+  );
+  let totalMonthlyIncome = tenantMonthly;
+  // If property has units and a price per unit, use that to calculate income
+  if (property?.units_available && property?.price_per_unit) {
+    totalMonthlyIncome = property.price_per_unit * property.units_available;
+  }
+  const totalAnnualIncome = totalMonthlyIncome * 12;
+  const occupiedUnits = propertyTenants.length;
+  const averageIncomePerUnit =
+    occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0;
+  const potentialMonthlyIncome = property?.price_per_unit
+    ? property.price_per_unit * property?.units_available
+    : 0;
+  const occupancyPercentage =
+    property?.units_available > 0
+      ? Math.round((occupiedUnits / property.units_available) * 100)
+      : 0;
+  const incomeUtilization =
+    potentialMonthlyIncome > 0
+      ? Math.round((totalMonthlyIncome / potentialMonthlyIncome) * 100)
+      : 0;
 
   if (!property) {
     return (
       <div className="space-y-6">
         <Button variant="outline" asChild>
-          <Link href="/dashboard/properties" className="flex items-center gap-2">
+          <Link
+            href="/dashboard/properties"
+            className="flex items-center gap-2"
+          >
             <ArrowLeft className="w-4 h-4" />
             Back to Properties
           </Link>
@@ -54,7 +128,7 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           <p className="text-muted-foreground">Property not found</p>
         </Card>
       </div>
-    )
+    );
   }
 
   return (
@@ -62,7 +136,10 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <Button variant="outline" asChild>
-          <Link href="/dashboard/properties" className="flex items-center gap-2">
+          <Link
+            href="/dashboard/properties"
+            className="flex items-center gap-2"
+          >
             <ArrowLeft className="w-4 h-4" />
             Back
           </Link>
@@ -81,43 +158,279 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
             {/* Main Image */}
             <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
               <img
-                src={property.images?.[selectedImageIndex] || "/placeholder.svg"}
+                src={images?.[selectedImageIndex] || "/placeholder.svg"}
                 alt={property.name}
                 className="w-full h-full object-cover"
               />
             </div>
 
             {/* Thumbnail Images */}
-            {property.images && property.images.length > 1 && (
+            {images && images.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-2">
-                {property?.images.map((image:any, index:number) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedImageIndex(index)}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                      selectedImageIndex === index
-                        ? 'border-primary'
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <img
-                      src={image}
-                      alt={`${property.name} ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
+                {images.map((image, index) => (
+                  <div key={index} className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedImageIndex === index
+                          ? "border-primary"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`${property.name} ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete image ${index + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const next = images.filter((_, i) => i !== index);
+                        setImages(next);
+                        try {
+                          updateProperty(property.id, { images: next });
+                        } catch (err) {
+                          console.error(
+                            "Failed to persist image deletion",
+                            err,
+                          );
+                        }
+                        setSelectedImageIndex((prev) =>
+                          Math.max(0, Math.min(prev, next.length - 1)),
+                        );
+                      }}
+                      className="absolute top-0 right-0 m-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/90 hover:bg-red-600 hover:text-white text-xs"
+                    >
+                      <X className="w-3 font-bold h-3" />
+                    </button>
+                  </div>
                 ))}
+                {/* Add Image Button (visible when less than 6 images) */}
+                {images.length < 6 && (
+                  <div>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsUploadOpen(true)}
+                      className="bg-transparent w-16 h-16 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3"
+                    >
+                      <ImagePlus className="w-5 h-5  text-gray-200" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Upload Dialog */}
+            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Upload Property Image</DialogTitle>
+                  <DialogDescription>
+                    Add a title and upload an image for this property gallery.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Title
+                    </label>
+                    <Input
+                      name="uploadTitle"
+                      value={uploadTitle}
+                      onChange={(e) => setUploadTitle(e.target.value)}
+                      placeholder="Image title (optional)"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Image
+                    </label>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null;
+                        if (!f) {
+                          setUploadFile(null);
+                          setUploadPreview(null);
+                          return;
+                        }
+                        setUploadFile(f);
+                        const url = URL.createObjectURL(f);
+                        setUploadPreview(url);
+                      }}
+                      className="hidden"
+                    />
+
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragActive(true);
+                      }}
+                      onDragEnter={(e) => {
+                        e.preventDefault();
+                        setDragActive(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        setDragActive(false);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragActive(false);
+                        const f = e.dataTransfer.files?.[0] ?? null;
+                        if (!f) return;
+                        setUploadFile(f);
+                        const url = URL.createObjectURL(f);
+                        setUploadPreview(url);
+                      }}
+                      className={`flex items-center justify-center flex-col gap-2 rounded-md border-2 p-6 text-center cursor-pointer ${
+                        dragActive
+                          ? "border-primary bg-primary/5"
+                          : "border-dashed border-border bg-transparent"
+                      }`}
+                    >
+                      <ImagePlus className="w-8 h-8 text-muted-foreground" />
+                      <div className="text-sm text-muted-foreground">
+                        <div>Drag & drop an image here, or click to browse</div>
+                        <div className="text-xs text-muted-foreground/80">
+                          PNG, JPG, GIF up to 10MB
+                        </div>
+                      </div>
+                    </div>
+
+                    {uploadPreview && (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-foreground mb-2">
+                          Preview
+                        </p>
+                        <img
+                          src={uploadPreview}
+                          alt="Upload preview"
+                          className="max-h-40 w-auto rounded border"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // cancel
+                        if (uploadPreview) {
+                          URL.revokeObjectURL(uploadPreview);
+                        }
+                        setUploadFile(null);
+                        setUploadPreview(null);
+                        setUploadTitle("");
+                        setIsUploadOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      disabled={isUploading}
+                      onClick={async () => {
+                        setIsUploading(true);
+                        try {
+                          if (uploadFile) {
+                            const res = await uploadToCloudinary(uploadFile);
+                            // add to local state and persist to sample store
+                            setImages((prev) => {
+                              const next = [...prev, res.secure_url];
+                              setSelectedImageIndex(next.length - 1);
+                              try {
+                                updateProperty(property.id, { images: next });
+                              } catch (e) {
+                                console.error(
+                                  "Failed to persist property images",
+                                  e,
+                                );
+                              }
+                              return next;
+                            });
+
+                            console.log("Cloudinary upload result", res);
+                          } else if (uploadPreview) {
+                            setImages((prev) => {
+                              const next = [...prev, uploadPreview];
+                              setSelectedImageIndex(next.length - 1);
+                              return next;
+                            });
+                          }
+                        } catch (err) {
+                          console.error("Upload failed", err);
+                        } finally {
+                          setIsUploading(false);
+                          if (uploadPreview) URL.revokeObjectURL(uploadPreview);
+                          setUploadFile(null);
+                          setUploadPreview(null);
+                          setUploadTitle("");
+                          setIsUploadOpen(false);
+                        }
+                      }}
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        "Add Image"
+                      )}
+                    </Button>
+                  </div>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Info */}
           <div className="md:col-span-2">
             <div className="mb-6">
-              <h1 className="text-3xl font-bold text-foreground mb-2">{property.name}</h1>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                {property.name}
+              </h1>
               <div className="flex items-center gap-2 text-muted-foreground mb-4">
                 <MapPin className="w-4 h-4" />
-                <span>{property.address}, {property.city}, {property.country}</span>
+                <span>
+                  {property.address}, {property.city}, {property.country}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                Property ID:
+                <span className="underline">{property.id}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(String(property.id));
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch (e) {
+                      // ignore
+                    }
+                  }}
+                  aria-label="Copy property id"
+                  className="ml-1 p-1 rounded hover:bg-secondary"
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <Copy className="w-4 h-4 cursor-pointer" />
+                  )}
+                </button>
               </div>
               <div className="flex gap-2">
                 <div className="inline-block px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-sm font-semibold">
@@ -132,25 +445,37 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
             {/* Key Stats */}
             <div className="grid grid-cols-5 gap-3">
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Available Units</p>
-                <p className="text-2xl font-bold text-foreground">{property.units_available}</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Available Units
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  {property.units_available}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Tenants</p>
-                <p className="text-2xl font-bold text-foreground">{propertyTenants.length}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {propertyTenants.length}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Occupancy</p>
-                <p className="text-2xl font-bold text-foreground">{occupancyPercentage}%</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {occupancyPercentage}%
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Monthly Income</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Monthly Income
+                </p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   ${totalMonthlyIncome.toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-1">Annual Income</p>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Annual Income
+                </p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                   ${(totalAnnualIncome / 1000).toFixed(1)}k
                 </p>
@@ -204,52 +529,87 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           {/* Overview Tab */}
           <TabsContent value="overview" className="p-6 space-y-6">
             <div>
-              <h3 className="text-lg font-bold text-foreground mb-4">Property Information</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Property Information
+              </h3>
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Property Type</p>
-                  <p className="font-semibold text-foreground capitalize">{property.type}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Property Type
+                  </p>
+                  <p className="font-semibold text-foreground capitalize">
+                    {property.type}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Available Units</p>
-                  <p className="font-semibold text-foreground">{property.units_available}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Available Units
+                  </p>
+                  <p className="font-semibold text-foreground">
+                    {property.units_available}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Address</p>
-                  <p className="font-semibold text-foreground">{property.address}</p>
+                  <p className="font-semibold text-foreground">
+                    {property.address}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">City</p>
-                  <p className="font-semibold text-foreground">{property.city}</p>
+                  <p className="font-semibold text-foreground">
+                    {property.city}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Country</p>
-                  <p className="font-semibold text-foreground">{property.country}</p>
+                  <p className="font-semibold text-foreground">
+                    {property.country}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">Square Meters</p>
-                  <p className="font-semibold text-foreground">{property.sq_mtrs}</p>
+                  <p className="text-sm text-muted-foreground mb-1">
+                    Square Meters
+                  </p>
+                  <p className="font-semibold text-foreground">
+                    {property.sq_mtrs}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="border-t border-border pt-6">
-              <h3 className="text-lg font-bold text-foreground mb-4">Features & Details</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Features & Details
+              </h3>
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Geography</p>
-                  <p className="font-semibold text-foreground">{property.geography}</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Geography
+                  </p>
+                  <p className="font-semibold text-foreground">
+                    {property.geography}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Occupancy Status</p>
-                  <p className="font-semibold text-foreground">{property.occupancy}</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Occupancy Status
+                  </p>
+                  <p className="font-semibold text-foreground">
+                    {property.occupancy}
+                  </p>
                 </div>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-3">Property Features</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Property Features
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {property.features.map((feature:any, index:number) => (
-                    <span key={index} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-full">
+                  {property.features.map((feature: any, index: number) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-full"
+                    >
                       {feature}
                     </span>
                   ))}
@@ -258,10 +618,14 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
             </div>
 
             <div className="border-t border-border pt-6">
-              <h3 className="text-lg font-bold text-foreground mb-4">Rental Details</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Rental Details
+              </h3>
               <div className="grid grid-cols-3 gap-6">
                 <div className="p-4 bg-secondary rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-2">Price Per Unit</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Price Per Unit
+                  </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                     ${property.price_per_unit.toLocaleString()}
                   </p>
@@ -273,7 +637,9 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
                   </p>
                 </div>
                 <div className="p-4 bg-secondary rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-2">Occupancy</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Occupancy
+                  </p>
                   <p className="text-2xl font-bold text-foreground">
                     {property.occupancy}
                   </p>
@@ -286,55 +652,124 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           <TabsContent value="units" className="p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-foreground">Tenants ({propertyTenants.length})</h3>
-                <Button size="sm">Add Tenant</Button>
+                <h3 className="text-lg font-bold text-foreground">
+                  Tenants ({propertyTenants.length})
+                </h3>
+                <AddTenantForm
+                  isOpen={showAddTenant}
+                  onClose={() => setShowAddTenant(false)}
+                  onSubmit={async (data: any) => {
+                    try {
+                      const tenant = createTenant({
+                        name: data.name,
+                        email: data.email,
+                        unit: data.unitNumber,
+                        propertyId: property.id,
+                        rentAmount: data.monthlyRent,
+                        status: "due",
+                      }) as TenantRecord;
+                      // add tenant id to property
+                      const updated = updateProperty(property.id, {
+                        tenants: [...(property.tenants || []), tenant.id],
+                      });
+                      // optimistic: no state sync here since this page uses sample data; in a full integration you would reload property
+                      setShowAddTenant(false);
+                    } catch (e) {
+                      console.error("Add tenant failed", e);
+                    }
+                  }}
+                />
+                <Button size="sm" onClick={() => setShowAddTenant(true)}>
+                  Add Tenant
+                </Button>
               </div>
               {propertyTenants.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Unit</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Avatar</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Tenant</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Monthly Rent</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Status</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Lease Type</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Actions</th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Unit
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Avatar
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Tenant
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Monthly Rent
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Lease Type
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {propertyTenants.map((tenant) => (
-                        <tr key={tenant.id} className="border-b border-border hover:bg-secondary">
-                          <td className="px-4 py-3 font-semibold text-foreground">{tenant.unit}</td>
+                        <tr
+                          key={tenant.id}
+                          className="border-b border-border hover:bg-secondary"
+                        >
+                          <td className="px-4 py-3 font-semibold text-foreground">
+                            {tenant.unit}
+                          </td>
                           <td className="px-4 py-3">
                             <Image
-                              src={tenant.image}
-                              alt={tenant.name}
+                              src={
+                                tenant?.image ||
+                                "https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740&q=80"
+                              }
+                              alt={tenant?.name || "Tenant"}
                               width={40}
                               height={40}
                               className="rounded-full object-cover"
                             />
                           </td>
                           <td className="px-4 py-3 text-foreground">
-                            <Link href={`/dashboard/tenants/${tenant.id}`} className="font-semibold text-blue-600 hover:underline">
+                            <Link
+                              href={`/dashboard/tenants/${tenant.id}`}
+                              className="font-semibold text-blue-600 hover:underline"
+                            >
                               {tenant.name}
                             </Link>
                           </td>
-                          <td className="px-4 py-3 font-semibold text-foreground">${tenant.rentAmount.toLocaleString()}</td>
+                          <td className="px-4 py-3 font-semibold text-foreground">
+                            ${(tenant.rentAmount ?? 0).toLocaleString()}
+                          </td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                              tenant.status === 'paid' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
-                              tenant.status === 'due' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
-                              tenant.status === 'moving out' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
-                              'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                            }`}>
-                              {tenant.status === 'paid' ? 'Paid' : tenant.status === 'due' ? 'Due' : tenant.status.replace('-', ' ')}
+                            <span
+                              className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                tenant.status === "paid"
+                                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                                  : tenant.status === "due"
+                                    ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                                    : tenant.status === "moving out"
+                                      ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                      : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                              }`}
+                            >
+                              {tenant.status === "paid"
+                                ? "Paid"
+                                : tenant.status === "due"
+                                  ? "Due"
+                                  : (tenant.status ?? "").replace("-", " ")}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-foreground capitalize">{tenant.lease_type}</td>
+                          <td className="px-4 py-3 text-foreground capitalize">
+                            {tenant.lease_type}
+                          </td>
                           <td className="px-4 py-3">
-                            <Link href={`/dashboard/tenants/${tenant.id}`} className="text-blue-600 hover:text-blue-700 text-sm">
+                            <Link
+                              href={`/dashboard/tenants/${tenant.id}`}
+                              className="text-blue-600 hover:text-blue-700 text-sm"
+                            >
                               View
                             </Link>
                           </td>
@@ -346,7 +781,9 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
               ) : (
                 <Card className="border border-border p-8 text-center">
                   <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground mb-4">No tenants in this property</p>
+                  <p className="text-muted-foreground mb-4">
+                    No tenants in this property
+                  </p>
                   <Button size="sm">Add First Tenant</Button>
                 </Card>
               )}
@@ -357,28 +794,38 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           <TabsContent value="financials" className="p-6">
             {/* Income Summary */}
             <div className="mb-8">
-              <h3 className="text-lg font-bold text-foreground mb-4">Income Summary</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Income Summary
+              </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Monthly Income</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Monthly Income
+                  </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                     ${totalMonthlyIncome.toLocaleString()}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Annual Income</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Annual Income
+                  </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                     ${totalAnnualIncome.toLocaleString()}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Occupied Units</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Occupied Units
+                  </p>
                   <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                     {occupiedUnits}/{property?.units_available}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Occupancy Rate</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Occupancy Rate
+                  </p>
                   <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                     {occupancyPercentage}%
                   </p>
@@ -386,91 +833,154 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
               </div>
             </div>
 
-            {/* Potential vs Actual */}
-            <div className="mb-8">
-              <h3 className="text-lg font-bold text-foreground mb-4">Revenue Potential</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Potential Monthly</p>
-                  <p className="text-2xl font-bold text-foreground">
-                    ${potentialMonthlyIncome.toLocaleString()}
-                  </p>
-                </Card>
-                <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Current Monthly</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    ${totalMonthlyIncome.toLocaleString()}
-                  </p>
-                </Card>
-                <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Lost Revenue</p>
-                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                    ${(potentialMonthlyIncome - totalMonthlyIncome).toLocaleString()}
-                  </p>
-                </Card>
-                <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Utilization</p>
-                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {incomeUtilization}%
-                  </p>
-                </Card>
-              </div>
-            </div>
+            {/* Thumbnail Images / Add Image Button */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {images.length > 0 ? (
+                images.map((image, index) => (
+                  <div key={index} className="relative flex-shrink-0">
+                    <button
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedImageIndex === index
+                          ? 'border-primary'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`${property.name} ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete image ${index + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const next = images.filter((_, i) => i !== index)
+                        setImages(next)
+                        try {
+                          updateProperty(property.id, { images: next })
+                        } catch (err) {
+                          console.error('Failed to persist image deletion', err)
+                        }
+                        setSelectedImageIndex((prev) => Math.max(0, Math.min(prev, next.length - 1)))
+                      }}
+                      className="absolute top-0 right-0 m-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/90 hover:bg-red-600 hover:text-white text-xs"
+                    >
+                     <X className="w-3 font-bold h-3" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="w-full flex items-center justify-center">
+                  <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-transparent w-32 h-32 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3 flex flex-col items-center justify-center">
+                    <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
+                    <span className="text-sm text-muted-foreground">Add property images</span>
+                  </Button>
+                </div>
+              )}
 
-            {/* Unit Details */}
-            <div className="mb-8">
-              <h3 className="text-lg font-bold text-foreground mb-4">Unit Income Details</h3>
+              {/* Small add button always visible when under limit */}
+              {images.length < 6 && (
+                <div>
+                  <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-transparent w-16 h-16 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3">
+                    <ImagePlus className="w-5 h-5 text-gray-200" />
+                  </Button>
+                </div>
+              )}
+            </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Price per Unit</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Price per Unit
+                  </p>
                   <p className="text-2xl font-bold text-foreground">
                     ${property?.price_per_unit.toLocaleString()}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Average Income per Unit</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Average Income per Unit
+                  </p>
                   <p className="text-2xl font-bold text-foreground">
                     ${averageIncomePerUnit.toLocaleString()}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">Total Units Available</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Total Units Available
+                  </p>
                   <p className="text-2xl font-bold text-foreground">
                     {property?.units_available}
                   </p>
                 </Card>
               </div>
-            </div>
-            
+             
+
             {/* Tenant Monthly Rent Breakdown */}
             <div>
-              <h3 className="text-lg font-bold text-foreground mb-4">Tenant Monthly Rent Breakdown</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Tenant Monthly Rent Breakdown
+              </h3>
               {propertyTenants.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Unit</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Tenant</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Monthly Rent</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Annual Income</th>
-                        <th className="px-4 py-3 text-left font-semibold text-foreground">Lease Type</th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Unit
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Tenant
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Monthly Rent
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Annual Income
+                        </th>
+                        <th className="px-4 py-3 text-left font-semibold text-foreground">
+                          Lease Type
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {propertyTenants.map((tenant) => (
-                        <tr key={tenant.id} className="border-b border-border hover:bg-secondary">
-                          <td className="px-4 py-3 font-semibold text-foreground">{tenant.unit}</td>
-                          <td className="px-4 py-3 text-foreground">{tenant.name}</td>
-                          <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">${tenant.rentAmount.toLocaleString()}</td>
-                          <td className="px-4 py-3 font-semibold text-foreground">${(tenant.rentAmount * 12).toLocaleString()}</td>
-                          <td className="px-4 py-3 text-foreground capitalize">{tenant.lease_type}</td>
+                        <tr
+                          key={tenant.id}
+                          className="border-b border-border hover:bg-secondary"
+                        >
+                          <td className="px-4 py-3 font-semibold text-foreground">
+                            {tenant.unit}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {tenant.name}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">
+                            ${(tenant.rentAmount ?? 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-foreground">
+                            ${((tenant.rentAmount ?? 0) * 12).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-foreground capitalize">
+                            {tenant.lease_type}
+                          </td>
                         </tr>
                       ))}
                       <tr className="border-t-2 border-border bg-secondary">
-                        <td colSpan={2} className="px-4 py-3 font-bold text-foreground">TOTAL</td>
-                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">${totalMonthlyIncome.toLocaleString()}</td>
-                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">${totalAnnualIncome.toLocaleString()}</td>
+                        <td
+                          colSpan={2}
+                          className="px-4 py-3 font-bold text-foreground"
+                        >
+                          TOTAL
+                        </td>
+                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
+                          ${totalMonthlyIncome.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
+                          ${totalAnnualIncome.toLocaleString()}
+                        </td>
                         <td></td>
                       </tr>
                     </tbody>
@@ -488,7 +998,9 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           <TabsContent value="documents" className="p-6">
             <div className="text-center py-12">
               <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground mb-4">No documents uploaded yet</p>
+              <p className="text-muted-foreground mb-4">
+                No documents uploaded yet
+              </p>
               <Button>Upload Document</Button>
             </div>
           </TabsContent>
@@ -497,7 +1009,9 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
           <TabsContent value="settings" className="p-6">
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-bold text-foreground mb-4">Property Settings</h3>
+                <h3 className="text-lg font-bold text-foreground mb-4">
+                  Property Settings
+                </h3>
                 <Button variant="outline">Edit Property Details</Button>
               </div>
             </div>
@@ -505,5 +1019,5 @@ export default function PropertyDetailPage({ params }: PropertyDetailPageProps) 
         </Tabs>
       </Card>
     </div>
-  )
+  );
 }

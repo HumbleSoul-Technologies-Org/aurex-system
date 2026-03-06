@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AddPropertyForm from '@/components/forms/add-property-form'
-import { sampleProperties } from '@/app/lib/sample-data'
+import { listProperties, createProperty, PropertyRecord } from '@/lib/services/properties'
+import { uploadToCloudinary } from '@/lib/cloudinary'
 import {
   Plus,
   Search,
@@ -23,8 +24,11 @@ export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
+  const [isCreatingProperty, setIsCreatingProperty] = useState(false)
 
-  const filteredProperties = sampleProperties.filter((prop) => {
+  const [properties, setProperties] = useState<PropertyRecord[]>(() => listProperties())
+
+  const filteredProperties = properties.filter((prop) => {
     const matchesSearch =
       prop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prop.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -32,9 +36,36 @@ export default function PropertiesPage() {
     return matchesSearch
   })
 
-  const handleAddProperty = (data: any) => {
-    console.log('New property:', data)
-    // Here you would typically send data to backend
+  const handleAddProperty = async (data: any, file?: File | null) => {
+    setIsCreatingProperty(true)
+    try {
+      const payload: Partial<PropertyRecord> = {
+        name: data.name,
+        address: data.address,
+        city: data.city,
+        country: data.country,
+        units_available: data.units,
+        price_per_unit: data.pricePerUnit,
+        type: data.propertyType,
+        features: data.features,
+        description: data.description,
+      }
+
+      if (data.imageUrl) payload.images = [data.imageUrl]
+      if (file) {
+        try {
+          const res = await uploadToCloudinary(file)
+          payload.images = [res.secure_url]
+        } catch (e) {
+          console.error('Image upload failed', e)
+        }
+      }
+
+      const created = createProperty(payload)
+      setProperties((prev) => [created, ...prev])
+    } catch (e) {
+      console.error('Create property failed', e)
+    }
   }
 
   return (
@@ -105,7 +136,7 @@ export default function PropertiesPage() {
                     className="w-full h-full object-cover hover:scale-105 transition-transform"
                   />
                   <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    {property.occupancy}
+                    {property.occupancy ?? 0}
                   </div>
                   <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
                     {property.type}
@@ -145,7 +176,7 @@ export default function PropertiesPage() {
                         <Users className="w-4 h-4" />
                         Tenants
                       </span>
-                      <span className="font-semibold text-foreground">{property.tenants.length}</span>
+                      <span className="font-semibold text-foreground">{property.tenants?.length ?? 0}</span>
                     </div>
                   </div>
 
@@ -189,7 +220,7 @@ export default function PropertiesPage() {
                     <td className="px-6 py-4 text-foreground">{property.units_available}</td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-full">
-                        {property.occupancy}
+                        {property.occupancy ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
@@ -197,7 +228,7 @@ export default function PropertiesPage() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-semibold rounded-full">
-                        {property.tenants.length}
+                        {property.tenants?.length ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -219,8 +250,24 @@ export default function PropertiesPage() {
       {filteredProperties.length === 0 && (
         <Card className="border border-border p-12 text-center">
           <Home className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">No properties found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p>
+          {properties.length === 0 ? (
+            <>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No properties yet</h3>
+              <p className="text-muted-foreground mb-4">Click "Add Property" to get started</p>
+              <Button 
+                onClick={() => setShowAddForm(true)}
+                className="bg-primary hover:bg-primary/90 text-white"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Property
+              </Button>
+            </>
+          ) : (
+            <>
+              <h3 className="text-lg font-semibold text-foreground mb-2">No properties found</h3>
+              <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p>
+            </>
+          )}
         </Card>
       )}
     </div>

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { X, DollarSign, Calendar, Tag } from 'lucide-react'
+import { createTransaction } from '@/app/lib/transactions-client'
 
 interface AddExpenseFormProps {
   isOpen: boolean
@@ -42,8 +43,20 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // create transaction record
+    try {
+      await createTransaction({
+        amount: formData.amount,
+        type: 'expense',
+        description: formData.description,
+        propertyId: formData.property || undefined,
+        status: 'completed',
+      })
+    } catch (err) {
+      // ignore
+    }
     onSubmit?.(formData)
     setFormData({
       category: 'maintenance',

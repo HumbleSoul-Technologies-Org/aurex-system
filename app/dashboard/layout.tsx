@@ -32,7 +32,7 @@ import {
   Home,
   MapPin,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { getNotifications, markAsRead, getUnreadCount } from "@/lib/services/notifications";
 
 interface NavItem {
   label: string;
@@ -49,14 +49,35 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
 
-  const { user: authUser, isAuthenticated } = useAuth();
+  const { user: authUser, isAuthenticated, isLoading } = useAuth();
+
+  // Load notifications
+  React.useEffect(() => {
+    setNotifications(getNotifications());
+  }, []);
+
+  const refreshNotifications = () => {
+    setNotifications(getNotifications());
+  };
+
+  // Make refreshNotifications available globally for other components
+  React.useEffect(() => {
+    (window as any).refreshNotifications = refreshNotifications;
+    return () => {
+      delete (window as any).refreshNotifications;
+    };
+  }, []);
 
   React.useEffect(() => {
+    // Don't redirect while loading
+    if (isLoading) return;
+
     if (!isAuthenticated) {
       router.push("/auth/login");
       return;
@@ -64,47 +85,7 @@ export default function DashboardLayout({
     if (authUser?.role !== "admin") {
       router.push("/auth/login");
     }
-  }, [isAuthenticated, authUser, router]);
-
-  // Sample notifications
-  const notifications = [
-    {
-      id: 1,
-      title: "Rent Payment Received",
-      message: "Payment of $2,500 received from Unit 301",
-      type: "Payment",
-      read: false,
-      date: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      actionUrl: "/dashboard/finances",
-    },
-    {
-      id: 2,
-      title: "Maintenance Request",
-      message: "Urgent: Broken HVAC in Unit 201",
-      type: "Maintenance",
-      read: false,
-      date: new Date(Date.now() - 4 * 60 * 60 * 1000),
-      actionUrl: "/dashboard/maintenance",
-    },
-    {
-      id: 3,
-      title: "Payment Overdue",
-      message: "Unit 402 - Rent overdue by 5 days",
-      type: "Payment",
-      read: true,
-      date: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-      actionUrl: "/dashboard/finances",
-    },
-    {
-      id: 4,
-      title: "Tenant Application",
-      message: "New tenant application for Unit 105",
-      type: "General",
-      read: true,
-      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-      actionUrl: "/dashboard/tenants",
-    },
-  ];
+  }, [isAuthenticated, isLoading, authUser, router]);
 
   const unreadNotifications = notifications.filter((n) => !n.read).length;
 
@@ -136,7 +117,7 @@ export default function DashboardLayout({
           label: "Maintenance",
           href: "/dashboard/maintenance",
           icon: <Wrench className="w-4 h-4" />,
-          badge: 3,
+          badge: 0,
         },
         {
           label: "Map",
@@ -152,7 +133,7 @@ export default function DashboardLayout({
           label: "Finances",
           href: "/dashboard/finances",
           icon: <DollarSign className="w-4 h-4" />,
-          badge: 2,
+          badge: 0,
         },
       ],
     },
@@ -164,21 +145,21 @@ export default function DashboardLayout({
           href: "/dashboard/communications",
           icon: <MessageSquare className="w-4 h-4" />,
         },
-        {
-          label: "Documents",
-          href: "/dashboard/documents",
-          icon: <FileText className="w-4 h-4" />,
-        },
+        // {
+        //   label: "Documents",
+        //   href: "/dashboard/documents",
+        //   icon: <FileText className="w-4 h-4" />,
+        // },
       ],
     },
     {
       label: undefined,
       items: [
-        {
-          label: "Analytics",
-          href: "/dashboard/analytics",
-          icon: <BarChart3 className="w-4 h-4" />,
-        },
+        // {
+        //   label: "Analytics",
+        //   href: "/dashboard/analytics",
+        //   icon: <BarChart3 className="w-4 h-4" />,
+        // },
         {
           label: "Tenant Portal",
           href: "/dashboard/tenant-portal",
@@ -291,7 +272,7 @@ export default function DashboardLayout({
                           <span className="flex-1 text-sm font-medium">
                             {item.label}
                           </span>
-                          {item.badge && (
+                          {item?.badge > 0 && (
                             <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
                               {item.badge}
                             </span>
@@ -415,7 +396,15 @@ export default function DashboardLayout({
                       <Link
                         key={notif.id}
                         href={notif.actionUrl}
-                        onClick={() => setNotificationsOpen(false)}
+                        onClick={() => {
+                          if (!notif.read) {
+                            markAsRead(notif.id);
+                            setNotifications(prev => prev.map(n => 
+                              n.id === notif.id ? { ...n, read: true } : n
+                            ));
+                          }
+                          setNotificationsOpen(false);
+                        }}
                       >
                         <Card
                           className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
@@ -481,7 +470,15 @@ export default function DashboardLayout({
                       <Link
                         key={notif.id}
                         href={notif.actionUrl}
-                        onClick={() => setNotificationsOpen(false)}
+                        onClick={() => {
+                          if (!notif.read) {
+                            markAsRead(notif.id);
+                            setNotifications(prev => prev.map(n => 
+                              n.id === notif.id ? { ...n, read: true } : n
+                            ));
+                          }
+                          setNotificationsOpen(false);
+                        }}
                       >
                         <Card
                           className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${

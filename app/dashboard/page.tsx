@@ -29,6 +29,7 @@ import {
   Users,
   MapPin,
 } from 'lucide-react'
+import { createTransaction } from '@/app/lib/transactions-client'
 import { chartData, expenseBreakdown, occupancyData, sampleProperties, sampleTenants, sampleTransactions } from '@/app/lib/sample-data'
 
 export default function DashboardPage() {
@@ -247,7 +248,21 @@ export default function DashboardPage() {
                 <Building2 className="w-4 h-4 mr-2" />
                 Add Property
               </Button>
-              <Button variant="outline" className="w-full border-border text-foreground justify-start bg-transparent">
+              <Button
+                variant="outline"
+                className="w-full border-border text-foreground justify-start bg-transparent"
+                onClick={async () => {
+                  const tenantId = prompt('Tenant ID (optional)') || undefined
+                  const amtStr = prompt('Payment amount')
+                  if (!amtStr) return
+                  const amount = Number(amtStr)
+                  if (Number.isNaN(amount)) return alert('Invalid amount')
+                  const desc = prompt('Description (optional)') || 'Quick payment'
+                  const created = await createTransaction({ tenantId, amount, type: 'rent', description: desc })
+                  if (created) alert('Payment recorded')
+                  else alert('Failed to record payment')
+                }}
+              >
                 <DollarSign className="w-4 h-4 mr-2" />
                 Record Payment
               </Button>

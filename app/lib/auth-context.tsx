@@ -1,6 +1,8 @@
 'use client'
 
-import React, { createContext, useContext, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { authenticate, getCurrentUser, signOut, createUser, listUsers } from '@/lib/services/auth'
+import { ensureSeed } from '@/lib/seed'
 
 interface User {
   id: string
@@ -13,53 +15,56 @@ interface User {
 interface AuthContextType {
   user: User | null
   isAuthenticated: boolean
+  isLoading: boolean
   login: (email: string, password: string) => Promise<User>
-  signup: (email: string, password: string, name: string) => Promise<void>
-  logout: () => void
+  signup: (email: string, name: string, role?: string) => Promise<{ user: User; password: string }>
+  logout: () => Promise<void>
   setUser: (user: User | null) => void
+  listUsers: () => any[]
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Default/demo credentials
-  const defaultUsers: Array<{ email: string; password: string; role: string; name: string }> = [
-    { email: 'admin@example.com', password: 'adminpass', role: 'admin', name: 'Admin User' },
-    { email: 'tenant@example.com', password: 'tenantpass', role: 'tenant', name: 'Tenant User' },
-  ]
+  useEffect(() => {
+    // Ensure admin user exists
+    ensureSeed()
+    
+    // Restore session from localStorage
+    try {
+      const currentUser = getCurrentUser()
+      if (currentUser) {
+        setUser({
+          id: currentUser.id,
+          email: currentUser.email,
+          name: currentUser.name,
+          role: currentUser.role,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to restore session:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   const login = async (email: string, password: string) => {
-    // In a real app, replace this with API authentication
-    const match = defaultUsers.find((u) => u.email === email && u.password === password)
-    if (!match) {
-      throw new Error('Invalid credentials')
-    }
-    setUser({
-      id: match.email,
-      email: match.email,
-      name: match.name,
-      role: match.role,
-    })
-    return {
-      id: match.email,
-      email: match.email,
-      name: match.name,
-      role: match.role,
-    }
+    const u = await authenticate(email, password)
+    setUser(u as User)
+    return u as User
   }
 
-  const signup = async (email: string, password: string, name: string) => {
-    // Placeholder: In a real app, this would call an API
-    setUser({
-      id: '1',
-      email,
-      name,
-    })
+  const signup = async (email: string, name: string, role = 'tenant') => {
+    const { user: u, password } = await createUser({ email, name, role })
+    setUser(u as User)
+    return { user: u as User, password }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    await signOut()
     setUser(null)
   }
 
@@ -68,10 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isAuthenticated: !!user,
+        isLoading,
         login,
         signup,
         logout,
         setUser,
+        listUsers,
       }}
     >
       {children}
@@ -86,3 +93,4 @@ export function useAuth() {
   }
   return context
 }
+

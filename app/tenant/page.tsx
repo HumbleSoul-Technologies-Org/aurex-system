@@ -31,10 +31,10 @@ export default function TenantDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-          Welcome, {currentTenant.name}
+          Welcome, {currentTenant?.name || 'Tenant'}
         </h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Unit {currentTenant.unit} • {propertyInfo.name}
+          Unit {currentTenant?.unit || 'N/A'} • {propertyInfo?.name || 'Property'}
         </p>
       </div>
 
@@ -48,10 +48,10 @@ export default function TenantDashboard() {
                 Monthly Rent
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${currentTenant.monthlyRent}
+                ${currentTenant?.monthlyRent || '0'}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Due on {new Date(latestPayment.dueDate).toLocaleDateString()}
+                Due on {latestPayment?.dueDate ? new Date(latestPayment.dueDate).toLocaleDateString() : 'N/A'}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -71,7 +71,7 @@ export default function TenantDashboard() {
                 Paid
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {new Date(paymentHistory[paymentHistory.length - 2].date).toLocaleDateString()}
+                {paymentHistory.length > 1 && paymentHistory[paymentHistory.length - 2]?.date ? new Date(paymentHistory[paymentHistory.length - 2].date).toLocaleDateString() : 'N/A'}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -91,7 +91,7 @@ export default function TenantDashboard() {
                 7 mo
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {new Date(currentTenant.leaseEnd).toLocaleDateString()}
+                {currentTenant?.leaseEnd ? new Date(currentTenant.leaseEnd).toLocaleDateString() : 'N/A'}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">

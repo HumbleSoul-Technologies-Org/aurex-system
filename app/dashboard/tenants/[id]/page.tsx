@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { use } from 'react'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getEnrichedTenants, sampleProperties, getTenantRentPayments } from '@/app/lib/sample-data'
+import { getTenant, deleteTenant, updateTenant } from '@/lib/services/tenants'
+import { getProperty } from '@/lib/services/properties'
+import { fetchTransactions, createTransaction } from '@/app/lib/transactions-client'
 import {
   ArrowLeft,
   Mail,
@@ -25,6 +28,8 @@ import {
   CheckCircle,
   Clock,
   XCircle,
+  Copy,
+  Check,
 } from 'lucide-react'
 
 interface TenantDetailPageProps {
@@ -35,9 +40,51 @@ interface TenantDetailPageProps {
 
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const { id } = use(params)
-  const allTenants = getEnrichedTenants()
-  const tenant = allTenants.find((t) => t.id === id)
+  const [tenant, setTenant] = useState<any | null>(null)
+  const [property, setProperty] = useState<any | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null)
+  const [copiedPassword, setCopiedPassword] = useState(false)
+  const router = useRouter()
+
+  const [transactions, setTransactions] = useState<any[]>([])
+
+  useEffect(() => {
+    const t = getTenant(id)
+    if (t) {
+      setTenant(t)
+      if (t.propertyId) {
+        const p = getProperty(t.propertyId)
+        setProperty(p)
+      }
+      // show existing tenant password if present
+      setGeneratedPassword((t as any)?.password || null)
+    }
+  }, [id])
+
+  useEffect(() => {
+    let mounted = true
+    if (!tenant) return
+    fetchTransactions(tenant.id, 'rent').then((list) => {
+      if (mounted) setTransactions(list)
+    })
+    return () => { mounted = false }
+  }, [tenant?.id])
+
+  const generatePassword = (length = 8) => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let pw = ''
+    for (let i = 0; i < length; i++) pw += chars.charAt(Math.floor(Math.random() * chars.length))
+    setGeneratedPassword(pw)
+
+    // persist to tenant record if loaded
+    if (tenant) {
+      const updated = updateTenant(tenant.id, { password: pw })
+      if (updated) setTenant(updated)
+    }
+
+    return pw
+  }
 
   const calculateLeaseEnd = (leaseStart: string, leaseType: string) => {
     const startDate = new Date(leaseStart)
@@ -103,7 +150,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     )
   }
 
-  const leaseEnd = calculateLeaseEnd(tenant.lease_start, tenant.lease_type)
+  const leaseEnd = calculateLeaseEnd(tenant.lease_start || '', tenant.lease_type || '')
 
   return (
     <div className="space-y-6">
@@ -115,10 +162,22 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
             Back
           </Link>
         </Button>
-        <Button variant="outline" size="sm">
-          <Edit className="w-4 h-4 mr-2" />
-          Edit Tenant
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm">
+            <Edit className="w-4 h-4 mr-2" />
+            Edit Tenant
+          </Button>
+          <Button variant="destructive" size="sm" onClick={async () => {
+            if (!tenant) return
+            const ok = confirm('Are you sure you want to delete this tenant and all related data?')
+            if (!ok) return
+            deleteTenant(tenant.id)
+            // could also clear transactions via API if needed
+            router.push('/dashboard/tenants')
+          }}>
+            Delete
+          </Button>
+        </div>
       </div>
 
       {/* Tenant Info Card */}
@@ -127,8 +186,8 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           {/* Avatar & Tenant Details */}
           <div className="flex items-start gap-4">
             <Image
-              src={tenant.image}
-              alt={tenant.name}
+              src={tenant.image || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQf1fiSQO7JfDw0uv1Ae_Ye-Bo9nhGNg27dwg&s'}
+              alt={tenant.name || 'Tenant'}
               width={100}
               height={100}
               className="rounded-lg object-cover"
@@ -154,6 +213,41 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     {tenant.phone}
                   </a>
                 </div>
+                {generatedPassword && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <User className="w-4 h-4" />
+                    <span className="text-sm font-mono">{generatedPassword}</span>
+                    <button
+                      className="ml-2 text-xs text-primary hover:underline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedPassword)
+                        setCopiedPassword(true)
+                        setTimeout(() => setCopiedPassword(false), 2000)
+                      }}
+                    >
+                      {copiedPassword ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                    
+                     {!generatedPassword && (
+                   <button
+                      className="ml-4 text-xs text-primary hover:underline"
+                      onClick={async () => {
+                        const newPw = generatePassword(8)
+                        if (tenant) {
+                          const updated = updateTenant(tenant.id, { password: newPw })
+                          if (updated) setTenant(updated)
+                        }
+                      }}
+                    >
+                      Regenerate
+                    </button>
+                  )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -162,14 +256,14 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Lease Status</p>
-              <span className={`px-4 py-2 rounded-lg text-sm font-semibold inline-block ${getStatusColor(tenant.status)}`}>
-                {getStatusLabel(tenant.status)}
+              <span className={`px-4 py-2 rounded-lg text-sm font-semibold inline-block ${getStatusColor(tenant.status ?? '')}`}>
+                {getStatusLabel(tenant.status ?? '')}
               </span>
             </div>
             <div>
               <p className="text-sm text-muted-foreground mb-1">Property</p>
               <Link href={`/dashboard/properties/${tenant.propertyId}`} className="text-blue-600 hover:underline font-semibold text-sm">
-                {tenant.property?.name || 'Unknown'}
+                {property?.name || 'Unknown'}
               </Link>
             </div>
           </div>
@@ -220,12 +314,12 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Property</p>
                 <Link href={`/dashboard/properties/${tenant.propertyId}`} className="text-blue-600 hover:underline">
-                  {tenant.property?.name || 'Unknown'}
+                  {property?.name || 'Unknown'}
                 </Link>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Monthly Rent</p>
-                <p className="text-lg font-semibold text-foreground">${tenant.rentAmount.toLocaleString()}</p>
+                <p className="text-lg font-semibold text-foreground">${(tenant.rentAmount ?? 0).toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Lease Type</p>
@@ -234,7 +328,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Lease Start</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {new Date(tenant.lease_start).toLocaleDateString()}
+                  {tenant.lease_start ? new Date(tenant.lease_start).toLocaleDateString() : 'N/A'}
                 </p>
               </div>
               <div>
@@ -242,6 +336,41 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 <p className="text-lg font-semibold text-foreground">
                   {leaseEnd.toLocaleDateString()}
                 </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Generated Password</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-semibold text-foreground">{generatedPassword ?? '—'}</p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!generatedPassword) {
+                        generatePassword(8)
+                        setTimeout(async () => {
+                          if (generatedPassword) {
+                            try { await navigator.clipboard.writeText(generatedPassword) } catch {}
+                          }
+                        }, 50)
+                        return
+                      }
+                      try {
+                        await navigator.clipboard.writeText(generatedPassword)
+                        setCopiedPassword(true)
+                        setTimeout(() => setCopiedPassword(false), 2000)
+                      } catch (e) {
+                        // ignore
+                      }
+                    }}
+                    aria-label="Copy password"
+                    className="p-1 rounded hover:bg-secondary"
+                  >
+                    {copiedPassword ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                   
+                  {!generatedPassword && (
+                    <Button size="sm" variant="outline" onClick={() => generatePassword(8)}>Generate</Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -276,81 +405,86 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Monthly Rent</p>
-                  <p className="text-2xl font-bold text-foreground">${tenant.rentAmount.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-foreground">${(tenant.rentAmount ?? 0).toLocaleString()}</p>
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Annual Rent</p>
-                  <p className="text-2xl font-bold text-foreground">${(tenant.rentAmount * 12).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-foreground">${((tenant.rentAmount ?? 0) * 12).toLocaleString()}</p>
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Total Paid</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">${calculateTotalPaid(tenant.lease_start, tenant.rentAmount).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">${calculateTotalPaid(tenant.lease_start, tenant.rentAmount ?? 0).toLocaleString()}</p>
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Payment Status</p>
-                  <span className={`px-3 py-1 text-xs font-semibold rounded-full inline-block ${getStatusColor(tenant.status)}`}>
-                    {getStatusLabel(tenant.status)}
+                  <span className={`px-3 py-1 text-xs font-semibold rounded-full inline-block ${getStatusColor(tenant.status ?? '')}`}>
+                    {getStatusLabel(tenant.status ?? '')}
                   </span>
                 </Card>
               </div>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-foreground">Payment History</h3>
-                <Button size="sm">Record Payment</Button>
+                <Button size="sm" onClick={async () => {
+                  const amtStr = prompt('Enter payment amount')
+                  if (!amtStr) return
+                  const amount = Number(amtStr)
+                  if (Number.isNaN(amount)) return alert('Invalid amount')
+                  const desc = prompt('Description (optional)') || 'Rent payment'
+                  const created = await createTransaction({ tenantId: tenant.id, propertyId: tenant.propertyId, amount, type: 'rent', description: desc })
+                  if (created) {
+                    const list = await fetchTransactions(tenant.id, 'rent')
+                    setTransactions(list)
+                  } else {
+                    alert('Failed to record payment')
+                  }
+                }}>Record Payment</Button>
               </div>
-              
-              {(() => {
-                const transactions = getTenantRentPayments(tenant.id)
-                
-                if (transactions.length === 0) {
-                  return (
-                    <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
-                      <p className="text-muted-foreground">No payment records found</p>
-                    </div>
-                  )
-                }
-                
-                return (
-                  <div className="border border-border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                      <thead className="bg-secondary/50 border-b border-border">
-                        <tr>
-                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Transaction ID</th>
-                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Amount</th>
-                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Description</th>
-                          <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Status</th>
+
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
+                  <p className="text-muted-foreground">No payment records found</p>
+                </div>
+              ) : (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Transaction ID</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Amount</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Description</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((transaction) => (
+                        <tr key={transaction.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                          <td className="px-4 py-3 text-sm text-foreground font-medium">{transaction.id}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="font-semibold text-green-600 dark:text-green-400">
+                              ${transaction.amount.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{transaction.description}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded inline-flex items-center gap-1 ${
+                              transaction.status === 'completed'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                : transaction.status === 'pending'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                            }`}>
+                              {transaction.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                              {transaction.status === 'pending' && <Clock className="w-3 h-3" />}
+                              {transaction.status === 'failed' && <XCircle className="w-3 h-3" />}
+                              {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
+                            </span>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((transaction) => (
-                          <tr key={transaction.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
-                            <td className="px-4 py-3 text-sm text-foreground font-medium">{transaction.id}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <span className="font-semibold text-green-600 dark:text-green-400">
-                                ${transaction.amount.toLocaleString()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-muted-foreground">{transaction.description}</td>
-                            <td className="px-4 py-3 text-sm">
-                              <span className={`px-2 py-1 text-xs font-semibold rounded inline-flex items-center gap-1 ${
-                                transaction.status === 'completed'
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                                  : transaction.status === 'pending'
-                                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                              }`}>
-                                {transaction.status === 'completed' && <CheckCircle className="w-3 h-3" />}
-                                {transaction.status === 'pending' && <Clock className="w-3 h-3" />}
-                                {transaction.status === 'failed' && <XCircle className="w-3 h-3" />}
-                                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              })()}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </TabsContent>
 
@@ -394,7 +528,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                   <p className="text-sm text-muted-foreground">
                     {tenant.messages.length} message{tenant.messages.length !== 1 ? 's' : ''} on record
                   </p>
-                  {tenant.messages.map((msgId, index) => (
+                  {tenant.messages.map((msgId: string, index: number) => (
                     <div key={index} className="p-4 border border-border rounded-lg hover:bg-secondary transition-colors">
                       <p className="font-semibold text-foreground text-sm">{msgId}</p>
                       <p className="text-xs text-muted-foreground mt-1">Message ID: {msgId}</p>

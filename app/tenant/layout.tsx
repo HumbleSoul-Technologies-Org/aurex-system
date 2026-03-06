@@ -37,9 +37,12 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const pathname = usePathname()
 
-  const { user: authUser, isAuthenticated } = useAuth()
+  const { user: authUser, isAuthenticated, isLoading } = useAuth()
 
   React.useEffect(() => {
+    // Don't redirect while loading
+    if (isLoading) return;
+    
     if (!isAuthenticated) {
       // Not authenticated -> send to login
       window.location.href = '/auth/login'
@@ -48,7 +51,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
     if (authUser?.role !== 'tenant') {
       window.location.href = '/auth/login'
     }
-  }, [isAuthenticated, authUser])
+  }, [isAuthenticated, isLoading, authUser])
 
   const unreadNotifications = notifications.filter((n) => !n.read).length
 
@@ -151,8 +154,8 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                 <span className="text-white font-bold text-xs">SA</span>
               </div>
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-semibold text-foreground">{currentTenant.name}</p>
-                <p className="text-xs text-muted-foreground">Unit {currentTenant.unit}</p>
+                <p className="text-xs font-semibold text-foreground">{currentTenant?.name || 'Tenant'}</p>
+                <p className="text-xs text-muted-foreground">Unit {currentTenant?.unit || 'N/A'}</p>
               </div>
             </button>
           </div>

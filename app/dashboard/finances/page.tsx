@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { sampleTransactions, sampleTenants, getEnrichedTenants, sampleProperties, chartData, expenseBreakdown } from '@/app/lib/sample-data'
+import { sampleTenants, getEnrichedTenants, sampleProperties, chartData, expenseBreakdown } from '@/app/lib/sample-data'
+import { fetchTransactions, createTransaction } from '@/app/lib/transactions-client'
 import {
   BarChart,
   Bar,
@@ -35,6 +36,7 @@ import {
   Eye,
   FileText,
 } from 'lucide-react'
+import AddExpenseForm from '@/components/forms/add-expense-form'
 
 export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState('rent-collection')
@@ -42,8 +44,14 @@ export default function FinancesPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all')
   const allTenants = getEnrichedTenants()
 
+  const [transactions, setTransactions] = useState<any[]>([])
+
+  useEffect(() => {
+    fetchTransactions().then((list) => setTransactions(list))
+  }, [])
+
   // Enrich transactions with tenant and property data
-  const enrichedTransactions = sampleTransactions.map((transaction) => {
+  const enrichedTransactions = transactions.map((transaction) => {
     const tenant = allTenants.find((t) => t.id === transaction.tenantId)
     const property = sampleProperties.find((p) => p.id === transaction.propertyId)
     return {
@@ -77,6 +85,8 @@ export default function FinancesPage() {
     .filter((t) => t.type === 'expense')
     .filter((expense) => !searchQuery || expense.description.toLowerCase().includes(searchQuery.toLowerCase()))
 
+  const [showAddExpense, setShowAddExpense] = useState(false)
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -85,10 +95,10 @@ export default function FinancesPage() {
           <h1 className="text-3xl font-bold text-foreground mb-1">Finances</h1>
           <p className="text-muted-foreground">Manage rent collection, expenses, and financial reports</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white">
+        {/* <Button className="bg-primary hover:bg-primary/90 text-white">
           <Download className="w-4 h-4 mr-2" />
           Export Report
-        </Button>
+        </Button> */}
       </div>
 
       {/* Key Metrics */}
@@ -136,12 +146,12 @@ export default function FinancesPage() {
             <TabsTrigger value="expenses" className="data-[state=active]:border-b-2 data-[state=active]:border-primary">
               Expenses
             </TabsTrigger>
-            <TabsTrigger
+            {/* <TabsTrigger
               value="reports"
               className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
             >
               Reports
-            </TabsTrigger>
+            </TabsTrigger> */}
           </TabsList>
 
           {/* <Button size="sm">
@@ -169,10 +179,20 @@ export default function FinancesPage() {
               <option value="completed">Paid</option>
               <option value="pending">Pending</option>
             </select>
-            <Button size="sm">
+            {/* <Button size="sm" onClick={async () => {
+              const tenantId = prompt('Tenant ID (optional)') || undefined
+              const amtStr = prompt('Payment amount')
+              if (!amtStr) return
+              const amount = Number(amtStr)
+              if (Number.isNaN(amount)) return alert('Invalid amount')
+              const desc = prompt('Description (optional)') || 'Manual payment'
+              const created = await createTransaction({ tenantId, amount, type: 'rent', description: desc })
+              if (created) alert('Payment recorded')
+              else alert('Failed to record payment')
+            }}>
               <Plus className="w-4 h-4 mr-2" />
               Record Payment
-            </Button>
+            </Button> */}
           </div>
 
           <div className="space-y-3">
@@ -228,11 +248,13 @@ export default function FinancesPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button size="sm">
+            <Button size="sm" onClick={() => setShowAddExpense(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Expense
             </Button>
           </div>
+
+          <AddExpenseForm isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} onSubmit={() => setShowAddExpense(false)} />
 
           <div className="space-y-3">
             {expenseTransactions.length > 0 ? (

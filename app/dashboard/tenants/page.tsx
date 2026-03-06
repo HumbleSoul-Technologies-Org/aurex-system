@@ -6,7 +6,9 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import AddTenantForm from '@/components/forms/add-tenant-form'
-import { getEnrichedTenants } from '@/app/lib/sample-data'
+import { listTenants } from '@/lib/services/tenants'
+import { listProperties } from '@/lib/services/properties'
+import { createTenant } from '@/lib/services/tenants'
 import {
   Plus,
   Search,
@@ -24,14 +26,20 @@ export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'due' | 'moving-out'>('all')
   const [showAddForm, setShowAddForm] = useState(false)
+  const [tenants, setTenants] = useState(() => listTenants())
 
-  const enrichedTenants = getEnrichedTenants()
+  const enrichedTenants = tenants.map((tenant) => {
+    const property = listProperties().find((p) => p.id === tenant.propertyId)
+    return {
+      ...tenant,
+      property,
+    }
+  })
 
   const filteredTenants = enrichedTenants.filter((tenant) => {
     const matchesSearch =
       tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.unit.toLowerCase().includes(searchQuery.toLowerCase())
+      tenant.email.toLowerCase().includes(searchQuery.toLowerCase())  
 
     let matchesStatus = true
     if (filterStatus === 'paid') {
@@ -77,7 +85,24 @@ export default function TenantsPage() {
   }
 
   const handleAddTenant = (data: any) => {
-    console.log('New tenant:', data)
+    try {
+      const tenant = createTenant({
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        phone: data.phone,
+        unit: data.unitNumber,
+        propertyId: data.propertyId,
+        rentAmount: data.monthlyRent,
+        lease_type: data.leaseType,
+        lease_start: data.leaseStartDate,
+        status: 'due',
+      })
+      setTenants((prev) => [tenant, ...prev])
+      console.log('New tenant created:', tenant)
+    } catch (error) {
+      console.error('Failed to create tenant:', error)
+    }
   }
 
   return (
@@ -170,7 +195,7 @@ export default function TenantsPage() {
                       {tenant.phone}
                     </a>
                   </td>
-                  <td className="px-6 py-4 font-semibold text-foreground">${tenant.rentAmount.toLocaleString()}</td>
+                  <td className="px-6 py-4 font-semibold text-foreground">${(tenant.rentAmount ?? 0).toLocaleString()}</td>
                   <td className="px-6 py-4 text-sm text-foreground capitalize">{tenant.lease_type}</td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(tenant)}`}>

@@ -53,10 +53,10 @@ export default function TenantSettingsPage() {
 
           <div className="flex-1">
             <h2 className="text-xl md:text-2xl font-bold text-foreground mb-1">
-              {currentTenant.name}
+              {currentTenant?.name || 'Tenant'}
             </h2>
             <p className="text-sm md:text-base text-muted-foreground mb-3">
-              Unit {currentTenant.unit}
+              Unit {currentTenant?.unit || 'N/A'}
             </p>
             <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
               Active Tenant
@@ -75,7 +75,7 @@ export default function TenantSettingsPage() {
               </label>
               <input
                 type="text"
-                defaultValue={currentTenant.name}
+                defaultValue={currentTenant?.name || ''}
                 className="w-full px-4 py-2 md:py-3 border border-border rounded-lg bg-background text-foreground text-sm md:text-base"
                 disabled
               />
@@ -87,7 +87,7 @@ export default function TenantSettingsPage() {
               </label>
               <input
                 type="email"
-                defaultValue={currentTenant.email}
+                defaultValue={currentTenant?.email || ''}
                 className="w-full px-4 py-2 md:py-3 border border-border rounded-lg bg-background text-foreground text-sm md:text-base"
                 disabled
               />
@@ -99,7 +99,7 @@ export default function TenantSettingsPage() {
               </label>
               <input
                 type="tel"
-                defaultValue={currentTenant.phone}
+                defaultValue={currentTenant?.phone || ''}
                 className="w-full px-4 py-2 md:py-3 border border-border rounded-lg bg-background text-foreground text-sm md:text-base"
                 disabled
               />
@@ -111,9 +111,9 @@ export default function TenantSettingsPage() {
               </label>
               <input
                 type="text"
-                defaultValue={new Date(
+                defaultValue={currentTenant?.leaseStart ? new Date(
                   currentTenant.leaseStart
-                ).toLocaleDateString()}
+                ).toLocaleDateString() : 'N/A'}
                 className="w-full px-4 py-2 md:py-3 border border-border rounded-lg bg-background text-foreground text-sm md:text-base"
                 disabled
               />

@@ -3,7 +3,11 @@
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { sampleMaintenanceRequests, getEnrichedTenants, sampleProperties, sampleTransactions } from '@/app/lib/sample-data'
+import { createTransaction } from '@/app/lib/transactions-client'
 import Link from 'next/link'
 import {
   Plus,
@@ -30,7 +34,7 @@ interface MaintenanceRequest {
   createdDate: string
   completedDate: string | null
   assignedTo: string | null
-  actualCost: number
+  cost: number | null
   transactionId: string | null
 }
 
@@ -38,7 +42,7 @@ export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const allTenants = getEnrichedTenants()
 
-  const requests: MaintenanceRequest[] = sampleMaintenanceRequests.map((req: any) => {
+  const initialRequests: MaintenanceRequest[] = sampleMaintenanceRequests.map((req: any) => {
     const tenant = allTenants.find((t) => t.id === req.tenantId)
     const property = sampleProperties.find((p) => p.id === req.property)
     const transaction = sampleTransactions.find((t) => t.maintenanceId === req.id)
@@ -56,10 +60,66 @@ export default function MaintenancePage() {
       createdDate: req.createdAt,
       completedDate: req.completedAt,
       assignedTo: req.assignedTo || null,
-      actualCost: req.cost,
+      cost: typeof req.cost === 'number' ? req.cost : null,
       transactionId: transaction?.id || null,
     }
   })
+
+  const [requests, setRequests] = useState<MaintenanceRequest[]>(initialRequests)
+
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false)
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null)
+  const [expenseForm, setExpenseForm] = useState({ maintenanceId: '', expense: '', expenseType: '', description: '', tenantId: '', price: '', paymentMethod: '', companyAssigned: '' })
+
+  const openExpenseDialog = (requestId: string) => {
+    const req = requests.find((r) => r.id === requestId)
+    setSelectedRequestId(requestId)
+    setExpenseForm({
+      maintenanceId: req?.id || requestId,
+      expense: req?.description || '',
+      expenseType: '',
+      description: `Maintenance: ${req?.description || ''}`,
+      tenantId: req?.tenantId || '',
+      price: req?.cost !== null && req?.cost !== undefined ? String(req.cost) : '',
+      paymentMethod: '',
+      companyAssigned: req?.assignedTo || '',
+    })
+    setExpenseDialogOpen(true)
+  }
+
+  const handleExpenseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target
+    setExpenseForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleExpenseSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!selectedRequestId) return
+    const price = parseFloat(expenseForm.price || '0') || 0
+
+    setRequests((prev) => prev.map((r) => {
+      if (r.id !== selectedRequestId) return r
+      return { ...r, cost: price, assignedTo: expenseForm.companyAssigned || r.assignedTo, status: 'assigned' }
+    }))
+
+    // Record as a transaction
+    try {
+      await createTransaction({
+        tenantId: expenseForm.tenantId || undefined,
+        propertyId: expenseForm.maintenanceId || undefined,
+        amount: price,
+        type: 'expense',
+        description: expenseForm.description || 'Maintenance expense',
+        status: 'completed',
+      })
+    } catch (err) {
+      // ignore for now
+    }
+
+    setExpenseForm({ maintenanceId: '', expense: '', expenseType: '', description: '', tenantId: '', price: '', paymentMethod: '', companyAssigned: '' })
+    setSelectedRequestId(null)
+    setExpenseDialogOpen(false)
+  }
 
   // Group requests by status
   const groupedRequests = {
@@ -97,7 +157,7 @@ export default function MaintenancePage() {
   }
 
   const RequestCard = ({ request }: { request: MaintenanceRequest }) => (
-    <Card className="border border-border p-4 hover:shadow-md transition-shadow cursor-pointer">
+    <Card className="border relative border-border p-4 hover:shadow-md transition-shadow cursor-pointer">
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
@@ -118,10 +178,15 @@ export default function MaintenancePage() {
               {request.tenantName}
             </Link>
           </div>
+
           <div className="flex items-center gap-2 text-xs">
             <DollarSign className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
             <span className="text-muted-foreground">Cost: </span>
-            <span className="font-semibold text-foreground">${request.actualCost.toLocaleString()}</span>
+            {request.cost !== null && request.cost !== undefined ? (
+              <span className="font-semibold text-foreground">${request.cost.toLocaleString()}</span>
+            ) : (
+              <span className="font-semibold text-foreground">—</span>
+            )}
           </div>
           {request.assignedTo && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -135,8 +200,20 @@ export default function MaintenancePage() {
               Completed: {new Date(request.completedDate).toLocaleDateString()}
             </div>
           )}
+          {request.status === 'pending' && (
+            <Button
+              variant="ghost"
+              className="mt-2 bg-primary hover:bg-primary/90 text-white w-full"
+              onClick={() => openExpenseDialog(request.id)}
+            >
+              Approve Maintenance
+            </Button>
+          )}
         </div>
       </div>
+
+      
+
     </Card>
   )
 
@@ -148,10 +225,7 @@ export default function MaintenancePage() {
           <h1 className="text-3xl font-bold text-foreground mb-1">Maintenance</h1>
           <p className="text-muted-foreground">Track and manage work orders and maintenance requests</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white">
-          <Plus className="w-4 h-4 mr-2" />
-          Create Work Order
-        </Button>
+        
       </div>
 
       {/* Statistics */}
@@ -187,7 +261,7 @@ export default function MaintenancePage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Total Cost</p>
-              <p className="text-2xl font-bold text-foreground">${requests.reduce((sum, r) => sum + r.actualCost, 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">${requests.reduce((sum, r) => sum + (r.cost || 0), 0).toLocaleString()}</p>
             </div>
             <DollarSign className="w-8 h-8 text-primary/60" />
           </div>
@@ -224,10 +298,11 @@ export default function MaintenancePage() {
                 {groupedRequests.pending.length}
               </span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-3 relative">
               {groupedRequests.pending.map((request) => (
                 <RequestCard key={request.id} request={request} />
               ))}
+              
             </div>
           </div>
 
@@ -308,7 +383,7 @@ export default function MaintenancePage() {
                     <td className="px-6 py-4 text-sm text-muted-foreground">
                       {request.assignedTo || '-'}
                     </td>
-                    <td className="px-6 py-4 font-semibold text-foreground">${request.actualCost.toLocaleString()}</td>
+                    <td className="px-6 py-4 font-semibold text-foreground">{request.cost !== null && request.cost !== undefined ? `$${request.cost.toLocaleString()}` : '—'}</td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(request.createdDate).toLocaleDateString()}</td>
                   </tr>
                 ))}
@@ -317,6 +392,81 @@ export default function MaintenancePage() {
           </div>
         </Card>
       )}
+
+      {/* Expense Dialog */}
+      <Dialog open={expenseDialogOpen} onOpenChange={(open) => { if(!open){ setSelectedRequestId(null); setExpenseForm({ maintenanceId: '', expense: '', expenseType: '', description: '', tenantId: '', price: '', paymentMethod: '', companyAssigned: '' }) } setExpenseDialogOpen(open) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Record Expense</DialogTitle>
+            <DialogDescription>Approve maintenance and record expense details.</DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={(e) => { handleExpenseSubmit(e) }} className="p-2">
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Expense</label>
+                <Input name="expense" value={expenseForm.expense} onChange={handleExpenseChange} placeholder="Expense title" required />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Expense Type</label>
+                <select name="expenseType" value={expenseForm.expenseType} onChange={handleExpenseChange} className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground">
+                  <option value="">Select Type</option>
+                  <option value="repair">Repair</option>
+                  <option value="replacement">Replacement</option>
+                  <option value="labor">Labor</option>
+                  <option value="materials">Materials</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+                <Textarea name="description" value={expenseForm.description} onChange={handleExpenseChange} placeholder="Details about the expense" className="h-24" />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Tenant</label>
+                <select name="tenantId" value={expenseForm.tenantId} onChange={handleExpenseChange} className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground">
+                  <option value="">Select Tenant</option>
+                  {allTenants.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Price</label>
+                  <Input type="number" name="price" value={expenseForm.price} onChange={handleExpenseChange} placeholder="0" min="0" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Company Assigned</label>
+                  <Input name="companyAssigned" value={expenseForm.companyAssigned} onChange={handleExpenseChange} placeholder="Company name" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
+                <select name="paymentMethod" value={expenseForm.paymentMethod} onChange={handleExpenseChange} className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground">
+                  <option value="">Select Method</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="check">Check</option>
+                </select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => { setExpenseDialogOpen(false); setSelectedRequestId(null); setExpenseForm({ maintenanceId: '', expense: '', expenseType: '', description: '', tenantId: '', price: '', paymentMethod: '', companyAssigned: '' }) }}>Cancel</Button>
+                <Button type="submit">Approve</Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
