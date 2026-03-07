@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import SendAnnouncementForm from '@/components/forms/send-announcement-form'
+import SendAnnouncementForm, { AnnouncementFormData } from '@/components/forms/send-announcement-form'
 import {
   listMessages,
   createMessage,
@@ -17,9 +17,10 @@ import {
   markMessageSeen,
   MessageRecord,
 } from '@/lib/services/messages'
+import { listAnnouncements, createAnnouncement, AnnouncementRecord } from '@/lib/services/announcements'
 import { listProperties } from '@/lib/services/properties'
 import { listTenants } from '@/lib/services/tenants'
-import { MessageSquare, Plus, Send, Bell, Archive, Paperclip, Search, Check } from 'lucide-react'
+import { MessageSquare, Plus, Send, Bell, Archive, Paperclip, Search, Check, Eye } from 'lucide-react'
 
 interface Message {
   id: string
@@ -41,12 +42,130 @@ interface Conversation {
   messages: Message[]
 }
 
+interface AnnouncementTemplate {
+  id: string
+  title: string
+  description: string
+  data: Partial<AnnouncementFormData>
+}
+
 export default function CommunicationsPage() {
   const [activeTab, setActiveTab] = useState('inbox')
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messageText, setMessageText] = useState('')
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false)
+  const [selectedAnnouncementForViews, setSelectedAnnouncementForViews] = useState<string | null>(null)
+  const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false)
+  const [announcementTemplate, setAnnouncementTemplate] = useState<Partial<AnnouncementFormData> | null>(null)
   const [messagesData, setMessagesData] = useState<MessageRecord[]>(() => listMessages())
+  const [announcementsData, setAnnouncementsData] = useState<AnnouncementRecord[]>([])
+
+  const announcementTemplates: AnnouncementTemplate[] = [
+    {
+      id: 'rent-reminder',
+      title: 'Rent Reminder',
+      description: 'Standard message reminder for upcoming rent payment',
+      data: {
+        title: 'Rent Reminder',
+        message: 'Dear tenant,\n\nThis is a friendly reminder that your rent payment of $[amount] is due on [due_date]. Please ensure payment is made by the due date to avoid any late fees.\n\nIf you have already made the payment, please disregard this message.\n\nThank you for your prompt attention to this matter.\n\nBest regards,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+    {
+      id: 'maintenance-notice',
+      title: 'Maintenance Notice',
+      description: 'Template for scheduled maintenance updates',
+      data: {
+        title: 'Scheduled Maintenance',
+        message: 'Dear tenants,\n\nWe will be conducting scheduled maintenance on [date] from [start_time] to [end_time]. During this time, there may be [describe any disruptions, e.g., water outage, noise, etc.].\n\nWe apologize for any inconvenience this may cause and appreciate your understanding.\n\nIf you have any questions, please contact us at [contact_info].\n\nThank you,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+    {
+      id: 'lease-renewal',
+      title: 'Lease Renewal',
+      description: 'Notice about upcoming lease renewal',
+      data: {
+        title: 'Lease Renewal Notice',
+        message: 'Dear tenant,\n\nYour current lease is set to expire on [expiration_date]. We would like to discuss the possibility of renewing your lease.\n\nPlease contact us at your earliest convenience to discuss renewal terms and any changes you would like to make.\n\nWe value you as a tenant and hope to continue our partnership.\n\nBest regards,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+    {
+      id: 'eviction-notice',
+      title: 'Eviction Notice',
+      description: 'Formal notice for lease violations',
+      data: {
+        title: 'Eviction Notice',
+        message: 'Dear tenant,\n\nThis letter serves as formal notice that due to [reason for eviction, e.g., non-payment of rent, lease violations], your tenancy at [property_address] will be terminated effective [termination_date].\n\nYou have [number] days to vacate the premises. Failure to do so may result in legal action.\n\nPlease contact us immediately to discuss this matter.\n\nSincerely,\nProperty Management Team',
+        priority: 'urgent',
+      }
+    },
+    {
+      id: 'community-event',
+      title: 'Community Event',
+      description: 'Announcement for community gatherings',
+      data: {
+        title: 'Community Event',
+        message: 'Dear tenants,\n\nWe are excited to announce a community event: [event_name] on [date] at [time] in [location].\n\n[Brief description of the event and what to expect]\n\nWe hope to see you there! This is a great opportunity to meet your neighbors and enjoy some community spirit.\n\nRSVP by [rsvp_date] to [contact_info].\n\nBest regards,\nProperty Management Team',
+        priority: 'low',
+      }
+    },
+    {
+      id: 'policy-update',
+      title: 'Policy Update',
+      description: 'Changes to property policies or rules',
+      data: {
+        title: 'Policy Update',
+        message: 'Dear tenants,\n\nWe are updating our property policies effective [effective_date]. The following changes will be implemented:\n\n[Describe the policy changes clearly]\n\nThese changes are designed to [explain the purpose/benefit of the changes].\n\nIf you have any questions or concerns, please contact us.\n\nThank you for your understanding and cooperation.\n\nSincerely,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+    {
+      id: 'holiday-notice',
+      title: 'Holiday Notice',
+      description: 'Information about holiday schedules',
+      data: {
+        title: 'Holiday Notice',
+        message: 'Dear tenants,\n\nPlease be advised that our office will be closed on [holiday_dates] in observance of [holiday_name].\n\nDuring this time, emergency maintenance requests can be reported to [emergency_contact].\n\nNormal business hours will resume on [return_date].\n\nWe wish you a happy holiday season!\n\nBest regards,\nProperty Management Team',
+        priority: 'low',
+      }
+    },
+    {
+      id: 'utility-update',
+      title: 'Utility Update',
+      description: 'Information about utility changes',
+      data: {
+        title: 'Utility Update',
+        message: 'Dear tenants,\n\nWe wanted to inform you about upcoming changes to utility services:\n\n[Describe the utility changes, e.g., rate increases, service interruptions, new providers]\n\nThese changes will take effect on [effective_date].\n\nIf you have any questions about how this affects your tenancy, please contact us.\n\nThank you,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+    {
+      id: 'security-alert',
+      title: 'Security Alert',
+      description: 'Important security information',
+      data: {
+        title: 'Security Alert',
+        message: 'Dear tenants,\n\nFor your safety and security, we wanted to inform you about [describe the security concern or incident].\n\n[Provide specific details and any safety instructions]\n\nPlease take the following precautions:\n- [List safety measures]\n\nIf you notice anything suspicious, please contact [security_contact] immediately.\n\nYour safety is our top priority.\n\nSincerely,\nProperty Management Team',
+        priority: 'urgent',
+      }
+    },
+    {
+      id: 'general-announcement',
+      title: 'General Announcement',
+      description: 'Blank template for custom announcements',
+      data: {
+        title: 'General Announcement',
+        message: 'Dear tenants,\n\n[Your message here]\n\nBest regards,\nProperty Management Team',
+        priority: 'normal',
+      }
+    },
+  ]
+
+  useEffect(() => {
+    setAnnouncementsData(listAnnouncements())
+  }, [])
 
   // new message dialog state
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false)
@@ -166,7 +285,13 @@ export default function CommunicationsPage() {
   }
 
   const handleSendAnnouncement = (data: any) => {
-    console.log('New announcement:', data)
+    setIsSendingAnnouncement(true)
+    // Simulate sending delay
+    setTimeout(() => {
+      createAnnouncement(data)
+      setAnnouncementsData(listAnnouncements())
+      setIsSendingAnnouncement(false)
+    }, 2000)
   }
 
   const handleCreateNewMessage = () => {
@@ -193,8 +318,13 @@ export default function CommunicationsPage() {
     <div className="space-y-6">
       <SendAnnouncementForm 
         isOpen={showAnnouncementForm}
-        onClose={() => setShowAnnouncementForm(false)}
+        onClose={() => {
+          setShowAnnouncementForm(false)
+          setAnnouncementTemplate(null)
+        }}
         onSubmit={handleSendAnnouncement}
+        isLoading={isSendingAnnouncement}
+        initialData={announcementTemplate || undefined}
       />
 
       {/* New message dialog */}
@@ -260,7 +390,7 @@ export default function CommunicationsPage() {
           <h1 className="text-3xl font-bold text-foreground mb-1">Communications</h1>
           <p className="text-muted-foreground">Message tenants and manage announcements</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white">
+        <Button className="bg-primary hover:bg-primary/90 text-white" onClick={() => setShowAnnouncementForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
           New Announcement
         </Button>
@@ -589,31 +719,61 @@ export default function CommunicationsPage() {
           {/* Announcements Tab */}
           <TabsContent value="announcements" className="p-6">
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-bold text-foreground mb-4">Create Announcement</h3>
-                <Card className="border border-border p-4">
-                  <Button 
-                    onClick={() => setShowAnnouncementForm(true)}
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Announcement
-                  </Button>
-                </Card>
-              </div>
+              
 
               <div>
                 <h3 className="text-lg font-bold text-foreground mb-4">Recent Announcements</h3>
                 <div className="space-y-3">
-                  <Card className="border border-border p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <p className="font-semibold text-foreground">Scheduled Maintenance</p>
-                      <p className="text-xs text-muted-foreground">2024-02-03</p>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      All properties will undergo scheduled maintenance on February 5th.
-                    </p>
-                  </Card>
+                  {announcementsData.length === 0 ? (
+                    <Card className="border border-border p-4">
+                      <p className="text-sm text-muted-foreground text-center">No announcements yet</p>
+                    </Card>
+                  ) : (
+                    announcementsData.map((announcement) => {
+                      const readTenants = listTenants().filter(t => announcement.readBy.includes(t.id))
+                      return (
+                        <Card key={announcement.id} className="border border-border p-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <p className="font-semibold text-foreground">{announcement.title}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedAnnouncementForViews(
+                                  selectedAnnouncementForViews === announcement.id ? null : announcement.id
+                                )}
+                                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                              >
+                                <Eye className="w-4 h-4" />
+                                {announcement.readBy.length}
+                              </button>
+                              <p className="text-xs text-muted-foreground">{formatDateTime(announcement.sentAt || announcement.createdAt)}</p>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {announcement.message}
+                          </p>
+                          {selectedAnnouncementForViews === announcement.id && (
+                            <div className="mt-3 p-3 bg-muted rounded-md">
+                              <p className="text-sm font-medium mb-2">Seen by:</p>
+                              {readTenants.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">No one yet</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {readTenants.map((tenant) => {
+                                    const property = listProperties().find(p => p.id === tenant.propertyId)
+                                    return (
+                                      <div key={tenant.id} className="text-sm">
+                                        {tenant.name} - {property?.name || 'Unknown Property'}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </Card>
+                      )
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -627,26 +787,27 @@ export default function CommunicationsPage() {
                 Create Template
               </Button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="border border-border p-4">
-                  <h3 className="font-semibold text-foreground mb-2">Rent Reminder</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Standard message reminder for upcoming rent payment
-                  </p>
-                  <Button size="sm" variant="outline" className="border-border bg-transparent">
-                    Use Template
-                  </Button>
-                </Card>
-
-                <Card className="border border-border p-4">
-                  <h3 className="font-semibold text-foreground mb-2">Maintenance Request</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Template for maintenance request updates
-                  </p>
-                  <Button size="sm" variant="outline" className="border-border bg-transparent">
-                    Use Template
-                  </Button>
-                </Card>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {announcementTemplates.map((template) => (
+                  <Card key={template.id} className="border border-border p-4">
+                    <h3 className="font-semibold text-foreground mb-2">{template.title}</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {template.description}
+                    </p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="border-border bg-transparent w-full"
+                      onClick={() => {
+                        setAnnouncementTemplate(template.data)
+                        setShowAnnouncementForm(true)
+                        setActiveTab('announcements')
+                      }}
+                    >
+                      Use Template
+                    </Button>
+                  </Card>
+                ))}
               </div>
             </div>
           </TabsContent>

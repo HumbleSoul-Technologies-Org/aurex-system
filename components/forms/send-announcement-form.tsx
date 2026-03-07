@@ -2,17 +2,21 @@
 
 import React from "react"
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { X, Bell, Users, Calendar } from 'lucide-react'
+import { listProperties } from '@/lib/services/properties'
+import { listTenants } from '@/lib/services/tenants'
 
 interface SendAnnouncementFormProps {
   isOpen: boolean
   onClose: () => void
   onSubmit?: (data: AnnouncementFormData) => void
+  isLoading?: boolean
+  initialData?: Partial<AnnouncementFormData>
 }
 
 interface AnnouncementFormData {
@@ -21,23 +25,65 @@ interface AnnouncementFormData {
   recipients: string
   priority: string
   scheduledDate?: string
+  propertyId?: string
+  tenantSelectionMode?: string
+  tenantIds?: string[]
 }
 
-export default function SendAnnouncementForm({ isOpen, onClose, onSubmit }: SendAnnouncementFormProps) {
+export default function SendAnnouncementForm({ isOpen, onClose, onSubmit, isLoading = false, initialData }: SendAnnouncementFormProps) {
   const [formData, setFormData] = useState<AnnouncementFormData>({
     title: '',
     message: '',
     recipients: 'all',
     priority: 'normal',
     scheduledDate: '',
+    propertyId: '',
+    tenantSelectionMode: 'all',
+    tenantIds: [],
+    ...initialData,
   })
 
+  const properties = useMemo(() => listProperties(), [])
+  const tenantsForSelectedProperty = useMemo(
+    () => formData.propertyId ? listTenants().filter(t => t.propertyId === formData.propertyId) : [],
+    [formData.propertyId]
+  )
+  const tenantsWithDueDate = useMemo(
+    () => tenantsForSelectedProperty.filter(t => t.rentAmount && t.rentAmount > 0),
+    [tenantsForSelectedProperty]
+  )
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    const { name, value, options } = e.target as HTMLSelectElement
+    if (name === 'tenantIds' && options) {
+      const selected = Array.from(options).filter(o => o.selected).map(o => o.value)
+      setFormData((prev) => ({
+        ...prev,
+        [name]: selected,
+      }))
+    } else {
+      setFormData((prev) => {
+        const newData = {
+          ...prev,
+          [name]: value,
+        }
+        if (name === 'recipients' && value !== 'property') {
+          newData.propertyId = ''
+          newData.tenantSelectionMode = 'all'
+          newData.tenantIds = []
+        }
+        if (name === 'tenantSelectionMode') {
+          if (value === 'all') {
+            newData.tenantIds = tenantsForSelectedProperty.map(t => t.id)
+          } else if (value === 'withDueDate') {
+            newData.tenantIds = tenantsWithDueDate.map(t => t.id)
+          } else if (value === 'custom') {
+            newData.tenantIds = []
+          }
+        }
+        return newData
+      })
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -49,6 +95,9 @@ export default function SendAnnouncementForm({ isOpen, onClose, onSubmit }: Send
       recipients: 'all',
       priority: 'normal',
       scheduledDate: '',
+      propertyId: '',
+      tenantSelectionMode: 'all',
+      tenantIds: [],
     })
     onClose()
   }
@@ -87,12 +136,10 @@ export default function SendAnnouncementForm({ isOpen, onClose, onSubmit }: Send
                 name="title"
                 value={formData.title}
                 onChange={handleChange}
-                placeholder="e.g., Scheduled Maintenance Update"
+                placeholder="Enter announcement title"
                 required
               />
             </div>
-
-            {/* Message */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Message</label>
               <Textarea
@@ -126,6 +173,77 @@ export default function SendAnnouncementForm({ isOpen, onClose, onSubmit }: Send
                 <option value="managers">Managers Only</option>
               </select>
             </div>
+
+            {/* Conditional Property and Tenants */}
+            {formData.recipients === 'property' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Property</label>
+                  <select
+                    name="propertyId"
+                    value={formData.propertyId}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    required
+                  >
+                    <option value="">Select property</option>
+                    {properties.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Tenants</label>
+                  <select
+                    name="tenantSelectionMode"
+                    value={formData.tenantSelectionMode}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    required
+                  >
+                    <option value="all">All Tenants in Property</option>
+                    <option value="withDueDate">Tenants with Due Date</option>
+                    <option value="custom">Custom Selection</option>
+                  </select>
+                </div>
+                {formData.tenantSelectionMode === 'all' && (
+                  <div className="text-sm text-muted-foreground">
+                    All {tenantsForSelectedProperty.length} tenants in this property will receive the announcement.
+                  </div>
+                )}
+                {formData.tenantSelectionMode === 'withDueDate' && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Tenants with outstanding rent:</p>
+                    <div className="max-h-32 overflow-y-auto border border-input rounded-md p-2 bg-muted">
+                      {tenantsWithDueDate.length > 0 ? (
+                        tenantsWithDueDate.map((t) => (
+                          <div key={t.id} className="text-sm">{t.name}</div>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">No tenants with due dates</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {formData.tenantSelectionMode === 'custom' && (
+                  <div>
+                    <select
+                      name="tenantIds"
+                      multiple
+                      value={formData.tenantIds}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                      required
+                    >
+                      {tenantsForSelectedProperty.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">Hold Ctrl (Cmd on Mac) to select multiple tenants</p>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Priority */}
             <div>
@@ -171,8 +289,8 @@ export default function SendAnnouncementForm({ isOpen, onClose, onSubmit }: Send
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-white">
-                Send Announcement
+              <Button type="submit" disabled={isLoading} className="flex-1 bg-primary hover:bg-primary/90 text-white">
+                {isLoading ? 'Sending...' : 'Send Announcement'}
               </Button>
             </div>
           </form>
