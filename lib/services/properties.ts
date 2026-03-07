@@ -18,6 +18,10 @@ export interface PropertyRecord {
   tenants?: string[] // tenant ids
   occupancy?: number
   monthlyRevenue?: number
+  location?: {
+    lat: number
+    lng: number
+  }
 }
 
 function makePrefix(name: string, city: string, country: string) {
@@ -86,6 +90,7 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
     features: payload.features ?? [],
     description: payload.description ?? '',
     tenants: [],
+    location: payload.location,
   }
   insertIntoCollection('properties', record)
 

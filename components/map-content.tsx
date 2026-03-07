@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
-import { sampleProperties } from '@/app/lib/sample-data'
+import { listProperties } from '@/lib/services/properties'
+import { listTenants } from '@/lib/services/tenants'
+import { useRouter } from 'next/navigation'
 import 'leaflet/dist/leaflet.css'
 
 // Fix default marker icons
@@ -14,20 +16,32 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 })
 
-export default function MapContent() {
+interface MapContentProps {
+  properties: any[]
+  tenants: any[]
+}
+
+export default function MapContent({ properties, tenants }: MapContentProps) {
   const mapContainer = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
-  const initialized = useRef(false)
+  const router = useRouter()
 
   useEffect(() => {
-    if (!mapContainer.current || initialized.current) return
+    if (!mapContainer.current) return
+
+    // Clean up previous map instance
+    if (mapInstance.current) {
+      mapInstance.current.off()
+      mapInstance.current.remove()
+      mapInstance.current = null
+    }
 
     // Calculate center coordinates for map
-    const lats = sampleProperties
+    const lats = properties
       .map((p) => p.location?.lat || 0)
       .filter((lat) => lat !== 0)
-    const longs = sampleProperties
-      .map((p) => p.location?.long || 0)
+    const longs = properties
+      .map((p) => p.location?.lng || 0)
       .filter((long) => long !== 0)
 
     const centerLat =
@@ -49,19 +63,20 @@ export default function MapContent() {
     }).addTo(map)
 
     // Add markers for each property
-    sampleProperties.forEach((property) => {
-      if (property.location?.lat && property.location?.long) {
+    properties.forEach((property) => {
+      if (property.location?.lat && property.location?.lng) {
         const marker = L.marker([
           property.location.lat,
-          property.location.long,
+          property.location.lng,
         ]).addTo(map)
 
-        const monthlyRevenue = property.price_per_unit * property.units_available
+        // Count tenants for this property
+        const propertyTenants = tenants.filter(t => t.propertyId === property.id)
+        const tenantCount = propertyTenants.length
 
         const popupContent = `
-          <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 260px;">
+          <div onclick="window.location.href='/dashboard/properties/${property.id}'" style="cursor: pointer;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">${property.name}</h3>
-            <p style="margin: 4px 0; font-size: 13px; color: #666;">${property.address}</p>
             <p style="margin: 4px 0; font-size: 13px; color: #666;">${property.city}, ${property.country}</p>
             <div style="margin: 8px 0 0 0; padding-top: 8px; border-top: 1px solid #e0e0e0;">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
@@ -70,16 +85,8 @@ export default function MapContent() {
                   <p style="margin: 4px 0 0 0; color: #333;">${property.units_available}</p>
                 </div>
                 <div>
-                  <p style="margin: 0; color: #999;"><strong>Type</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">${property.type}</p>
-                </div>
-                <div>
-                  <p style="margin: 0; color: #999;"><strong>Monthly Income</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">$${monthlyRevenue.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p style="margin: 0; color: #999;"><strong>Occupancy</strong></p>
-                  <p style="margin: 4px 0 0 0; color: #333;">${property.occupancy}</p>
+                  <p style="margin: 0; color: #999;"><strong>Tenants</strong></p>
+                  <p style="margin: 4px 0 0 0; color: #333;">${tenantCount}</p>
                 </div>
               </div>
             </div>
@@ -91,7 +98,6 @@ export default function MapContent() {
     })
 
     mapInstance.current = map
-    initialized.current = true
 
     // Cleanup
     return () => {
@@ -99,10 +105,9 @@ export default function MapContent() {
         mapInstance.current.off()
         mapInstance.current.remove()
         mapInstance.current = null
-        initialized.current = false
       }
     }
-  }, [])
+  }, [properties, tenants])
 
   return (
     <div

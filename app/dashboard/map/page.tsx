@@ -1,11 +1,13 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, MapPin } from 'lucide-react'
 import Link from 'next/link'
-import { sampleProperties } from '@/app/lib/sample-data'
+import { listProperties, PropertyRecord } from '@/lib/services/properties'
+import { listTenants } from '@/lib/services/tenants'
 
 const MapContent = dynamic(() => import('@/components/map-content'), {
   ssr: false,
@@ -13,6 +15,13 @@ const MapContent = dynamic(() => import('@/components/map-content'), {
 })
 
 export default function MapPage() {
+  const [properties, setProperties] = useState<PropertyRecord[]>([])
+  const [tenants, setTenants] = useState<any[]>([])
+
+  useEffect(() => {
+    setProperties(listProperties())
+    setTenants(listTenants())
+  }, [])
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -36,8 +45,8 @@ export default function MapPage() {
         {/* Map */}
         <div className="lg:col-span-3">
           <Card className="border border-border p-0 overflow-hidden h-[600px]">
-            {sampleProperties.length > 0 ? (
-              <MapContent />
+            {properties.length > 0 ? (
+              <MapContent properties={properties} tenants={tenants} />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-muted">
                 <div className="text-center">
@@ -60,31 +69,33 @@ export default function MapPage() {
           <Card className="border border-border p-4 overflow-y-auto max-h-[600px]">
             <h2 className="text-lg font-bold text-foreground mb-4">Properties</h2>
             <div className="space-y-3">
-              {sampleProperties.length > 0 ? (
-                sampleProperties.map((property) => (
-                  <div
-                    key={property.id}
-                    className="p-3 rounded-lg border border-border hover:bg-accent transition-colors"
-                  >
-                    <p className="font-medium text-foreground text-sm">{property.name}</p>
-                    <div className="flex items-start gap-2 mt-2">
-                      <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-muted-foreground">
-                        {property?.city}, {property?.country}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                      <div>
-                        <p className="text-muted-foreground">Units</p>
-                        <p className="font-semibold text-foreground">{property.units_available}</p>
+              {properties.length > 0 ? (
+                properties.map((property) => {
+                  const propertyTenants = tenants.filter(t => t.propertyId === property.id)
+                  return (
+                    <Link key={property.id} href={`/dashboard/properties/${property.id}`}>
+                      <div className="p-3 rounded-lg border border-border hover:bg-accent transition-colors cursor-pointer">
+                        <p className="font-medium text-foreground text-sm">{property.name}</p>
+                        <div className="flex items-start gap-2 mt-2">
+                          <MapPin className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-muted-foreground">
+                            {property?.city}, {property?.country}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Units</p>
+                            <p className="font-semibold text-foreground">{property.units_available}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Tenants</p>
+                            <p className="font-semibold text-foreground">{propertyTenants.length}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Occupancy</p>
-                        <p className="font-semibold text-foreground">{property.occupancy}%</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
+                    </Link>
+                  )
+                })
               ) : (
                 <div className="text-center py-8">
                   <MapPin className="w-8 h-8 text-muted-foreground mx-auto mb-3 opacity-50" />

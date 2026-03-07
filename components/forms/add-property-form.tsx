@@ -279,22 +279,20 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
                 <Input
-                  type="number"
+                  type="text"
                   name="location.lat"
                   value={formData.location.lat as any}
                   onChange={handleChange}
-                  step="any"
                   placeholder="e.g., 37.7749"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
                 <Input
-                  type="number"
+                  type="text"
                   name="location.lng"
                   value={formData.location.lng as any}
                   onChange={handleChange}
-                  step="any"
                   placeholder="e.g., -122.4194"
                 />
               </div>

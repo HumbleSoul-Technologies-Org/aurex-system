@@ -40,6 +40,7 @@ import {
   X,
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { fetchTransactions } from '@/app/lib/transactions-client'
 
 interface PropertyDetailPageProps {
   params: Promise<{
@@ -68,6 +69,17 @@ export default function PropertyDetailPage({
   const [images, setImages] = useState<string[]>(property.images || []);
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editName, setEditName] = useState(property.name || '');
+  const [editAddress, setEditAddress] = useState(property.address || '');
+  const [editCity, setEditCity] = useState(property.city || '');
+  const [editCountry, setEditCountry] = useState(property.country || '');
+  const [editPrice, setEditPrice] = useState<number>(property.price_per_unit || 0);
+  const [editUnits, setEditUnits] = useState<number>(property.units_available || 0);
+  const [editType, setEditType] = useState(property.type || '');
+  const [editFeatures, setEditFeatures] = useState<string>((property.features || []).join(', '));
+  const [editLat, setEditLat] = useState<string>(property.location?.lat?.toString() || '');
+  const [editLng, setEditLng] = useState<string>(property.location?.lng?.toString() || '');
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -85,6 +97,19 @@ export default function PropertyDetailPage({
       }
     };
   }, [uploadPreview]);
+
+  const [transactions, setTransactions] = useState<any[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    fetchTransactions().then((list) => {
+      if (!mounted) return
+      const tenantIds = propertyTenants.map((t: any) => t.id)
+      const filtered = list.filter((tx: any) => tx.propertyId === property.id || (tx.tenantId && tenantIds.includes(tx.tenantId)))
+      setTransactions(filtered)
+    })
+    return () => { mounted = false }
+  }, [property.id])
 
   // Income Calculations
   const tenantMonthly = propertyTenants.reduce(
@@ -111,6 +136,29 @@ export default function PropertyDetailPage({
     potentialMonthlyIncome > 0
       ? Math.round((totalMonthlyIncome / potentialMonthlyIncome) * 100)
       : 0;
+
+  function formatCompactNumber(value: number | null | undefined) {
+    const n = Number(value) || 0
+    const abs = Math.abs(n)
+    if (abs >= 1_000_000) {
+      const v = n / 1_000_000
+      return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + 'M'
+    }
+    if (abs >= 1_000) {
+      const v = n / 1_000
+      return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + 'K'
+    }
+    return String(n)
+  }
+
+  // Tenant-collected rent for this property (completed rent transactions)
+  const tenantCollected = transactions
+    .filter((t) => t.type === 'rent' && t.status === 'completed')
+    .reduce((s, t) => s + (Number(t.amount) || 0), 0)
+
+  // revenue lost compared to potential monthly income
+  const revenueLost = Math.max(0, potentialMonthlyIncome - tenantCollected)
+  const avgRevenueLostPerUnit = property?.units_available ? Math.round(revenueLost / property.units_available) : 0
 
   if (!property) {
     return (
@@ -144,10 +192,152 @@ export default function PropertyDetailPage({
             Back
           </Link>
         </Button>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => {
+          // populate edit fields then open dialog
+          setEditName(property.name || '');
+          setEditAddress(property.address || '');
+          setEditCity(property.city || '');
+          setEditCountry(property.country || '');
+          setEditPrice(property.price_per_unit || 0);
+          setEditUnits(property.units_available || 0);
+          setEditType(property.type || '');
+          setEditFeatures((property.features || []).join(', '));
+          setEditLat(property.location?.lat?.toString() || '');
+          setEditLng(property.location?.lng?.toString() || '');
+          setIsEditOpen(true);
+        }}>
           <Edit className="w-4 h-4 mr-2" />
           Edit Property
         </Button>
+
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Property</DialogTitle>
+              <DialogDescription>Update property details and save.</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Name</label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Address</label>
+                <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">City</label>
+                  <Input value={editCity} onChange={(e) => setEditCity(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Country</label>
+                  <Input value={editCountry} onChange={(e) => setEditCountry(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Price per Unit</label>
+                  <Input value={String(editPrice)} onChange={(e) => setEditPrice(Number(e.target.value) || 0)} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Units Available</label>
+                  <Input value={String(editUnits)} onChange={(e) => setEditUnits(Number(e.target.value) || 0)} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <select
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                >
+                  <option value="">Select property type</option>
+                  <option value="apartment">Apartment</option>
+                  <option value="house">House</option>
+                  <option value="condo">Condo</option>
+                  <option value="townhouse">Townhouse</option>
+                  <option value="studio">Studio</option>
+                  <option value="duplex">Duplex</option>
+                  <option value="loft">Loft</option>
+                  <option value="office">Office</option>
+                  <option value="retail">Retail / Commercial</option>
+                  <option value="warehouse">Warehouse</option>
+                  <option value="land">Land</option>
+                  <option value="mixed-use">Mixed-use</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Features (comma separated)</label>
+                <Input value={editFeatures} onChange={(e) => setEditFeatures(e.target.value)} />
+              </div>
+
+              {/* Location fields */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
+                  <Input
+                    type="text"
+                    value={editLat}
+                    onChange={(e) => setEditLat(e.target.value)}
+                    placeholder="e.g., 37.7749"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
+                  <Input
+                    type="text"
+                    value={editLng}
+                    onChange={(e) => setEditLng(e.target.value)}
+                    placeholder="e.g., -122.4194"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                <Button onClick={async () => {
+                  try {
+                    // build a patch only with fields provided in the form
+                    const updated: any = {}
+
+                    if (editName !== '') updated.name = editName
+                    if (editAddress !== '') updated.address = editAddress
+                    if (editCity !== '') updated.city = editCity
+                    if (editCountry !== '') updated.country = editCountry
+                    // price and units are numbers, always include (0 is valid)
+                    updated.price_per_unit = editPrice
+                    updated.units_available = editUnits
+                    if (editType !== '') updated.type = editType
+
+                    const cleanedFeatures = editFeatures
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                    if (cleanedFeatures.length > 0) {
+                      updated.features = cleanedFeatures
+                    }
+
+                    if (editLat !== '' && editLng !== '') {
+                      updated.location = { lat: Number(editLat), lng: Number(editLng) }
+                    }
+
+                    updateProperty(property.id, updated)
+                    setIsEditOpen(false)
+                    // reload to reflect server-side sample-data changes
+                    window.location.reload()
+                  } catch (e) {
+                    console.error('Failed to update property', e)
+                    alert('Update failed')
+                  }
+                }}>Save</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Property Hero */}
@@ -165,9 +355,9 @@ export default function PropertyDetailPage({
             </div>
 
             {/* Thumbnail Images */}
-            {images && images.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {images.map((image, index) => (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {images && images.length > 0 && (
+                images.map((image, index) => (
                   <div key={index} className="relative flex-shrink-0">
                     <button
                       onClick={() => setSelectedImageIndex(index)}
@@ -207,21 +397,18 @@ export default function PropertyDetailPage({
                       <X className="w-3 font-bold h-3" />
                     </button>
                   </div>
-                ))}
-                {/* Add Image Button (visible when less than 6 images) */}
-                {images.length < 6 && (
-                  <div>
-                    <Button
-                      size="sm"
-                      onClick={() => setIsUploadOpen(true)}
-                      className="bg-transparent w-16 h-16 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3"
-                    >
-                      <ImagePlus className="w-5 h-5  text-gray-200" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+                ))
+              )  }
+
+              {/* Small add button always visible when under limit */}
+              {images.length < 6 && (
+                <div>
+                  <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-transparent w-16 h-16 border-dashed border-2 border-border hover:border-white hover:text-primary hover:bg-primary p-3">
+                    <ImagePlus className="w-5 h-5 text-gray-200" />
+                  </Button>
+                </div>
+              )}
+            </div>
 
             {/* Upload Dialog */}
             <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
@@ -469,15 +656,15 @@ export default function PropertyDetailPage({
                   Monthly Income
                 </p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  ${totalMonthlyIncome.toLocaleString()}
+                  ${formatCompactNumber(totalMonthlyIncome)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">
                   Annual Income
                 </p>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  ${(totalAnnualIncome / 1000).toFixed(1)}k
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  ${formatCompactNumber(totalAnnualIncome)}
                 </p>
               </div>
             </div>
@@ -803,7 +990,7 @@ export default function PropertyDetailPage({
                     Monthly Income
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    ${totalMonthlyIncome.toLocaleString()}
+                    ${formatCompactNumber(totalMonthlyIncome)}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -811,7 +998,7 @@ export default function PropertyDetailPage({
                     Annual Income
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    ${totalAnnualIncome.toLocaleString()}
+                    ${formatCompactNumber(totalAnnualIncome)}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -833,63 +1020,9 @@ export default function PropertyDetailPage({
               </div>
             </div>
 
-            {/* Thumbnail Images / Add Image Button */}
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {images.length > 0 ? (
-                images.map((image, index) => (
-                  <div key={index} className="relative flex-shrink-0">
-                    <button
-                      onClick={() => setSelectedImageIndex(index)}
-                      className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImageIndex === index
-                          ? 'border-primary'
-                          : 'border-border hover:border-primary/50'
-                      }`}
-                    >
-                      <img
-                        src={image}
-                        alt={`${property.name} ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete image ${index + 1}`}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const next = images.filter((_, i) => i !== index)
-                        setImages(next)
-                        try {
-                          updateProperty(property.id, { images: next })
-                        } catch (err) {
-                          console.error('Failed to persist image deletion', err)
-                        }
-                        setSelectedImageIndex((prev) => Math.max(0, Math.min(prev, next.length - 1)))
-                      }}
-                      className="absolute top-0 right-0 m-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-white/90 hover:bg-red-600 hover:text-white text-xs"
-                    >
-                     <X className="w-3 font-bold h-3" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <div className="w-full flex items-center justify-center">
-                  <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-transparent w-32 h-32 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3 flex flex-col items-center justify-center">
-                    <ImagePlus className="w-6 h-6 text-muted-foreground mb-1" />
-                    <span className="text-sm text-muted-foreground">Add property images</span>
-                  </Button>
-                </div>
-              )}
+           
 
-              {/* Small add button always visible when under limit */}
-              {images.length < 6 && (
-                <div>
-                  <Button size="sm" onClick={() => setIsUploadOpen(true)} className="bg-transparent w-16 h-16 border-dashed border-2 border-border hover:border-gray-300 hover:text-primary hover:bg-gray-300 p-3">
-                    <ImagePlus className="w-5 h-5 text-gray-200" />
-                  </Button>
-                </div>
-              )}
-            </div>
+            
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">
@@ -975,12 +1108,12 @@ export default function PropertyDetailPage({
                         >
                           TOTAL
                         </td>
-                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
-                          ${totalMonthlyIncome.toLocaleString()}
-                        </td>
-                        <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
-                          ${totalAnnualIncome.toLocaleString()}
-                        </td>
+                          <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
+                            ${formatCompactNumber(tenantCollected)}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
+                            ${formatCompactNumber(tenantCollected * 12)}
+                          </td>
                         <td></td>
                       </tr>
                     </tbody>

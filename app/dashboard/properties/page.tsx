@@ -49,6 +49,7 @@ export default function PropertiesPage() {
         type: data.propertyType,
         features: data.features,
         description: data.description,
+        location: data.location.lat !== '' && data.location.lng !== '' ? { lat: Number(data.location.lat), lng: Number(data.location.lng) } : undefined,
       }
 
       if (data.imageUrl) payload.images = [data.imageUrl]
