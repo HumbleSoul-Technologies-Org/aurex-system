@@ -33,6 +33,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { getNotifications, markAsRead, getUnreadCount } from "@/lib/services/notifications";
+import { getMaintenanceRequests } from "@/lib/services/maintenance";
+import { listMessages } from "@/lib/services/messages";
 
 interface NavItem {
   label: string;
@@ -50,6 +52,8 @@ export default function DashboardLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [pendingMaintenanceCount, setPendingMaintenanceCount] = useState(0);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const pathname = usePathname();
@@ -60,6 +64,17 @@ export default function DashboardLayout({
   // Load notifications
   React.useEffect(() => {
     setNotifications(getNotifications());
+  }, []);
+
+  // Load maintenance and messages counts
+  React.useEffect(() => {
+    const maintenanceRequests = getMaintenanceRequests();
+    const pendingCount = maintenanceRequests.filter(req => req.status === 'pending').length;
+    setPendingMaintenanceCount(pendingCount);
+
+    const messages = listMessages();
+    const unreadCount = messages.filter(msg => !msg.seen && msg.from !== 'management').length;
+    setUnreadMessagesCount(unreadCount);
   }, []);
 
   const refreshNotifications = () => {
@@ -117,7 +132,7 @@ export default function DashboardLayout({
           label: "Maintenance",
           href: "/dashboard/maintenance",
           icon: <Wrench className="w-4 h-4" />,
-          badge: 0,
+          badge: pendingMaintenanceCount,
         },
         {
           label: "Map",
@@ -144,6 +159,7 @@ export default function DashboardLayout({
           label: "Communications",
           href: "/dashboard/communications",
           icon: <MessageSquare className="w-4 h-4" />,
+          badge: unreadMessagesCount,
         },
         // {
         //   label: "Documents",

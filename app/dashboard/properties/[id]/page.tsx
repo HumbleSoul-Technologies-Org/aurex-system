@@ -40,7 +40,7 @@ import {
   X,
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-import { fetchTransactions } from '@/app/lib/transactions-client'
+import { listTransactions } from '@/app/lib/transactions-client'
 
 interface PropertyDetailPageProps {
   params: Promise<{
@@ -102,12 +102,11 @@ export default function PropertyDetailPage({
 
   useEffect(() => {
     let mounted = true
-    fetchTransactions().then((list) => {
-      if (!mounted) return
-      const tenantIds = propertyTenants.map((t: any) => t.id)
-      const filtered = list.filter((tx: any) => tx.propertyId === property.id || (tx.tenantId && tenantIds.includes(tx.tenantId)))
-      setTransactions(filtered)
-    })
+    const list = listTransactions()
+    if (!mounted) return
+    const tenantIds = propertyTenants.map((t: any) => t.id)
+    const filtered = list.filter((tx: any) => tx.propertyId === property.id || (tx.tenantId && tenantIds.includes(tx.tenantId)))
+    setTransactions(filtered)
     return () => { mounted = false }
   }, [property.id])
 

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getTenant, deleteTenant, updateTenant } from '@/lib/services/tenants'
 import { getProperty } from '@/lib/services/properties'
-import { fetchTransactions, createTransaction } from '@/app/lib/transactions-client'
+import { listTransactions, createTransaction } from '@/app/lib/transactions-client'
 import {
   ArrowLeft,
   Mail,
@@ -65,9 +65,8 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   useEffect(() => {
     let mounted = true
     if (!tenant) return
-    fetchTransactions(tenant.id, 'rent').then((list) => {
-      if (mounted) setTransactions(list)
-    })
+    const list = listTransactions(tenant.id, 'rent')
+    if (mounted) setTransactions(list)
     return () => { mounted = false }
   }, [tenant?.id])
 
@@ -430,9 +429,9 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                   const amount = Number(amtStr)
                   if (Number.isNaN(amount)) return alert('Invalid amount')
                   const desc = prompt('Description (optional)') || 'Rent payment'
-                  const created = await createTransaction({ tenantId: tenant.id, propertyId: tenant.propertyId, amount, type: 'rent', description: desc })
+                  const created = createTransaction({ tenantId: tenant.id, propertyId: tenant.propertyId, amount, type: 'rent', description: desc })
                   if (created) {
-                    const list = await fetchTransactions(tenant.id, 'rent')
+                    const list = listTransactions(tenant.id, 'rent')
                     setTransactions(list)
                   } else {
                     alert('Failed to record payment')

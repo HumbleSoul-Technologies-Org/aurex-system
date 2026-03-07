@@ -1,3 +1,5 @@
+import { insertIntoCollection, getCollection, generateId, updateInCollection, removeFromCollection } from '@/lib/local-store'
+
 export type TransactionCreate = {
   tenantId?: string
   propertyId?: string
@@ -9,21 +11,32 @@ export type TransactionCreate = {
 
 export type Transaction = TransactionCreate & { id: string; date: string }
 
-export async function fetchTransactions(tenantId?: string, type?: string): Promise<Transaction[]> {
-  const params = new URLSearchParams()
-  if (tenantId) params.set('tenantId', tenantId)
-  if (type) params.set('type', type)
-  const res = await fetch(`/api/transactions?${params.toString()}`)
-  if (!res.ok) return []
-  return res.json()
+export function listTransactions(tenantId?: string, type?: string): Transaction[] {
+  let transactions = getCollection<Transaction>('transactions') || []
+  if (tenantId) transactions = transactions.filter((t) => t.tenantId === tenantId)
+  if (type) transactions = transactions.filter((t) => t.type === type)
+  return transactions
 }
 
-export async function createTransaction(payload: TransactionCreate): Promise<Transaction | null> {
-  const res = await fetch('/api/transactions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (!res.ok) return null
-  return res.json()
+export function createTransaction(payload: TransactionCreate): Transaction {
+  const tx: Transaction = {
+    id: generateId('tx'),
+    tenantId: payload.tenantId,
+    propertyId: payload.propertyId,
+    amount: payload.amount,
+    date: new Date().toISOString(),
+    type: payload.type || 'rent',
+    description: payload.description || '',
+    status: payload.status || 'completed',
+  }
+  insertIntoCollection('transactions', tx)
+  return tx
+}
+
+export function updateTransaction(id: string, patch: Partial<TransactionCreate>): Transaction | null {
+  return updateInCollection<Transaction>('transactions', id, patch as any)
+}
+
+export function deleteTransaction(id: string): boolean {
+  return removeFromCollection('transactions', id)
 }

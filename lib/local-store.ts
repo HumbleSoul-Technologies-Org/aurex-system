@@ -1,4 +1,4 @@
-export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements'
+export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions'
 
 const DB_KEY = 'propman:v1'
 
@@ -10,6 +10,7 @@ export interface DBSchema {
   messages: any[]
   replies: any[]
   announcements: any[]
+  transactions: any[]
 }
 
 const defaultDB: DBSchema = {
@@ -20,6 +21,7 @@ const defaultDB: DBSchema = {
   messages: [],
   replies: [],
   announcements: [],
+  transactions: [],
 }
 
 function readRaw(): DBSchema {

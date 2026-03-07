@@ -2,13 +2,14 @@
 
 import React from "react"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { X, DollarSign, Calendar, Tag } from 'lucide-react'
 import { createTransaction } from '@/app/lib/transactions-client'
+import { listProperties } from '@/lib/services/properties'
 
 interface AddExpenseFormProps {
   isOpen: boolean
@@ -18,7 +19,7 @@ interface AddExpenseFormProps {
 
 interface ExpenseFormData {
   category: string
-  amount: number
+  amount: string
   date: string
   description: string
   property: string
@@ -28,18 +29,25 @@ interface ExpenseFormData {
 export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpenseFormProps) {
   const [formData, setFormData] = useState<ExpenseFormData>({
     category: 'maintenance',
-    amount: 0,
+    amount: '',
     date: new Date().toISOString().split('T')[0],
     description: '',
     property: '',
     receipt: '',
   })
 
+  const [properties, setProperties] = useState<any[]>([])
+
+  // Load properties on mount
+  useEffect(() => {
+    setProperties(listProperties())
+  }, [])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'amount' ? Number(value) : value,
+      [name]: value,
     }))
   }
 
@@ -47,8 +55,8 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
     e.preventDefault()
     // create transaction record
     try {
-      await createTransaction({
-        amount: formData.amount,
+      createTransaction({
+        amount: parseFloat(formData.amount) || 0,
         type: 'expense',
         description: formData.description,
         propertyId: formData.property || undefined,
@@ -60,7 +68,7 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
     onSubmit?.(formData)
     setFormData({
       category: 'maintenance',
-      amount: 0,
+      amount: '',
       date: new Date().toISOString().split('T')[0],
       description: '',
       property: '',
@@ -126,13 +134,11 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
                 </div>
               </label>
               <Input
-                type="number"
+                type="text"
                 name="amount"
                 value={formData.amount}
                 onChange={handleChange}
                 placeholder="0.00"
-                min="0"
-                step="0.01"
                 required
               />
             </div>
@@ -165,11 +171,11 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
                 required
               >
                 <option value="">Select Property</option>
-                <option value="sunset">Sunset Apartments</option>
-                <option value="downtown">Downtown Office</option>
-                <option value="beachside">Beachside Villa</option>
-                <option value="mountain">Mountain Lodge</option>
-                <option value="urban">Urban Lofts</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.name}
+                  </option>
+                ))}
               </select>
             </div>
 

@@ -4,9 +4,13 @@ import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { sampleTenants, getEnrichedTenants, sampleProperties, chartData, expenseBreakdown } from '@/app/lib/sample-data'
-import { fetchTransactions, createTransaction } from '@/app/lib/transactions-client'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { chartData, expenseBreakdown } from '@/app/lib/sample-data'
+import { listTenants } from '@/lib/services/tenants'
+import { listProperties } from '@/lib/services/properties'
+import { listTransactions, createTransaction, deleteTransaction, updateTransaction } from '@/app/lib/transactions-client'    
 import {
   BarChart,
   Bar,
@@ -42,18 +46,22 @@ export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState('rent-collection')
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all')
-  const allTenants = getEnrichedTenants()
+  const [allTenants, setAllTenants] = useState<any[]>([])
+  const [allProperties, setAllProperties] = useState<any[]>([])
+
 
   const [transactions, setTransactions] = useState<any[]>([])
 
   useEffect(() => {
-    fetchTransactions().then((list) => setTransactions(list))
+    setTransactions(listTransactions())
+    setAllTenants(listTenants())
+    setAllProperties(listProperties())
   }, [])
 
-  // Enrich transactions with tenant and property data
-  const enrichedTransactions = transactions.map((transaction) => {
+  // Enrich transactions with tenant and property data from real lists
+  const enrichedTransactions = (transactions || []).map((transaction) => {
     const tenant = allTenants.find((t) => t.id === transaction.tenantId)
-    const property = sampleProperties.find((p) => p.id === transaction.propertyId)
+    const property = allProperties.find((p) => p.id === transaction.propertyId)
     return {
       ...transaction,
       tenantName: tenant?.name || 'Unknown Tenant',
@@ -64,7 +72,11 @@ export default function FinancesPage() {
   // Calculate financial metrics
   const rentPayments = enrichedTransactions.filter((t) => t.type === 'rent')
   const completedPayments = rentPayments.filter((t) => t.status === 'completed')
-  const pendingPayments = rentPayments.filter((t) => t.status === 'pending')
+  // only count pending payments for tenants whose status is 'due'
+  const dueTenantIds = allTenants.filter((t) => t.status === 'due').map((t) => t.id)
+  const pendingPayments = rentPayments.filter(
+    (t) => t.status === 'pending' && t.tenantId && dueTenantIds.includes(t.tenantId)
+  )
   
   const totalRevenue = completedPayments.reduce((sum, t) => sum + t.amount, 0)
   const totalExpenses = enrichedTransactions
@@ -85,7 +97,27 @@ export default function FinancesPage() {
     .filter((t) => t.type === 'expense')
     .filter((expense) => !searchQuery || expense.description.toLowerCase().includes(searchQuery.toLowerCase()))
 
+  const handleRowClick = (tx: any) => {
+    setSelectedTx(tx)
+    setIsEditingTx(false)
+    setTxFormData({
+      ...tx,
+      amount: tx.amount.toString(),
+    })
+    setIsTxDialogOpen(true)
+  }
+
+  const refreshTransactions = () => {
+    setTransactions(listTransactions())
+  }
+
   const [showAddExpense, setShowAddExpense] = useState(false)
+
+  // dialog for viewing/editing a transaction
+  const [selectedTx, setSelectedTx] = useState<any | null>(null)
+  const [isTxDialogOpen, setIsTxDialogOpen] = useState(false)
+  const [isEditingTx, setIsEditingTx] = useState(false)
+  const [txFormData, setTxFormData] = useState<any>({})
 
   return (
     <div className="space-y-6">
@@ -137,6 +169,132 @@ export default function FinancesPage() {
       </div>
 
       {/* Tabs */}
+
+      {/* transaction detail dialog */}
+      <Dialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEditingTx ? 'Edit Transaction' : 'Transaction Details'}</DialogTitle>
+            <DialogDescription>
+              {selectedTx ? selectedTx.id : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedTx && !isEditingTx && (
+            <div className="space-y-2">
+              <p><strong>Type:</strong> {selectedTx.type}</p>
+              <p><strong>Amount:</strong> ${selectedTx.amount.toLocaleString()}</p>
+              <p><strong>Status:</strong> {selectedTx.status}</p>
+              <p><strong>Date:</strong> {new Date(selectedTx.date).toLocaleString()}</p>
+              <p><strong>Property:</strong> {selectedTx.propertyName || 'N/A'}</p>
+              <p><strong>Tenant:</strong> {selectedTx.tenantName || 'N/A'}</p>
+              <p><strong>Description:</strong> {selectedTx.description || '—'}</p>
+            </div>
+          )}
+
+          {selectedTx && isEditingTx && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                updateTransaction(selectedTx.id, {
+                  amount: Number(txFormData.amount),
+                  status: txFormData.status,
+                  date: txFormData.date,
+                  description: txFormData.description,
+                  propertyId: txFormData.propertyId,
+                  tenantId: txFormData.tenantId,
+                  type: txFormData.type,
+                })
+                refreshTransactions()
+                setIsTxDialogOpen(false)
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Type</label>
+                <select
+                  value={txFormData.type}
+                  onChange={(e) => setTxFormData({ ...txFormData, type: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md"
+                >
+                  <option value="rent">Rent</option>
+                  <option value="expense">Expense</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Amount</label>
+                <Input
+                  type="text"
+                  value={txFormData.amount}
+                  onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Status</label>
+                <select
+                  value={txFormData.status}
+                  onChange={(e) => setTxFormData({ ...txFormData, status: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md"
+                >
+                  <option value="completed">Completed</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Date</label>
+                <Input
+                  type="datetime-local"
+                  value={txFormData.date}
+                  onChange={(e) => setTxFormData({ ...txFormData, date: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                <Textarea
+                  value={txFormData.description}
+                  onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
+                  className="h-20"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditingTx(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-white">
+                  Save
+                </Button>
+              </div>
+            </form>
+          )}
+
+          <DialogFooter>
+            {!isEditingTx && (
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (!selectedTx) return
+                    deleteTransaction(selectedTx.id)
+                    refreshTransactions()
+                    setIsTxDialogOpen(false)
+                  }}
+                >
+                  Delete
+                </Button>
+                <Button onClick={() => setIsEditingTx(true)}>Edit</Button>
+              </div>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center justify-between">
           <TabsList className="border-b border-border bg-transparent h-auto p-0 rounded-none">
@@ -202,7 +360,10 @@ export default function FinancesPage() {
                   key={payment.id}
                   className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
                 >
-                  <div className="flex items-center gap-4 flex-1">
+                  <div
+                    className="flex items-center gap-4 flex-1 cursor-pointer"
+                    onClick={() => handleRowClick(payment)}
+                  >
                     <div>
                       {payment.status === 'completed' ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
@@ -254,14 +415,15 @@ export default function FinancesPage() {
             </Button>
           </div>
 
-          <AddExpenseForm isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} onSubmit={() => setShowAddExpense(false)} />
+          <AddExpenseForm isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} onSubmit={() => { setShowAddExpense(false); refreshTransactions() }} />
 
           <div className="space-y-3">
             {expenseTransactions.length > 0 ? (
               expenseTransactions.map((expense: any) => (
                 <div
                   key={expense.id}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
+                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors cursor-pointer"
+                  onClick={() => handleRowClick(expense)}
                 >
                   <div className="flex-1">
                     <p className="font-semibold text-foreground">{expense.description}</p>
