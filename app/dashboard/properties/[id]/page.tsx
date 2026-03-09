@@ -295,6 +295,8 @@ export default function PropertyDetailPage({
               </div>
             </div>
 
+            
+
             <DialogFooter>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
