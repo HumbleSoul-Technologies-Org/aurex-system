@@ -86,11 +86,11 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       href: '/tenant/messages',
       icon: <MessageSquare className="w-4 h-4" />,
     },
-    {
-      label: 'Settings',
-      href: '/tenant/settings',
-      icon: <Settings className="w-4 h-4" />,
-    },
+    // {
+    //   label: 'Settings',
+    //   href: '/tenant/settings',
+    //   icon: <Settings className="w-4 h-4" />,
+    // },
   ]
 
   return (
