@@ -264,45 +264,46 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                 No notifications
               </p>
             ) : (
-              notifications.map((notif) => (
-              {[...notifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((notif) => (
-                <Link
-                  key={notif.id}
-                  href={notif.actionUrl}
-                  onClick={() => setNotificationsOpen(false)}
-                >
-                  <Card
-                    className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
-                      notif.read ? 'border-border' : 'border-primary bg-primary/5'
-                    }`}
+              [...notifications]
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .map((notif) => (
+                  <Link
+                    key={notif.id}
+                    href={notif.actionUrl}
+                    onClick={() => setNotificationsOpen(false)}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">
-                        {!notif.read && (
-                          <div className="w-2 h-2 bg-primary rounded-full" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold text-sm text-foreground truncate">
-                            {notif.title}
-                          </p>
-                          <Badge className="text-xs whitespace-nowrap">
-                            {notif.type}
-                          </Badge>
+                    <Card
+                      className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
+                        notif.read ? 'border-border' : 'border-primary bg-primary/5'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1">
+                          {!notif.read && (
+                            <div className="w-2 h-2 bg-primary rounded-full" />
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                          {notif.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {new Date(notif.date).toLocaleDateString()}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm text-foreground truncate">
+                              {notif.title}
+                            </p>
+                            <Badge className="text-xs whitespace-nowrap">
+                              {notif.type}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {notif.message}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {new Date(notif.date).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
                       </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
-                    </div>
-                  </Card>
-                </Link>
-              ))
+                    </Card>
+                  </Link>
+                ))
             )}
           </div>
         </div>
