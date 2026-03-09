@@ -11,6 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getTenant, deleteTenant, updateTenant } from '@/lib/services/tenants'
 import { getProperty } from '@/lib/services/properties'
 import { listTransactions, createTransaction } from '@/app/lib/transactions-client'
+import { listPayments, createPayment } from '@/lib/services/payments'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { MoreHorizontal, Printer, Share2 } from 'lucide-react'
 import {
   ArrowLeft,
   Mail,
@@ -48,6 +51,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const router = useRouter()
 
   const [transactions, setTransactions] = useState<any[]>([])
+  const [payments, setPayments] = useState<any[]>([])
 
   useEffect(() => {
     const t = getTenant(id)
@@ -60,6 +64,13 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
       // show existing tenant password if present
       setGeneratedPassword((t as any)?.password || null)
     }
+    // load persisted payments for this tenant
+    try {
+      const all = listPayments()
+      setPayments(all.filter((p: any) => p.tenantId === id))
+    } catch (e) {
+      setPayments([])
+    }
   }, [id])
 
   useEffect(() => {
@@ -67,6 +78,15 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     if (!tenant) return
     const list = listTransactions(tenant.id, 'rent')
     if (mounted) setTransactions(list)
+    const refreshPayments = () => {
+      try {
+        const all = listPayments()
+        setPayments(all.filter((p: any) => p.tenantId === tenant.id))
+      } catch (e) {
+        setPayments([])
+      }
+    }
+    window.addEventListener('paymentsUpdated', refreshPayments)
     return () => { mounted = false }
   }, [tenant?.id])
 
@@ -412,7 +432,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Total Paid</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">${calculateTotalPaid(tenant.lease_start, tenant.rentAmount ?? 0).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">${payments.filter(p => p.status === 'completed' || p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0).toLocaleString()}</p>
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">Payment Status</p>
@@ -429,21 +449,105 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                   const amount = Number(amtStr)
                   if (Number.isNaN(amount)) return alert('Invalid amount')
                   const desc = prompt('Description (optional)') || 'Rent payment'
-                  const created = createTransaction({ tenantId: tenant.id, propertyId: tenant.propertyId, amount, type: 'rent', description: desc })
-                  if (created) {
-                    const list = listTransactions(tenant.id, 'rent')
-                    setTransactions(list)
-                  } else {
+                  try {
+                    const created = createPayment({ tenantId: tenant.id, propertyId: tenant.propertyId, amount, date: new Date().toISOString(), status: 'completed', method: 'offline', note: desc })
+                    if (created) {
+                      const all = listPayments()
+                      setPayments(all.filter((p: any) => p.tenantId === tenant.id))
+                      // notify other pages
+                      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('paymentsUpdated'))
+                    } else {
+                      alert('Failed to record payment')
+                    }
+                  } catch (e) {
+                    console.error('createPayment failed', e)
                     alert('Failed to record payment')
                   }
                 }}>Record Payment</Button>
               </div>
 
-              {transactions.length === 0 ? (
-                <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
-                  <p className="text-muted-foreground">No payment records found</p>
+              {payments.length > 0 ? (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Transaction ID</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Amount</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Description</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Status</th>
+                        <th className="text-left px-4 py-3 text-sm font-semibold text-foreground">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((payment) => (
+                        <tr key={payment.id} className="border-b border-border hover:bg-secondary/30 transition-colors">
+                          <td className="px-4 py-3 text-sm text-foreground font-medium">{payment.transId || payment.id}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className="font-semibold text-green-600 dark:text-green-400">
+                              ${(payment.amount || 0).toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{payment.note || payment.description || '—'}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={`px-2 py-1 text-xs font-semibold rounded inline-flex items-center gap-1 ${
+                              payment.status === 'completed' || payment.status === 'paid'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                : payment.status === 'pending'
+                                ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                                : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                            }`}>
+                              {payment.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                              {payment.status === 'pending' && <Clock className="w-3 h-3" />}
+                              {payment.status === 'failed' && <XCircle className="w-3 h-3" />}
+                              {(payment.status || 'pending').charAt(0).toUpperCase() + (payment.status || 'pending').slice(1)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => {
+                                  if (typeof window === 'undefined') return
+                                  const w = window.open('', '_blank')
+                                  if (!w) return
+                                  w.document.write(`<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`)
+                                  w.document.close()
+                                  w.print()
+                                }}>
+                                  <Printer className="mr-2 h-4 w-4" />
+                                  Print
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={async () => {
+                                  try {
+                                    const text = `Payment ${payment.transId || payment.id}: $${(payment.amount||0).toFixed(2)}`
+                                    if (navigator.share) {
+                                      await navigator.share({ title: 'Payment', text, url: window.location.href })
+                                    } else if (navigator.clipboard) {
+                                      await navigator.clipboard.writeText(text)
+                                      alert('Payment details copied to clipboard')
+                                    } else {
+                                      alert(text)
+                                    }
+                                  } catch (e) {
+                                    console.error('Share failed', e)
+                                  }
+                                }}>
+                                  <Share2 className="mr-2 h-4 w-4" />
+                                  Share
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ) : (
+              ) : transactions.length > 0 ? (
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-secondary/50 border-b border-border">
@@ -482,6 +586,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
+                  <p className="text-muted-foreground">No payment records found</p>
                 </div>
               )}
             </div>

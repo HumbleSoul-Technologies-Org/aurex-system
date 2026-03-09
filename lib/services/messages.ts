@@ -10,6 +10,8 @@ export interface MessageRecord {
   createdAt: string
   seen?: boolean
   replyId?: string
+  // optional subject line stored with the message
+  subject?: string
 }
 
 export interface ReplyRecord {
@@ -37,6 +39,7 @@ export function createMessage(payload: Partial<MessageRecord>): MessageRecord {
     createdAt: payload.createdAt ?? new Date().toISOString(),
     seen: payload.seen ?? false,
     replyId: payload.replyId,
+    subject: payload.subject,
   }
   insertIntoCollection('messages', msg)
 

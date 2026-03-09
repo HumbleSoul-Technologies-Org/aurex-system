@@ -24,6 +24,8 @@ interface ExpenseFormData {
   description: string
   property: string
   receipt?: string
+  unit?: string
+  paymentMethod?: string
 }
 
 export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpenseFormProps) {
@@ -34,9 +36,12 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
     description: '',
     property: '',
     receipt: '',
+    unit: '',
+    paymentMethod: '',
   })
 
   const [properties, setProperties] = useState<any[]>([])
+  const [availableUnits, setAvailableUnits] = useState<string[] | null>(null)
 
   // Load properties on mount
   useEffect(() => {
@@ -45,6 +50,19 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
+    if (name === 'property') {
+      const prop = properties.find((p) => p.id === value)
+      if (prop && Array.isArray(prop.units) && prop.units.length > 0) {
+        setAvailableUnits(prop.units)
+        if (prop.units.length === 1) {
+          setFormData((prev) => ({ ...prev, property: value, unit: prop.units[0] }))
+          return
+        }
+      } else {
+        setAvailableUnits(null)
+      }
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -61,6 +79,11 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
         description: formData.description,
         propertyId: formData.property || undefined,
         status: 'completed',
+        category: formData.category,
+        date: formData.date,
+        receiptReference: formData.receipt || undefined,
+        unit: formData.unit || undefined,
+        paymentMethod: formData.paymentMethod || undefined,
       })
     } catch (err) {
       // ignore
@@ -73,6 +96,8 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
       description: '',
       property: '',
       receipt: '',
+      unit: '',
+      paymentMethod: '',
     })
     onClose()
   }
@@ -176,6 +201,41 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
                     {property.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Unit (conditional) */}
+            {availableUnits && availableUnits.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Unit</label>
+                <select
+                  name="unit"
+                  value={formData.unit}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="">Select Unit</option>
+                  {availableUnits.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Payment Method */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
+              <select
+                name="paymentMethod"
+                value={formData.paymentMethod}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+              >
+                <option value="">Select Method</option>
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="check">Check</option>
               </select>
             </div>
 

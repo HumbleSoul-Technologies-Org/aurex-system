@@ -24,10 +24,10 @@ interface PropertyFormData {
   propertyType: string
   geography: string
   location: {
-    lat: number | ''
-    lng: number | ''
+    lat: string
+    lng: string
   }
-  features: string[]
+  features: string
   imageUrl?: string
   description: string
 }
@@ -43,7 +43,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
     propertyType: 'apartment',
     geography: '',
     location: { lat: '', lng: '' },
-    features: [],
+    features: '',
     imageUrl: '',
     description: '',
   })
@@ -76,7 +76,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
         ...prev,
         [parent]: {
           ...(prev as any)[parent],
-          [child]: child === 'lat' || child === 'lng' ? (value === '' ? '' : Number(value)) : value,
+          [child]: value,
         },
       }))
       return
@@ -84,12 +84,6 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
     if (name === 'units' || name === 'pricePerUnit') {
       setFormData((prev) => ({ ...prev, [name]: Number(value) }))
-      return
-    }
-
-    if (name === 'features') {
-      const arr = value.split(',').map((s) => s.trim()).filter(Boolean)
-      setFormData((prev) => ({ ...prev, features: arr }))
       return
     }
 
@@ -118,7 +112,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
       propertyType: 'apartment',
       geography: '',
       location: { lat: '', lng: '' },
-      features: [],
+      features: '',
       imageUrl: '',
       description: '',
     })
@@ -220,11 +214,52 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
+                {/* Residential */}
                 <option value="apartment">Apartment Building</option>
                 <option value="single-family">Single Family Home</option>
                 <option value="condo">Condo</option>
                 <option value="townhouse">Townhouse</option>
-                <option value="commercial">Commercial</option>
+                <option value="duplex">Duplex</option>
+                <option value="triplex">Triplex</option>
+                <option value="quadplex">Quadplex</option>
+                <option value="mobile-home">Mobile Home</option>
+                <option value="tiny-house">Tiny House</option>
+                <option value="mansion">Mansion</option>
+                <option value="villa">Villa</option>
+                <option value="cottage">Cottage</option>
+                <option value="bungalow">Bungalow</option>
+                <option value="cabin">Cabin</option>
+                <option value="farmhouse">Farmhouse</option>
+                <option value="penthouse">Penthouse</option>
+                <option value="loft">Loft</option>
+                <option value="studio">Studio Apartment</option>
+                {/* Commercial */}
+                <option value="office">Office Building</option>
+                <option value="retail">Retail Space</option>
+                <option value="warehouse">Warehouse</option>
+                <option value="industrial">Industrial</option>
+                <option value="hotel">Hotel/Motel</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="shopping-center">Shopping Center</option>
+                <option value="mixed-use">Mixed-Use</option>
+                <option value="medical">Medical Office</option>
+                <option value="flex-space">Flex Space</option>
+                {/* Land */}
+                <option value="vacant-land">Vacant Land</option>
+                <option value="agricultural-land">Agricultural Land</option>
+                <option value="commercial-land">Commercial Land</option>
+                <option value="residential-land">Residential Land</option>
+                {/* Special Purpose */}
+                <option value="parking-lot">Parking Lot</option>
+                <option value="storage-facility">Storage Facility</option>
+                <option value="boat-slip">Boat Slip</option>
+                <option value="rv-park">RV Park</option>
+                <option value="car-wash">Car Wash</option>
+                <option value="gas-station">Gas Station</option>
+                <option value="church">Church/Religious</option>
+                <option value="school">School/Educational</option>
+                <option value="hospital">Hospital/Healthcare</option>
+                <option value="government">Government Building</option>
                 <option value="other">Other</option>
               </select>
             </div>
@@ -281,7 +316,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                 <Input
                   type="text"
                   name="location.lat"
-                  value={formData.location.lat as any}
+                  value={formData.location.lat}
                   onChange={handleChange}
                   placeholder="e.g., 37.7749"
                 />
@@ -291,7 +326,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                 <Input
                   type="text"
                   name="location.lng"
-                  value={formData.location.lng as any}
+                  value={formData.location.lng}
                   onChange={handleChange}
                   placeholder="e.g., -122.4194"
                 />
@@ -300,12 +335,12 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
             {/* Features */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Features (comma separated)</label>
+              <label className="block text-sm font-medium text-foreground mb-2">Features</label>
               <Textarea
                 name="features"
-                value={formData.features.join(', ')}
+                value={formData.features}
                 onChange={handleChange}
-                placeholder="Pool, Elevator, Parking"
+                placeholder="List property features..."
                 className="h-20"
               />
             </div>

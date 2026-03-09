@@ -47,9 +47,9 @@ export default function PropertiesPage() {
         units_available: data.units,
         price_per_unit: data.pricePerUnit,
         type: data.propertyType,
-        features: data.features,
+        features: data.features ? data.features.split('\n').map(f => f.trim()).filter(Boolean) : [],
         description: data.description,
-        location: data.location.lat !== '' && data.location.lng !== '' ? { lat: Number(data.location.lat), lng: Number(data.location.lng) } : undefined,
+        location: data.location.lat.trim() !== '' && data.location.lng.trim() !== '' ? { lat: Number(data.location.lat), lng: Number(data.location.lng) } : undefined,
       }
 
       if (data.imageUrl) payload.images = [data.imageUrl]
@@ -62,10 +62,15 @@ export default function PropertiesPage() {
         }
       }
 
+      // Simulate 3-second delay for property creation
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
       const created = createProperty(payload)
       setProperties((prev) => [created, ...prev])
     } catch (e) {
       console.error('Create property failed', e)
+    } finally {
+      setIsCreatingProperty(false)
     }
   }
 
@@ -75,6 +80,7 @@ export default function PropertiesPage() {
         isOpen={showAddForm}
         onClose={() => setShowAddForm(false)}
         onSubmit={handleAddProperty}
+        isLoading={isCreatingProperty}
       />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -90,6 +96,8 @@ export default function PropertiesPage() {
           Add Property
         </Button>
       </div>
+
+      
 
       {/* Toolbar */}
       <Card className="border border-border p-4">

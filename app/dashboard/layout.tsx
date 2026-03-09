@@ -288,11 +288,11 @@ export default function DashboardLayout({
                           <span className="flex-1 text-sm font-medium">
                             {item.label}
                           </span>
-                          {item?.badge > 0 && (
+                          {/* {item?.badge > 0 && (
                             <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
                               {item.badge}
                             </span>
-                          )}
+                          )} */}
                         </Link>
                       );
                     })}

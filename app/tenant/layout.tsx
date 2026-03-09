@@ -76,11 +76,11 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       href: '/tenant/maintenance',
       icon: <Wrench className="w-4 h-4" />,
     },
-    {
-      label: 'Contact Management',
-      href: '/tenant/contact',
-      icon: <MessageSquare className="w-4 h-4" />,
-    },
+    // {
+    //   label: 'Contact Management',
+    //   href: '/tenant/contact',
+    //   icon: <MessageSquare className="w-4 h-4" />,
+    // },
     {
       label: 'Messages',
       href: '/tenant/messages',
@@ -99,7 +99,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-4 md:px-6 h-16">
           {/* Left: Menu Button + Logo */}
-          <div className="flex items-center gap-4">
+          <div className="flex h-screen items-center gap-4">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 hover:bg-secondary rounded-lg transition-colors"
@@ -163,7 +163,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex">
+      <div className="flex h-screen">
         {/* Sidebar - Desktop */}
         <aside className="hidden md:flex flex-col w-64 border-r border-border bg-secondary">
           <nav className="flex-1 p-4 space-y-2">

@@ -7,9 +7,14 @@ export type TransactionCreate = {
   type?: 'rent' | 'expense' | string
   description?: string
   status?: 'completed' | 'pending' | 'failed'
+  category?: string
+  paymentMethod?: string
+  date?: string
+  receiptReference?: string
+  unit?: string
 }
 
-export type Transaction = TransactionCreate & { id: string; date: string }
+export type Transaction = TransactionCreate & { id: string; date: string; transID: string; receiptReference?: string }
 
 export function listTransactions(tenantId?: string, type?: string): Transaction[] {
   let transactions = getCollection<Transaction>('transactions') || []
@@ -19,15 +24,28 @@ export function listTransactions(tenantId?: string, type?: string): Transaction[
 }
 
 export function createTransaction(payload: TransactionCreate): Transaction {
+  function generateShortId(len = 8) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    let out = ''
+    for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)]
+    return out
+  }
+
+  const txDate = payload.date ? new Date(payload.date).toISOString() : new Date().toISOString()
   const tx: Transaction = {
     id: generateId('tx'),
+    transID: generateShortId(8),
     tenantId: payload.tenantId,
     propertyId: payload.propertyId,
     amount: payload.amount,
-    date: new Date().toISOString(),
+    date: txDate,
     type: payload.type || 'rent',
     description: payload.description || '',
     status: payload.status || 'completed',
+    category: payload.category,
+    paymentMethod: payload.paymentMethod,
+    receiptReference: payload.receiptReference,
+    unit: payload.unit,
   }
   insertIntoCollection('transactions', tx)
   return tx

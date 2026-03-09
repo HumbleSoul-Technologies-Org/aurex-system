@@ -17,10 +17,10 @@ import {
   markMessageSeen,
   MessageRecord,
 } from '@/lib/services/messages'
-import { listAnnouncements, createAnnouncement, AnnouncementRecord } from '@/lib/services/announcements'
+import { listAnnouncements, createAnnouncement, deleteAnnouncement, AnnouncementRecord } from '@/lib/services/announcements'
 import { listProperties } from '@/lib/services/properties'
 import { listTenants } from '@/lib/services/tenants'
-import { MessageSquare, Plus, Send, Bell, Archive, Paperclip, Search, Check, Eye } from 'lucide-react'
+import { MessageSquare, Plus, Send, Bell, Archive, Paperclip, Search, Check, Eye, User, Trash2 } from 'lucide-react'
 
 interface Message {
   id: string
@@ -191,6 +191,11 @@ export default function CommunicationsPage() {
     })
   }
 
+  // derive counts for each tab to display total items
+  const inboxCount = useMemo(() => messagesData.filter(msg => msg.to === 'You' && msg.from !== 'management').length, [messagesData]);
+  const sentCount = useMemo(() => messagesData.filter(msg => msg.from === 'management').length, [messagesData]);
+  const repliedCount = useMemo(() => messagesData.filter(msg => msg.replyId).length, [messagesData]);
+
   const conversations: Conversation[] = useMemo(() => {
     let filteredMessages = messagesData
     if (activeTab === 'inbox') {
@@ -246,12 +251,25 @@ export default function CommunicationsPage() {
     return conversations.map((conversation) => (
       <button
         key={conversation.id}
-        onClick={() => setSelectedConversation(conversation)}
-        className={`w-full text-left p-4 border-b border-border hover:bg-secondary transition-colors ${
+        onClick={() => {
+          // mark all unread tenant messages in this conversation as seen
+          conversation.messages.forEach((msg) => {
+            if (!msg.isRead && msg.senderType === 'tenant') {
+              markMessageSeen(msg.id)
+            }
+          });
+          // refresh data to update counts/icons
+          setMessagesData(listMessages());
+          setSelectedConversation(conversation);
+        }}
+        className={`w-full flex gap-3 text-left p-4 border-b border-border hover:bg-secondary transition-colors ${
           selectedConversation?.id === conversation.id ? 'bg-secondary' : ''
         }`}
       >
-        <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <User className="w-5 h-5" />
+                          </div>
+      <div>  <div className="flex items-start justify-between gap-2 mb-1">
           <h3 className="font-semibold text-foreground text-sm">{conversation.participant}</h3>
           {conversation.unreadCount > 0 && (
             <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded-full">
@@ -262,16 +280,47 @@ export default function CommunicationsPage() {
         <p className="text-xs text-muted-foreground line-clamp-1 mb-1">
           {conversation.lastMessage}
         </p>
-        <p className="text-xs text-muted-foreground">{formatDateTime(conversation.timestamp)}</p>
+        <p className="text-xs text-muted-foreground">{formatDateTime(conversation.timestamp)}</p></div>
       </button>
     ))
+  }
+
+  const deleteMsg = (id: string) => {
+    // remove from database then refresh local state
+    deleteMessage(id)
+    setMessagesData(listMessages())
+    setSelectedConversation((prev) =>
+      prev
+        ? { ...prev, messages: prev.messages.filter((m) => m.id !== id) }
+        : prev,
+    )
+  }
+
+  const deleteAnnouncement = (id: string) => {
+    // remove from database then refresh local state
+    deleteAnnouncement(id)
+    setAnnouncementsData(listAnnouncements())
+  }
+
+  const deleteAllInboxMessages = () => {
+    const inboxMessages = messagesData.filter(msg => msg.to === 'You' && msg.from !== 'management')
+    inboxMessages.forEach(msg => deleteMessage(msg.id))
+    setMessagesData(listMessages())
+    setSelectedConversation(null)
+  }
+
+  const deleteAllSentMessages = () => {
+    const sentMessages = messagesData.filter(msg => msg.from === 'management')
+    sentMessages.forEach(msg => deleteMessage(msg.id))
+    setMessagesData(listMessages())
+    setSelectedConversation(null)
   }
 
   const handleSendMessage = () => {
     if (messageText.trim() && selectedConversation) {
       const newMsg = createMessage({
         from: 'management',
-        to: selectedConversation.participant,
+        to: selectedConversation.participant, // should be tenant email under universal scheme
         message: messageText,
       })
       // optionally create a reply to last message
@@ -301,7 +350,7 @@ export default function CommunicationsPage() {
         const tenant = listTenants().find(t => t.id === sendTenantId)
         createMessage({
           from: 'management',
-          to: tenant?.name || '',
+          to: tenant?.email || tenant?.name || '',
           message: sendMessageText,
         })
         setMessagesData(listMessages())
@@ -403,30 +452,34 @@ export default function CommunicationsPage() {
             <TabsTrigger
               value="inbox"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+              onClick={() => setSelectedConversation(null)}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
-              Inbox
+              Inbox ({inboxCount})
             </TabsTrigger>
             <TabsTrigger
               value="sent"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+               onClick={() => setSelectedConversation(null)}
             >
               <Send className="w-4 h-4 mr-2" />
-              Sent
+              Sent ({sentCount})
             </TabsTrigger>
             <TabsTrigger
               value="replied"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+               onClick={() => setSelectedConversation(null)}
             >
               <Archive className="w-4 h-4 mr-2" />
-              Replied
+              Replied ({repliedCount})
+              
             </TabsTrigger>
             <TabsTrigger
               value="announcements"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
               <Bell className="w-4 h-4 mr-2" />
-              Announcements
+              Announcements ({announcementsData.length})
             </TabsTrigger>
             <TabsTrigger
               value="templates"
@@ -440,11 +493,15 @@ export default function CommunicationsPage() {
           <TabsContent value="inbox" className="p-0 grid grid-cols-1 md:grid-cols-3 gap-0">
             {/* Conversation List */}
             <div className="border-r border-border">
-              <div className="p-4 border-b border-border">
-                <div className="relative">
+              <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+                <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input placeholder="Search conversations..." className="pl-10" />
                 </div>
+                <Button size="sm" variant="destructive" onClick={deleteAllInboxMessages}>
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete All
+                </Button>
               </div>
 
               <div className="max-h-96 overflow-y-auto">
@@ -456,47 +513,53 @@ export default function CommunicationsPage() {
             {selectedConversation ? (
               <div className="md:col-span-2 flex flex-col">
                 {/* Chat Header */}
-                <div className="p-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-bold text-foreground">{selectedConversation.participant}</h2>
-                  <Button variant="ghost" size="sm">
-                    <Archive className="w-4 h-4" />
-                  </Button>
-                </div>
+                
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
                   {selectedConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.senderType === 'manager' ? 'justify-end' : 'justify-start'}`}
-                      onClick={() => {
-                        if (activeTab === 'inbox' && message.senderType !== 'manager' && !message.isRead) {
-                          markMessageSeen(message.id)
-                          setMessagesData(listMessages())
-                        }
-                      }}
-                    >
-                      <div
-                        className={`max-w-xs px-4 py-2 rounded-lg ${
-                          message.senderType === 'manager'
-                            ? 'bg-primary text-white'
-                            : 'bg-secondary text-foreground'
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                        <p className="text-xs opacity-70 mt-1 flex items-center gap-2">
-                          {formatDateTime(message.timestamp)}
+                    <div key={message.id} className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">
+                              {message.senderType === 'manager' ? 'Management' : selectedConversation.participant}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {message.senderType === 'manager' ? 'management@company.com' : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
+                            </div>
+                             
+                            <div className="text-xs text-muted-foreground">
+                              From: {selectedConversation.participant}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-muted-foreground">{formatDateTime(message.timestamp)}</div>
+                          <button onClick={() => deleteMsg(message.id)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" aria-label="Delete message">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                           {message.sent && (
-                            <span className="flex items-center gap-1">
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <span className="text-green-500 font-medium text-[10px]">Sent</span>
+                            <span className="flex items-center gap-1 text-green-600">
+                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 -ml-1" />
                             </span>
                           )}
                           {message.replied && (
-                            <span className="text-blue-500 font-medium text-[10px]">Replied</span>
+                            <span className="text-xs text-blue-600 font-medium">Replied</span>
                           )}
-                        </p>
+                        </div>
+                      </div>
+
+                      <div className="ml-13">
+                        <div className="font-medium text-sm mb-2">Message</div>
+                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
+                          {message.content}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -536,11 +599,15 @@ export default function CommunicationsPage() {
           <TabsContent value="sent" className="p-0 grid grid-cols-1 md:grid-cols-3 gap-0">
             {/* Conversation List */}
             <div className="border-r border-border">
-              <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="p-4 border-b gap-2 border-border flex items-center justify-between">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input placeholder="Search conversations..." className="pl-10" />
                 </div>
+                <Button size="sm" variant="destructive" onClick={deleteAllSentMessages}>
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete All
+                </Button>
                 <Button size="sm" onClick={() => setIsSendDialogOpen(true)}>
                   <Plus className="w-4 h-4 mr-1" />
                   New Message
@@ -556,41 +623,59 @@ export default function CommunicationsPage() {
             {selectedConversation ? (
               <div className="md:col-span-2 flex flex-col">
                 {/* Chat Header */}
-                <div className="p-4 border-b border-border flex items-center justify-between">
+                {/* <div className="p-4 border-b border-border flex items-center justify-between">
                   <h2 className="font-bold text-foreground">{selectedConversation.participant}</h2>
                   <Button variant="ghost" size="sm">
                     <Archive className="w-4 h-4" />
                   </Button>
-                </div>
+                </div> */}
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
                   {selectedConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.senderType === 'manager' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-xs px-4 py-2 rounded-lg ${
-                          message.senderType === 'manager'
-                            ? 'bg-primary text-white'
-                            : 'bg-secondary text-foreground'
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                        <p className="text-xs opacity-70 mt-1 flex items-center gap-2">
-                          {formatDateTime(message.timestamp)}
+                    <div key={message.id} className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">
+                              {message.senderType === 'manager' ? 'Management' : selectedConversation.participant}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {message.senderType === 'manager' ? 'management@company.com' : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                             <div className="text-xs text-muted-foreground">
+                              Sent to: {selectedConversation.participant}
+                            </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-muted-foreground">{formatDateTime(message.timestamp)}</div>
+                          <button onClick={() => deleteMsg(message.id)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" aria-label="Delete message">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                           {message.sent && (
-                            <span className="flex items-center gap-1">
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <span className="text-green-500 font-medium text-[10px]">Sent</span>
+                            <span className="flex items-center gap-1 text-green-600">
+                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 -ml-1" />
                             </span>
                           )}
                           {message.replied && (
-                            <span className="text-blue-500 font-medium text-[10px]">Replied</span>
+                            <span className="text-xs text-blue-600 font-medium">Replied</span>
                           )}
-                        </p>
+                        </div>
+                      </div>
+
+                      <div className="ml-13">
+                        <div className="font-medium text-sm mb-2">Message</div>
+                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
+                          {message.content}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -654,33 +739,46 @@ export default function CommunicationsPage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
                   {selectedConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.senderType === 'manager' ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-xs px-4 py-2 rounded-lg ${
-                          message.senderType === 'manager'
-                            ? 'bg-primary text-white'
-                            : 'bg-secondary text-foreground'
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                        <p className="text-xs opacity-70 mt-1 flex items-center gap-2">
-                          {formatDateTime(message.timestamp)}
+                    <div key={message.id} className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold">
+                              {message.senderType === 'manager' ? 'Management' : selectedConversation.participant}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {message.senderType === 'manager' ? 'management@company.com' : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-muted-foreground">{formatDateTime(message.timestamp)}</div>
+                          <button onClick={() => deleteMsg(message.id)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" aria-label="Delete message">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                           {message.sent && (
-                            <span className="flex items-center gap-1">
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <Check className={`w-3 h-3 ${message.isRead ? 'text-blue-500' : 'text-gray-400'}`} />
-                              <span className="text-green-500 font-medium text-[10px]">Sent</span>
+                            <span className="flex items-center gap-1 text-green-600">
+                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 -ml-1" />
                             </span>
                           )}
                           {message.replied && (
-                            <span className="text-blue-500 font-medium text-[10px]">Replied</span>
+                            <span className="text-xs text-blue-600 font-medium">Replied</span>
                           )}
-                        </p>
+                        </div>
+                      </div>
+
+                      <div className="ml-13">
+                        <div className="font-medium text-sm mb-2">Message</div>
+                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
+                          {message.content}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -744,6 +842,9 @@ export default function CommunicationsPage() {
                               >
                                 <Eye className="w-4 h-4" />
                                 {announcement.readBy.length}
+                              </button>
+                              <button onClick={() => deleteAnnouncement(announcement.id)} className="p-1 text-red-600 hover:bg-red-100 rounded-md" aria-label="Delete announcement">
+                                <Trash2 className="w-4 h-4" />
                               </button>
                               <p className="text-xs text-muted-foreground">{formatDateTime(announcement.sentAt || announcement.createdAt)}</p>
                             </div>
@@ -816,3 +917,4 @@ export default function CommunicationsPage() {
     </div>
   )
 }
+

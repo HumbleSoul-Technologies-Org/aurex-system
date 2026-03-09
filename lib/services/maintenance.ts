@@ -1,4 +1,4 @@
-import { getCollection, insertIntoCollection, updateInCollection, generateId } from '@/lib/local-store'
+import { getCollection, insertIntoCollection, updateInCollection, removeFromCollection, generateId } from '@/lib/local-store'
 import { notifyNewMaintenanceRequest } from '@/lib/services/notifications'
 
 export interface MaintenanceRequest {
@@ -9,6 +9,9 @@ export interface MaintenanceRequest {
   tenantId?: string
   tenantName?: string
   description: string
+  category: string
+  location?: string
+  contactMethod?: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'pending' | 'assigned' | 'completed'
   createdDate: Date
@@ -18,7 +21,7 @@ export interface MaintenanceRequest {
   transactionId?: string
 }
 
-const MAINTENANCE_KEY = 'propman:maintenance'
+const MAINTENANCE_KEY = 'maintenance'
 
 export function getMaintenanceRequests(): MaintenanceRequest[] {
   return getCollection<MaintenanceRequest>(MAINTENANCE_KEY) || []
@@ -42,6 +45,10 @@ export function createMaintenanceRequest(request: Omit<MaintenanceRequest, 'id' 
 
 export function updateMaintenanceRequest(id: string, updates: Partial<MaintenanceRequest>): MaintenanceRequest | null {
   return updateInCollection<MaintenanceRequest>(MAINTENANCE_KEY, id, updates)
+}
+
+export function deleteMaintenanceRequest(id: string): boolean {
+  return removeFromCollection(MAINTENANCE_KEY, id)
 }
 
 export function getMaintenanceRequest(id: string): MaintenanceRequest | null {

@@ -50,6 +50,11 @@ export default function DashboardPage() {
     setProperties(listProperties())
     setTenants(listTenants())
     setPayments(listPayments())
+    const onPaymentsUpdated = () => setPayments(listPayments())
+    if (typeof window !== 'undefined') window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+    return () => {
+      if (typeof window !== 'undefined') window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
+    }
     setMaintenanceRequests(getMaintenanceRequests())
   }, [])
 

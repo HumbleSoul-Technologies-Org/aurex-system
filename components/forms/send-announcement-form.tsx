@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,20 @@ export default function SendAnnouncementForm({ isOpen, onClose, onSubmit, isLoad
     tenantIds: [],
     ...initialData,
   })
+
+  useEffect(() => {
+    setFormData({
+      title: '',
+      message: '',
+      recipients: 'all',
+      priority: 'normal',
+      scheduledDate: '',
+      propertyId: '',
+      tenantSelectionMode: 'all',
+      tenantIds: [],
+      ...initialData,
+    })
+  }, [initialData])
 
   const properties = useMemo(() => listProperties(), [])
   const tenantsForSelectedProperty = useMemo(

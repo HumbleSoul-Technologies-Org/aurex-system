@@ -72,6 +72,11 @@ export default function TenantPortalPage() {
     setTenants(listTenants())
     setProperties(listProperties())
     setPayments(listPayments())
+    const onPaymentsUpdated = () => setPayments(listPayments())
+    if (typeof window !== 'undefined') window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+    return () => {
+      if (typeof window !== 'undefined') window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
+    }
   }, [])
 
   // Calculate statistics from real tenant and payment data
@@ -117,7 +122,7 @@ export default function TenantPortalPage() {
       return {
         ...tenant,
         propertyName: property?.name || 'Unknown Property',
-        lastActive: tenant.lastLogin || 'Never',
+        lastActive: tenant?.lastLogin || 'Never',
         portalStatus: tenant.status === 'active' ? 'Active' : 'Inactive'
       }
     })

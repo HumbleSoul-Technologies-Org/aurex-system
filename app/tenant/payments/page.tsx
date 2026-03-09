@@ -1,16 +1,35 @@
-'use client'
+ 'use client'
 
+import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Download, Filter } from 'lucide-react'
+import { Download, Filter, MoreHorizontal, Printer, Share2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import Link from 'next/link'
-import { paymentHistory, currentTenant } from '@/app/lib/tenant-data'
+import { currentTenant } from '@/app/lib/tenant-data'
+import { listPayments } from '@/lib/services/payments'
+import { listProperties } from '@/lib/services/properties'
 
 export default function PaymentHistoryPage() {
-  const totalPaid = paymentHistory
-    .filter((p) => p.status === 'paid')
-    .reduce((sum, p) => sum + p.amount, 0)
+  const [payments, setPayments] = useState<any[]>([])
+  const [properties, setProperties] = useState<any[]>([])
+
+  useEffect(() => {
+    setPayments(listPayments())
+    setProperties(listProperties())
+
+    const onPaymentsUpdated = () => setPayments(listPayments())
+    if (typeof window !== 'undefined') window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+    return () => {
+      if (typeof window !== 'undefined') window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
+    }
+  }, [])
+
+  const tenantPayments = payments.filter(p => !currentTenant || p.tenantId === currentTenant.id)
+  const totalPaid = tenantPayments
+    .filter((p) => p.status === 'completed' || p.status === 'paid')
+    .reduce((sum, p) => sum + (p.amount || 0), 0)
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -40,7 +59,7 @@ export default function PaymentHistoryPage() {
             Monthly Rent
           </p>
           <p className="text-2xl md:text-3xl font-bold text-foreground">
-            ${currentTenant?.monthlyRent || 0}
+            ${currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0}
           </p>
         </Card>
 
@@ -49,7 +68,7 @@ export default function PaymentHistoryPage() {
             Payments Made
           </p>
           <p className="text-2xl md:text-3xl font-bold text-foreground">
-            {paymentHistory.filter((p) => p.status === 'paid').length}
+            {tenantPayments.filter((p) => p.status === 'completed' || p.status === 'paid').length}
           </p>
         </Card>
       </div>
@@ -89,59 +108,76 @@ export default function PaymentHistoryPage() {
           <table className="w-full">
             <thead>
               <tr className="bg-secondary border-b border-border">
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
-                  Date
-                </th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
-                  Amount
-                </th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
-                  Status
-                </th>
-                <th className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
-                  Method
-                </th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
-                  Action
-                </th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Date</th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Trans ID</th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Amount</th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Status</th>
+                <th className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Method</th>
+                <th className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Property</th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Unit</th>
+                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paymentHistory.map((payment) => (
-                <tr
-                  key={payment.id}
-                  className="hover:bg-secondary transition-colors"
-                >
+              {tenantPayments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-secondary transition-colors">
                   <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-foreground">
-                    {payment.date
-                      ? new Date(payment.date).toLocaleDateString()
-                      : new Date(payment.dueDate).toLocaleDateString()}
+                    {payment.date ? new Date(payment.date).toLocaleDateString() : '—'}
                   </td>
-                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">
-                    ${payment.amount}
-                  </td>
+                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-mono text-foreground">{payment.transId || payment.id}</td>
+                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">${(payment.amount || 0).toFixed(2)}</td>
                   <td className="px-4 md:px-6 py-3 md:py-4">
-                    <Badge
-                      className={
-                        payment.status === 'paid'
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                      }
-                    >
-                      {payment.status === 'paid' ? 'Paid' : 'Pending'}
+                    <Badge className={payment.status === 'completed' || payment.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'}>
+                      {(payment.status === 'completed' || payment.status === 'paid') ? 'Paid' : (payment.status || 'Pending')}
                     </Badge>
                   </td>
-                  <td className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
-                    {payment.method || '—'}
-                  </td>
+                  <td className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{payment.method || '—'}</td>
+                  <td className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{properties.find(p => p.id === payment.propertyId)?.name || '—'}</td>
+                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{payment.unit || '—'}</td>
                   <td className="px-4 md:px-6 py-3 md:py-4">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-primary hover:text-primary/90"
-                    >
-                      View
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => {
+                          if (typeof window === 'undefined') return
+                          const w = window.open('', '_blank')
+                          if (!w) return
+                          w.document.write(`<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`)
+                          w.document.close()
+                          w.print()
+                        }}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Print
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={async () => {
+                          try {
+                            const text = `Payment ${payment.transId || payment.id}: $${(payment.amount||0).toFixed(2)}`
+                            if (navigator.share) {
+                              await navigator.share({ title: 'Payment', text, url: window.location.href })
+                            } else if (navigator.clipboard) {
+                              await navigator.clipboard.writeText(text)
+                              // small feedback
+                              // eslint-disable-next-line no-alert
+                              alert('Payment details copied to clipboard')
+                            } else {
+                              // fallback
+                              // eslint-disable-next-line no-alert
+                              alert(text)
+                            }
+                          } catch (e) {
+                            // eslint-disable-next-line no-console
+                            console.error('Share failed', e)
+                          }
+                        }}>
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Share
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}

@@ -12,7 +12,7 @@ export interface Notification {
   relatedId?: string // ID of related entity (property, maintenance request, etc.)
 }
 
-const NOTIFICATIONS_KEY = 'propman:notifications'
+const NOTIFICATIONS_KEY = 'notifications'
 
 // Initialize with empty array if not exists
 if (!getCollection<Notification>(NOTIFICATIONS_KEY)) {

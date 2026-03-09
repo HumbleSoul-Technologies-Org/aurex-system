@@ -200,7 +200,7 @@ export default function PropertyDetailPage({
           setEditPrice(property.price_per_unit || 0);
           setEditUnits(property.units_available || 0);
           setEditType(property.type || '');
-          setEditFeatures((property.features || []).join(', '));
+          setEditFeatures((property.features || []).join('\n'));
           setEditLat(property.location?.lat?.toString() || '');
           setEditLng(property.location?.lng?.toString() || '');
           setIsEditOpen(true);
@@ -313,7 +313,7 @@ export default function PropertyDetailPage({
                     if (editType !== '') updated.type = editType
 
                     const cleanedFeatures = editFeatures
-                      .split(',')
+                      .split('\n')
                       .map((s) => s.trim())
                       .filter(Boolean)
                     if (cleanedFeatures.length > 0) {

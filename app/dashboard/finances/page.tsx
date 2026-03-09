@@ -11,6 +11,7 @@ import { chartData, expenseBreakdown } from '@/app/lib/sample-data'
 import { listTenants } from '@/lib/services/tenants'
 import { listProperties } from '@/lib/services/properties'
 import { listTransactions, createTransaction, deleteTransaction, updateTransaction } from '@/app/lib/transactions-client'    
+import { listPayments } from '@/lib/services/payments'
 import {
   BarChart,
   Bar,
@@ -39,7 +40,12 @@ import {
   Clock,
   Eye,
   FileText,
+  MoreHorizontal,
+  Printer,
+  Share2,
 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { deletePayment } from '@/lib/services/payments'
 import AddExpenseForm from '@/components/forms/add-expense-form'
 
 export default function FinancesPage() {
@@ -51,11 +57,21 @@ export default function FinancesPage() {
 
 
   const [transactions, setTransactions] = useState<any[]>([])
+  const [payments, setPayments] = useState<any[]>([])
 
   useEffect(() => {
     setTransactions(listTransactions())
+    setPayments(listPayments())
     setAllTenants(listTenants())
     setAllProperties(listProperties())
+    const onTxUpdate = () => refreshTransactions()
+    const onPaymentsUpdated = () => setPayments(listPayments())
+    window.addEventListener('transactionsUpdated', onTxUpdate)
+    window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+    return () => {
+      window.removeEventListener('transactionsUpdated', onTxUpdate)
+      window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
+    }
   }, [])
 
   // Enrich transactions with tenant and property data from real lists
@@ -69,27 +85,37 @@ export default function FinancesPage() {
     }
   })
 
-  // Calculate financial metrics
-  const rentPayments = enrichedTransactions.filter((t) => t.type === 'rent')
-  const completedPayments = rentPayments.filter((t) => t.status === 'completed')
+  // Calculate financial metrics from persisted payments
+  const enrichedPayments = (payments || []).map((p) => {
+    const tenant = allTenants.find((t) => t.id === p.tenantId)
+    const property = allProperties.find((pr) => pr.id === p.propertyId)
+    return {
+      ...p,
+      tenantName: tenant?.name || 'Unknown Tenant',
+      propertyName: property?.name || 'Unknown Property',
+    }
+  })
+
+  const rentPayments = enrichedPayments
+  const completedPayments = rentPayments.filter((t) => t.status === 'completed' || t.status === 'paid')
   // only count pending payments for tenants whose status is 'due'
   const dueTenantIds = allTenants.filter((t) => t.status === 'due').map((t) => t.id)
   const pendingPayments = rentPayments.filter(
-    (t) => t.status === 'pending' && t.tenantId && dueTenantIds.includes(t.tenantId)
+    (t) => (t.status === 'pending' || t.status === undefined) && t.tenantId && dueTenantIds.includes(t.tenantId)
   )
-  
-  const totalRevenue = completedPayments.reduce((sum, t) => sum + t.amount, 0)
+
+  const totalRevenue = completedPayments.reduce((sum, t) => sum + (t.amount || 0), 0)
   const totalExpenses = enrichedTransactions
     .filter((t) => t.type === 'expense')
     .reduce((sum, t) => sum + t.amount, 0)
-  const totalPending = pendingPayments.reduce((sum, t) => sum + t.amount, 0)
+  const totalPending = pendingPayments.reduce((sum, t) => sum + (t.amount || 0), 0)
 
   // Filter payments by status
   const filteredPayments = rentPayments.filter((payment) => {
     const matchesStatus = filterStatus === 'all' || payment.status === filterStatus
     const matchesSearch = !searchQuery || 
-      payment.tenantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payment.propertyName.toLowerCase().includes(searchQuery.toLowerCase())
+      (payment.tenantName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (payment.propertyName || '').toLowerCase().includes(searchQuery.toLowerCase())
     return matchesStatus && matchesSearch
   })
 
@@ -109,6 +135,9 @@ export default function FinancesPage() {
 
   const refreshTransactions = () => {
     setTransactions(listTransactions())
+  }
+  const refreshPayments = () => {
+    setPayments(listPayments())
   }
 
   const [showAddExpense, setShowAddExpense] = useState(false)
@@ -182,6 +211,7 @@ export default function FinancesPage() {
 
           {selectedTx && !isEditingTx && (
             <div className="space-y-2">
+              {selectedTx.transID && <p><strong>Trans ID:</strong> {selectedTx.transID}</p>}
               <p><strong>Type:</strong> {selectedTx.type}</p>
               <p><strong>Amount:</strong> ${selectedTx.amount.toLocaleString()}</p>
               <p><strong>Status:</strong> {selectedTx.status}</p>
@@ -189,6 +219,9 @@ export default function FinancesPage() {
               <p><strong>Property:</strong> {selectedTx.propertyName || 'N/A'}</p>
               <p><strong>Tenant:</strong> {selectedTx.tenantName || 'N/A'}</p>
               <p><strong>Description:</strong> {selectedTx.description || '—'}</p>
+              {selectedTx.receiptReference && <p><strong>Receipt/Invoice Reference:</strong> {selectedTx.receiptReference}</p>}
+              {selectedTx.category && <p><strong>Category:</strong> {selectedTx.category}</p>}
+              {selectedTx.paymentMethod && <p><strong>Payment Method:</strong> {selectedTx.paymentMethod}</p>}
             </div>
           )}
 
@@ -204,6 +237,8 @@ export default function FinancesPage() {
                   propertyId: txFormData.propertyId,
                   tenantId: txFormData.tenantId,
                   type: txFormData.type,
+                  category: txFormData.category,
+                  paymentMethod: txFormData.paymentMethod,
                 })
                 refreshTransactions()
                 setIsTxDialogOpen(false)
@@ -219,6 +254,33 @@ export default function FinancesPage() {
                 >
                   <option value="rent">Rent</option>
                   <option value="expense">Expense</option>
+                </select>
+              </div>
+
+              {txFormData.type === 'expense' && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+                  <Input
+                    type="text"
+                    value={txFormData.category || ''}
+                    onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
+                    placeholder="e.g., maintenance, utilities, repairs"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Payment Method</label>
+                <select
+                  value={txFormData.paymentMethod || ''}
+                  onChange={(e) => setTxFormData({ ...txFormData, paymentMethod: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md"
+                >
+                  <option value="">Select Method</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="check">Check</option>
                 </select>
               </div>
 
@@ -384,11 +446,60 @@ export default function FinancesPage() {
                     </p>
                   </div>
 
-                  <Link href={`/dashboard/tenants/${payment.tenantId}`}>
-                    <Button variant="ghost" size="sm" className="ml-4">
-                      View
-                    </Button>
-                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-4">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleRowClick(payment)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        try {
+                          deletePayment(payment.id)
+                          refreshPayments()
+                          if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('paymentsUpdated'))
+                        } catch (e) {
+                          console.error('Failed to delete payment', e)
+                        }
+                      }}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        if (typeof window === 'undefined') return
+                        const w = window.open('', '_blank')
+                        if (!w) return
+                        w.document.write(`<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`)
+                        w.document.close()
+                        w.print()
+                      }}>
+                        <Printer className="mr-2 h-4 w-4" />
+                        Print
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={async () => {
+                        try {
+                          const text = `Payment ${payment.transId || payment.id}: $${(payment.amount||0).toFixed(2)}`
+                          if (navigator.share) {
+                            await navigator.share({ title: 'Payment', text, url: window.location.href })
+                          } else if (navigator.clipboard) {
+                            await navigator.clipboard.writeText(text)
+                            alert('Payment details copied to clipboard')
+                          } else {
+                            alert(text)
+                          }
+                        } catch (e) {
+                          console.error('Share failed', e)
+                        }
+                      }}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Share
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))
             ) : (
@@ -417,27 +528,44 @@ export default function FinancesPage() {
 
           <AddExpenseForm isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} onSubmit={() => { setShowAddExpense(false); refreshTransactions() }} />
 
-          <div className="space-y-3">
+          <div>
             {expenseTransactions.length > 0 ? (
-              expenseTransactions.map((expense: any) => (
-                <div
-                  key={expense.id}
-                  className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors cursor-pointer"
-                  onClick={() => handleRowClick(expense)}
-                >
-                  <div className="flex-1">
-                    <p className="font-semibold text-foreground">{expense.description}</p>
-                    <p className="text-sm text-muted-foreground">{expense.propertyName}</p>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {expenseTransactions.map((expense: any) => (
+                  <Card
+                    key={expense.id}
+                    className="p-4 border border-border hover:bg-secondary transition-colors cursor-pointer h-full"
+                    onClick={() => handleRowClick(expense)}
+                  >
+                    <div className="flex flex-col h-full">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground leading-5">{expense.category || 'Expense'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{expense.propertyName}{expense.unit ? ` • ${expense.unit}` : ''}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-red-600 dark:text-red-400">-${expense.amount.toLocaleString()}</p>
+                          <p className={`text-xs font-semibold ${expense.status === 'completed' ? 'text-green-600' : expense.status === 'pending' ? 'text-orange-600' : 'text-red-600'}`}>{expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}</p>
+                        </div>
+                      </div>
 
-                  <div className="text-right">
-                    <p className="font-bold text-red-600 dark:text-red-400">-${expense.amount.toLocaleString()}</p>
-                    <p className={`text-xs font-semibold ${expense.status === 'completed' ? 'text-green-600' : expense.status === 'pending' ? 'text-orange-600' : 'text-red-600'}`}>
-                      {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
-                    </p>
-                  </div>
-                </div>
-              ))
+                      <div className="mt-3 flex-1">
+                        <p className="text-sm text-foreground leading-5 line-clamp-3">{expense.description}</p>
+                      </div>
+
+                      <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
+                        <div className="truncate">
+                          {expense.transID && <span className="mr-2">ID: {expense.transID}</span>}
+                          {expense.receiptReference && <span>Receipt: {expense.receiptReference}</span>}
+                        </div>
+                        <div className="text-right">
+                          {expense.paymentMethod && <span className="inline-block bg-muted px-2 py-1 rounded-md text-[11px]">{expense.paymentMethod}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
             ) : (
               <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
                 <p className="text-muted-foreground">No expenses found</p>
