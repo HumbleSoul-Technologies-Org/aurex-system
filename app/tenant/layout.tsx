@@ -265,6 +265,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
               </p>
             ) : (
               notifications.map((notif) => (
+              {[...notifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((notif) => (
                 <Link
                   key={notif.id}
                   href={notif.actionUrl}

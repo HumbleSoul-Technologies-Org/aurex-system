@@ -44,7 +44,7 @@ export default function NotificationBell({ tenantId }: { tenantId?: string }) {
           <div className="p-2 max-h-64 overflow-auto">
             {notifications.length === 0 && <p className="text-sm text-muted-foreground">No notifications</p>}
             {notifications.map((n) => (
-              <div key={n.id} className={`p-2 rounded-md hover:bg-secondary flex items-start justify-between gap-2 ${n.read ? 'opacity-70' : ''}`}>
+            {[...notifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((n) => (
                 <div>
                   <p className="font-medium text-foreground">{n.title}</p>
                   {n.body && <p className="text-sm text-muted-foreground">{n.body}</p>}

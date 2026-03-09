@@ -31,10 +31,12 @@ import {
   HelpCircle,
   Home,
   MapPin,
+  Trash2,
 } from "lucide-react";
-import { getNotifications, markAsRead, getUnreadCount } from "@/lib/services/notifications";
+import { getNotifications, markAsRead, getUnreadCount, deleteNotification } from "@/lib/services/notifications";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { listMessages } from "@/lib/services/messages";
+import { Button } from "@/components/ui/button";
 
 interface NavItem {
   label: string;
@@ -65,6 +67,16 @@ export default function DashboardLayout({
   React.useEffect(() => {
     setNotifications(getNotifications());
   }, []);
+
+  // Function to delete all notifications from DB and UI
+  const clearAllNotifications = () => {
+    notifications.forEach(n => deleteNotification(n.id));
+    setTimeout(() => {
+      setNotifications(getNotifications());
+      // Force UI update if needed
+      window.dispatchEvent(new Event("storage"));
+    }, 150);
+  };
 
   // Load maintenance and messages counts
   React.useEffect(() => {
@@ -390,7 +402,11 @@ export default function DashboardLayout({
               <div className="hidden md:fixed md:right-0 md:top-16 md:h-[calc(100vh-64px)] md:w-80 md:border-l md:border-border md:bg-background md:flex md:flex-col md:z-40 md:shadow-lg">
                 <div className="p-4 border-b border-border sticky top-0 bg-background">
                   <div className="flex items-center justify-between">
-                    <h2 className="font-bold text-foreground">Notifications</h2>
+                    <h2 className="font-bold flex-1 text-foreground">Notifications</h2>
+                    {notifications.length > 0 && (
+                      <span className="flex mr-5 hover:border-0 gap-2 items-center border rounded-md p-2 cursor-pointer hover:bg-red-600 hover:text-white justify-center">
+                        <Trash2 className="w-4   h-4     cursor-pointer" onClick={clearAllNotifications} aria-label="Clear all notifications" />  <p className="text-xs">Clear All</p></span>
+                  )}
                     <button
                       onClick={() => setNotificationsOpen(false)}
                       className="p-1 hover:bg-secondary rounded-lg"
@@ -403,12 +419,13 @@ export default function DashboardLayout({
 
                 {/* Notifications List */}
                 <div className="flex-1 overflow-y-auto space-y-2 p-4">
+                  
                   {notifications.length === 0 ? (
                     <p className="text-center text-muted-foreground text-sm py-8">
                       No notifications
                     </p>
                   ) : (
-                    notifications.map((notif) => (
+                    [...notifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((notif) => (
                       <Link
                         key={notif.id}
                         href={notif.actionUrl}

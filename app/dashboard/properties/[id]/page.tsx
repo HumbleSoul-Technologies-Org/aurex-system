@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
-import { createTenant, TenantRecord } from "@/lib/services/tenants";
+import { createTenant, deleteTenant, TenantRecord } from "@/lib/services/tenants";
 import { updateProperty } from "@/lib/services/properties";
 import {
   Dialog,
@@ -38,9 +38,12 @@ import {
   Loader2,
   Trash,
   X,
+  MapPinOff,
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { listTransactions } from '@/app/lib/transactions-client'
+import { deleteMessage } from "@/lib/services/messages";
+import { deleteAnnouncement } from "@/lib/services/announcements";
 
 interface PropertyDetailPageProps {
   params: Promise<{
@@ -52,34 +55,24 @@ export default function PropertyDetailPage({
   params,
 }: PropertyDetailPageProps) {
   const { id } = use(params);
-  const property: any = getProperty(id) ?? {
-    images: [],
-    tenants: [],
-    features: [],
-    name: "Unknown",
-    address: "",
-    city: "",
-    country: "",
-    units_available: 0,
-    price_per_unit: 0,
-  };
+  const property: any = getProperty(id)  
   const propertyTenants = listTenants().filter((t) => t.propertyId === id);
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [images, setImages] = useState<string[]>(property.images || []);
+  const [images, setImages] = useState<string[]>(property?.images || []);
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editName, setEditName] = useState(property.name || '');
-  const [editAddress, setEditAddress] = useState(property.address || '');
-  const [editCity, setEditCity] = useState(property.city || '');
-  const [editCountry, setEditCountry] = useState(property.country || '');
-  const [editPrice, setEditPrice] = useState<number>(property.price_per_unit || 0);
-  const [editUnits, setEditUnits] = useState<number>(property.units_available || 0);
-  const [editType, setEditType] = useState(property.type || '');
-  const [editFeatures, setEditFeatures] = useState<string>((property.features || []).join(', '));
-  const [editLat, setEditLat] = useState<string>(property.location?.lat?.toString() || '');
-  const [editLng, setEditLng] = useState<string>(property.location?.lng?.toString() || '');
+  const [editName, setEditName] = useState(property?.name || '');
+  const [editAddress, setEditAddress] = useState(property?.address || '');
+  const [editCity, setEditCity] = useState(property?.city || '');
+  const [editCountry, setEditCountry] = useState(property?.country || '');
+  const [editPrice, setEditPrice] = useState<number>(property?.price_per_unit || 0);
+  const [editUnits, setEditUnits] = useState<number>(property?.units_available || 0);
+  const [editType, setEditType] = useState(property?.type || '');
+  const [editFeatures, setEditFeatures] = useState<string>((property?.features || []).join(', '));
+  const [editLat, setEditLat] = useState<string>(property?.location?.lat?.toString() || '');
+  const [editLng, setEditLng] = useState<string>(property?.location?.lng?.toString() || '');
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -88,6 +81,11 @@ export default function PropertyDetailPage({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [showAddTenant, setShowAddTenant] = useState(false);
+  // Delete dialog state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     let url = uploadPreview;
@@ -105,10 +103,10 @@ export default function PropertyDetailPage({
     const list = listTransactions()
     if (!mounted) return
     const tenantIds = propertyTenants.map((t: any) => t.id)
-    const filtered = list.filter((tx: any) => tx.propertyId === property.id || (tx.tenantId && tenantIds.includes(tx.tenantId)))
+    const filtered = list.filter((tx: any) => tx.propertyId === property?.id || (tx.tenantId && tenantIds.includes(tx.tenantId)))
     setTransactions(filtered)
     return () => { mounted = false }
-  }, [property.id])
+  }, [property?.id])
 
   // Income Calculations
   const tenantMonthly = propertyTenants.reduce(
@@ -118,18 +116,18 @@ export default function PropertyDetailPage({
   let totalMonthlyIncome = tenantMonthly;
   // If property has units and a price per unit, use that to calculate income
   if (property?.units_available && property?.price_per_unit) {
-    totalMonthlyIncome = property.price_per_unit * property.units_available;
+    totalMonthlyIncome = property?.price_per_unit * property?.units_available;
   }
   const totalAnnualIncome = totalMonthlyIncome * 12;
   const occupiedUnits = propertyTenants.length;
   const averageIncomePerUnit =
     occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0;
   const potentialMonthlyIncome = property?.price_per_unit
-    ? property.price_per_unit * property?.units_available
+    ? property?.price_per_unit * property?.units_available
     : 0;
   const occupancyPercentage =
     property?.units_available > 0
-      ? Math.round((occupiedUnits / property.units_available) * 100)
+      ? Math.round((occupiedUnits / property?.units_available) * 100)
       : 0;
   const incomeUtilization =
     potentialMonthlyIncome > 0
@@ -157,12 +155,18 @@ export default function PropertyDetailPage({
 
   // revenue lost compared to potential monthly income
   const revenueLost = Math.max(0, potentialMonthlyIncome - tenantCollected)
-  const avgRevenueLostPerUnit = property?.units_available ? Math.round(revenueLost / property.units_available) : 0
+  const avgRevenueLostPerUnit = property?.units_available ? Math.round(revenueLost / property?.units_available) : 0
 
   if (!property) {
     return (
-      <div className="space-y-6">
-        <Button variant="outline" asChild>
+      <div className="space-y-6 min-h-screen flex-1 items-center justify-center">
+       
+        <Card className="border flex items-center justify-center h-screen border-border p-12 text-center">
+
+          <span className="">
+            <img src="/no-property.png"  alt="Property not found" className="mx-auto mb-4 w-full h-full" />
+            {/* <p className="text-muted-foreground mb-5">Property not founds</p> */}
+           <Button variant="default" asChild>
           <Link
             href="/dashboard/properties"
             className="flex items-center gap-2"
@@ -171,8 +175,7 @@ export default function PropertyDetailPage({
             Back to Properties
           </Link>
         </Button>
-        <Card className="border border-border p-12 text-center">
-          <p className="text-muted-foreground">Property not found</p>
+          </span>
         </Card>
       </div>
     );
@@ -180,8 +183,88 @@ export default function PropertyDetailPage({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Property</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the property and all associated tenant profiles. Please enter the admin password to confirm.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Input
+              type="password"
+              placeholder="Admin Password"
+              value={adminPassword}
+              onChange={e => setAdminPassword(e.target.value)}
+              disabled={isDeleting}
+            />
+            {deleteError && <div className="text-red-600 text-sm">{deleteError}</div>}
+          </div>
+          <DialogFooter>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={isDeleting}>Cancel</Button>
+              <Button variant="destructive" disabled={isDeleting || !adminPassword} onClick={() => {
+                setIsDeleting(true);
+                setDeleteError("");
+                (async () => {
+                  try {
+                    const { getCurrentUser, authenticate } = await import("@/lib/services/auth");
+                    const { deleteProperty } = await import("@/lib/services/properties");
+                    const currentUser = getCurrentUser();
+                    if (!currentUser || currentUser.role !== "admin") {
+                      setDeleteError("You must be logged in as admin.");
+                      setIsDeleting(false);
+                      return;
+                    }
+                    const user = await authenticate(currentUser.email, adminPassword);
+                    if (!user || user.role !== "admin") {
+                      setDeleteError("Incorrect admin password.");
+                      setIsDeleting(false);
+                      return;
+                    }
+                    propertyTenants.forEach((tenant) => {
+                      // Delete tenant messages
+                      if (typeof deleteMessage === "function" && tenant.messages) {
+                        tenant.messages.forEach((msgId: string) => {
+                          deleteMessage(msgId);
+                        });
+                      }
+                      // Delete tenant announcements
+                      if (typeof deleteAnnouncement === "function" && tenant.announcements) {
+                        tenant.announcements.forEach((annId: string) => {
+                          deleteAnnouncement(annId);
+                        });
+                      }
+                      // Delete tenant
+                      if (typeof deleteTenant === "function") {
+                        deleteTenant(tenant.id);
+                      }
+                    });
+                    // Fully remove property
+                    if (typeof deleteProperty === "function") {
+                      deleteProperty(property?.id);
+                    }
+                    setIsDeleteOpen(false);
+                    window.location.href = "/dashboard/properties";
+                  } catch (e) {
+                    setDeleteError("Delete failed or invalid credentials.");
+                  }
+                  setIsDeleting(false);
+                })();
+              }}>
+                {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash className="w-4 h-4 mr-2" />}
+                Delete
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {property ? (
+        <div>
+          {/* Header */}
+      <div className="flex pb-2 items-center justify-center gap-4">
         <Button variant="outline" asChild>
           <Link
             href="/dashboard/properties"
@@ -191,22 +274,27 @@ export default function PropertyDetailPage({
             Back
           </Link>
         </Button>
+        <span className="flex-1 w-full"></span>
         <Button variant="outline" size="sm" onClick={() => {
           // populate edit fields then open dialog
-          setEditName(property.name || '');
-          setEditAddress(property.address || '');
-          setEditCity(property.city || '');
-          setEditCountry(property.country || '');
-          setEditPrice(property.price_per_unit || 0);
-          setEditUnits(property.units_available || 0);
-          setEditType(property.type || '');
-          setEditFeatures((property.features || []).join('\n'));
-          setEditLat(property.location?.lat?.toString() || '');
-          setEditLng(property.location?.lng?.toString() || '');
+          setEditName(property?.name || '');
+          setEditAddress(property?.address || '');
+          setEditCity(property?.city || '');
+          setEditCountry(property?.country || '');
+          setEditPrice(property?.price_per_unit || 0);
+          setEditUnits(property?.units_available || 0);
+          setEditType(property?.type || '');
+          setEditFeatures((property?.features || []).join('\n'));
+          setEditLat(property?.location?.lat?.toString() || '');
+          setEditLng(property?.location?.lng?.toString() || '');
           setIsEditOpen(true);
         }}>
           <Edit className="w-4 h-4 mr-2" />
           Edit Property
+        </Button>
+        <Button variant="destructive" size="sm" onClick={() => setIsDeleteOpen(true)}>
+          <Trash className="w-4 h-4 mr-2" />
+          Delete Property
         </Button>
 
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -326,7 +414,7 @@ export default function PropertyDetailPage({
                       updated.location = { lat: Number(editLat), lng: Number(editLng) }
                     }
 
-                    updateProperty(property.id, updated)
+                    updateProperty(property?.id, updated)
                     setIsEditOpen(false)
                     // reload to reflect server-side sample-data changes
                     window.location.reload()
@@ -350,7 +438,7 @@ export default function PropertyDetailPage({
             <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
               <img
                 src={images?.[selectedImageIndex] || "/placeholder.svg"}
-                alt={property.name}
+                alt={property?.name}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -370,7 +458,7 @@ export default function PropertyDetailPage({
                     >
                       <img
                         src={image}
-                        alt={`${property.name} ${index + 1}`}
+                        alt={`${property?.name} ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
                     </button>
@@ -382,7 +470,7 @@ export default function PropertyDetailPage({
                         const next = images.filter((_, i) => i !== index);
                         setImages(next);
                         try {
-                          updateProperty(property.id, { images: next });
+                          updateProperty(property?.id, { images: next });
                         } catch (err) {
                           console.error(
                             "Failed to persist image deletion",
@@ -539,7 +627,7 @@ export default function PropertyDetailPage({
                               const next = [...prev, res.secure_url];
                               setSelectedImageIndex(next.length - 1);
                               try {
-                                updateProperty(property.id, { images: next });
+                                updateProperty(property?.id, { images: next });
                               } catch (e) {
                                 console.error(
                                   "Failed to persist property images",
@@ -588,22 +676,22 @@ export default function PropertyDetailPage({
           <div className="md:col-span-2">
             <div className="mb-6">
               <h1 className="text-3xl font-bold text-foreground mb-2">
-                {property.name}
+                {property?.name}
               </h1>
               <div className="flex items-center gap-2 text-muted-foreground mb-4">
                 <MapPin className="w-4 h-4" />
                 <span>
-                  {property.address}, {property.city}, {property.country}
+                  {property?.address}, {property?.city}, {property?.country}
                 </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground mb-4">
                 Property ID:
-                <span className="underline">{property.id}</span>
+                <span className="underline">{property?.id}</span>
                 <button
                   type="button"
                   onClick={() => {
                     try {
-                      navigator.clipboard.writeText(String(property.id));
+                      navigator.clipboard.writeText(String(property?.id));
                       setCopied(true);
                       setTimeout(() => setCopied(false), 2000);
                     } catch (e) {
@@ -625,7 +713,7 @@ export default function PropertyDetailPage({
                   Active Property
                 </div>
                 <div className="inline-block px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-sm font-semibold capitalize">
-                  {property.type}
+                  {property?.type}
                 </div>
               </div>
             </div>
@@ -637,7 +725,7 @@ export default function PropertyDetailPage({
                   Available Units
                 </p>
                 <p className="text-2xl font-bold text-foreground">
-                  {property.units_available}
+                  {property?.units_available}
                 </p>
               </div>
               <div>
@@ -722,45 +810,39 @@ export default function PropertyDetailPage({
               </h3>
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Property Type
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Property Type</p>
                   <p className="font-semibold text-foreground capitalize">
-                    {property.type}
+                    {property?.type || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Available Units
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Available Units</p>
                   <p className="font-semibold text-foreground">
-                    {property.units_available}
+                    {property?.units_available !== undefined && property?.units_available !== null ? property?.units_available : <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Address</p>
                   <p className="font-semibold text-foreground">
-                    {property.address}
+                    {property?.address || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">City</p>
                   <p className="font-semibold text-foreground">
-                    {property.city}
+                    {property?.city || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Country</p>
                   <p className="font-semibold text-foreground">
-                    {property.country}
+                    {property?.country || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-1">
-                    Square Meters
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-1">Square Meters</p>
                   <p className="font-semibold text-foreground">
-                    {property.sq_mtrs}
+                    {property?.sq_mtrs !== undefined && property?.sq_mtrs !== null ? property?.sq_mtrs : <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
               </div>
@@ -772,19 +854,15 @@ export default function PropertyDetailPage({
               </h3>
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Geography
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-2">Geography</p>
                   <p className="font-semibold text-foreground">
-                    {property.geography}
+                    {property?.geography || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Occupancy Status
-                  </p>
+                  <p className="text-sm text-muted-foreground mb-2">Occupancy Status</p>
                   <p className="font-semibold text-foreground">
-                    {property.occupancy}
+                    {property?.occupancy || <span className="text-muted-foreground">No details found</span>}
                   </p>
                 </div>
               </div>
@@ -793,14 +871,18 @@ export default function PropertyDetailPage({
                   Property Features
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {property.features.map((feature: any, index: number) => (
-                    <span
-                      key={index}
-                      className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-full"
-                    >
-                      {feature}
-                    </span>
-                  ))}
+                  {Array.isArray(property?.features) && property?.features.length > 0 ? (
+                    property?.features.map((feature: any, index: number) => (
+                      <span
+                        key={index}
+                        className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-semibold rounded-full"
+                      >
+                        {feature}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">No details found</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -815,7 +897,7 @@ export default function PropertyDetailPage({
                     Price Per Unit
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    ${property.price_per_unit.toLocaleString()}
+                    ${property?.price_per_unit.toLocaleString()}
                   </p>
                 </div>
                 <div className="p-4 bg-secondary rounded-lg">
@@ -829,7 +911,7 @@ export default function PropertyDetailPage({
                     Occupancy
                   </p>
                   <p className="text-2xl font-bold text-foreground">
-                    {property.occupancy}
+                    {property?.occupancy}
                   </p>
                 </div>
               </div>
@@ -852,13 +934,13 @@ export default function PropertyDetailPage({
                         name: data.name,
                         email: data.email,
                         unit: data.unitNumber,
-                        propertyId: property.id,
+                        propertyId: property?.id,
                         rentAmount: data.monthlyRent,
                         status: "due",
                       }) as TenantRecord;
                       // add tenant id to property
-                      const updated = updateProperty(property.id, {
-                        tenants: [...(property.tenants || []), tenant.id],
+                      const updated = updateProperty(property?.id, {
+                        tenants: [...(property?.tenants || []), tenant.id],
                       });
                       // optimistic: no state sync here since this page uses sample data; in a full integration you would reload property
                       setShowAddTenant(false);
@@ -1151,7 +1233,16 @@ export default function PropertyDetailPage({
             </div>
           </TabsContent>
         </Tabs>
-      </Card>
+        </Card></div>) : (
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <MapPinOff className="w-12 h-12 text-muted-foreground" />
+          <p className="text-muted-foreground text-center">
+            Property not found. It may have been deleted or you may not have
+            access to it.
+          </p>
+            {/* <Button onClick={() => router.push('/dashboard/properties')}>Back to Properties</Button>   */}
+            </div>
+      )}
     </div>
   );
 }
