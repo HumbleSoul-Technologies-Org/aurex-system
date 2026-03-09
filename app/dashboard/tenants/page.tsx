@@ -128,7 +128,7 @@ export default function TenantsPage() {
       </div>
 
       {/* Toolbar */}
-      <Card className="border hidden border-border p-4">
+      <Card className="border  border-border p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <div className="flex-1 relative">
@@ -159,7 +159,7 @@ export default function TenantsPage() {
       </Card>
 
       {/* Tenants Table */}
-      <Card className="border hidden border-border overflow-hidden">
+      <Card className="border  border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -223,7 +223,7 @@ export default function TenantsPage() {
       </Card>
 
       {/* Empty State */}
-      {filteredTenants.length > 0 && (
+      {filteredTenants.length === 0 && (
         <Card className="border flex justify-center items-center border-border flex-1 h-screen p-12 text-center">
           <span><img src="/no-user.webp" alt="No tenants found" className="w-96 h-96 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-semibold text-foreground mb-2">No tenants found</h3>
