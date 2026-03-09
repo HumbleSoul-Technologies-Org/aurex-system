@@ -128,7 +128,7 @@ export default function TenantsPage() {
       </div>
 
       {/* Toolbar */}
-      <Card className="border border-border p-4">
+      <Card className="border hidden border-border p-4">
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Search */}
           <div className="flex-1 relative">
@@ -159,7 +159,7 @@ export default function TenantsPage() {
       </Card>
 
       {/* Tenants Table */}
-      <Card className="border border-border overflow-hidden">
+      <Card className="border hidden border-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -203,10 +203,10 @@ export default function TenantsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {new Date(tenant.lease_start).toLocaleDateString()}
+                    {new Date(tenant?.lease_start).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {calculateLeaseEnd(tenant.lease_start, tenant.lease_type).toLocaleDateString()}
+                    {calculateLeaseEnd(tenant?.lease_start, tenant.lease_type).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4">
                     <Link href={`/dashboard/tenants/${tenant.id}`}>
@@ -223,11 +223,11 @@ export default function TenantsPage() {
       </Card>
 
       {/* Empty State */}
-      {filteredTenants.length === 0 && (
-        <Card className="border border-border p-12 text-center">
-          <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+      {filteredTenants.length > 0 && (
+        <Card className="border flex justify-center items-center border-border flex-1 h-screen p-12 text-center">
+          <span><img src="/no-user.webp" alt="No tenants found" className="w-96 h-96 text-muted-foreground mx-auto mb-4 opacity-50" />
           <h3 className="text-lg font-semibold text-foreground mb-2">No tenants found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p>
+          <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p></span>
         </Card>
       )}
     </div>

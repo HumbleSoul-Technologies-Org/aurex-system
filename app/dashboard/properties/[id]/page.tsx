@@ -233,7 +233,7 @@ export default function PropertyDetailPage({
                       }
                       // Delete tenant announcements
                       if (typeof deleteAnnouncement === "function" && tenant.announcements) {
-                        tenant.announcements.forEach((annId: string) => {
+                         tenant.announcements.forEach((annId: string) => {
                           deleteAnnouncement(annId);
                         });
                       }

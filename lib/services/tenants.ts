@@ -3,6 +3,8 @@ import { getProperty, updateProperty } from '@/lib/services/properties'
 import { notifyNewTenant } from '@/lib/services/notifications'
 
 export interface TenantRecord {
+  announcements: boolean
+  messages: any
   id: string
   name: string
   email: string
@@ -39,6 +41,8 @@ export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
     lease_start: payload.lease_start,
     status: payload.status ?? 'due',
     image: payload.image,
+    announcements: payload.announcements ?? true,
+    messages: payload.messages ?? []
   }
   insertIntoCollection('tenants', tenant)
 
