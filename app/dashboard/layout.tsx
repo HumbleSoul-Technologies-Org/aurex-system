@@ -198,11 +198,11 @@ export default function DashboardLayout({
     {
       label: "Settings",
       items: [
-        // {
-        //   label: "Settings",
-        //   href: "/dashboard/settings",
-        //   icon: <Settings className="w-4 h-4" />,
-        // },
+        {
+          label: "Settings",
+          href: "/dashboard/settings",
+          icon: <Settings className="w-4 h-4" />,
+        },
         {
           label: "Help & Support",
           href: "/dashboard/help",

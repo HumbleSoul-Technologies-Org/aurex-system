@@ -2,6 +2,27 @@ import { getCollection, insertIntoCollection, updateInCollection, findInCollecti
 import { getProperty, updateProperty } from '@/lib/services/properties'
 import { notifyNewTenant } from '@/lib/services/notifications'
 
+export interface NotificationChannelSettings {
+  email: boolean
+  sms: boolean
+}
+
+export interface NotificationPreferences {
+  overdue: NotificationChannelSettings
+  leaseEnd: NotificationChannelSettings
+  maintenance: NotificationChannelSettings
+  profileChanges: NotificationChannelSettings
+  messages: NotificationChannelSettings
+}
+
+export interface MoveOutNotice {
+  noticeDate?: string
+  reason?: string
+  forwardingAddress?: string
+  additionalNotes?: string
+  status?: 'draft' | 'submitted'
+}
+
 export interface TenantRecord {
   announcements: boolean
   messages: any
@@ -17,6 +38,16 @@ export interface TenantRecord {
   lease_start?: string
   status?: string
   image?: string
+  address?: string
+  city?: string
+  postalCode?: string
+  country?: string
+  emergencyContactName?: string
+  emergencyContactPhone?: string
+  emergencyContactEmail?: string
+  notificationPreferences?: NotificationPreferences
+  documentDelivery?: 'email' | 'in-app' | 'both'
+  moveOutNotice?: MoveOutNotice
 }
 
 export function listTenants(): TenantRecord[] {
@@ -42,7 +73,17 @@ export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
     status: payload.status ?? 'due',
     image: payload.image,
     announcements: payload.announcements ?? true,
-    messages: payload.messages ?? []
+    messages: payload.messages ?? [],
+    address: payload.address,
+    city: payload.city,
+    postalCode: payload.postalCode,
+    country: payload.country,
+    emergencyContactName: payload.emergencyContactName,
+    emergencyContactPhone: payload.emergencyContactPhone,
+    emergencyContactEmail: payload.emergencyContactEmail,
+    notificationPreferences: payload.notificationPreferences,
+    documentDelivery: payload.documentDelivery,
+    moveOutNotice: payload.moveOutNotice,
   }
   insertIntoCollection('tenants', tenant)
 

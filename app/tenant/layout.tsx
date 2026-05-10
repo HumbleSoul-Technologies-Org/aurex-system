@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Settings,
   LogOut,
-  Menu,
   X,
   Bell,
   Moon,
@@ -21,6 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { BottomNavigation } from '@/components/ui/bottom-navigation'
 import { notifications, currentTenant } from '@/app/lib/tenant-data'
 
 interface NavItem {
@@ -31,8 +31,6 @@ interface NavItem {
 }
 
 function TenantLayoutContent({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [isDarkMode, setIsDarkMode] = useState(false)
   const pathname = usePathname()
@@ -55,20 +53,16 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
 
   const unreadNotifications = notifications.filter((n) => !n.read).length
 
-  const navItems: NavItem[] = [
+  // Desktop sidebar items (all navigation options)
+  const desktopNavItems: NavItem[] = [
     {
       label: 'Dashboard',
       href: '/tenant',
       icon: <Home className="w-4 h-4" />,
     },
     {
-      label: 'Payment History',
+      label: 'Payments',
       href: '/tenant/payments',
-      icon: <CreditCard className="w-4 h-4" />,
-    },
-    {
-      label: 'Make Payment',
-      href: '/tenant/make-payment',
       icon: <CreditCard className="w-4 h-4" />,
     },
     {
@@ -76,21 +70,46 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       href: '/tenant/maintenance',
       icon: <Wrench className="w-4 h-4" />,
     },
-    // {
-    //   label: 'Contact Management',
-    //   href: '/tenant/contact',
-    //   icon: <MessageSquare className="w-4 h-4" />,
-    // },
     {
       label: 'Messages',
       href: '/tenant/messages',
       icon: <MessageSquare className="w-4 h-4" />,
     },
-    // {
-    //   label: 'Settings',
-    //   href: '/tenant/settings',
-    //   icon: <Settings className="w-4 h-4" />,
-    // },
+    {
+      label: 'Settings',
+      href: '/tenant/settings',
+      icon: <Settings className="w-4 h-4" />,
+    },
+  ]
+
+  // Mobile bottom nav items (5 primary items)
+  const mobileNavItems: NavItem[] = [
+    {
+      label: 'Dashboard',
+      href: '/tenant',
+      icon: <Home className="w-4 h-4" />,
+    },
+    {
+      label: 'Maintenance',
+      href: '/tenant/maintenance',
+      icon: <Wrench className="w-4 h-4" />,
+    },
+    {
+      label: 'Messages',
+      href: '/tenant/messages',
+      icon: <MessageSquare className="w-4 h-4" />,
+      badge: unreadNotifications > 0 ? unreadNotifications : undefined,
+    },
+    {
+      label: 'Payments',
+      href: '/tenant/payments',
+      icon: <CreditCard className="w-4 h-4" />,
+    },
+    {
+      label: 'Settings',
+      href: '/tenant/settings',
+      icon: <Settings className="w-4 h-4" />,
+    },
   ]
 
   return (
@@ -98,19 +117,8 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-4 md:px-6 h-16">
-          {/* Left: Menu Button + Logo */}
-          <div className="flex h-screen items-center gap-4">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 hover:bg-secondary rounded-lg transition-colors"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? (
-                <X className="w-5 h-5 text-foreground" />
-              ) : (
-                <Menu className="w-5 h-5 text-foreground" />
-              )}
-            </button>
+          {/* Left: Logo */}
+          <div className="flex items-center gap-4">
             <Link href="/tenant" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">PT</span>
@@ -163,12 +171,12 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex h-screen">
+      <div className="flex h-[calc(100vh-64px)] md:h-screen">
         {/* Sidebar - Desktop */}
         <aside className="hidden md:flex flex-col w-64 border-r border-border bg-secondary">
           <nav className="flex-1 p-4 space-y-2">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href
+            {desktopNavItems.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
               return (
                 <Link
                   key={item.href}
@@ -204,42 +212,16 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        {/* Mobile Menu - Dropdown */}
-        {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 top-16 z-30 bg-background border-r border-border">
-            <nav className="p-4 space-y-2">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white'
-                        : 'text-foreground hover:bg-secondary'
-                    }`}
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    {item.icon}
-                    <span className="flex-1 text-sm font-medium">{item.label}</span>
-                    {item.badge && (
-                      <Badge className="bg-red-500 text-white text-xs">{item.badge}</Badge>
-                    )}
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-        )}
-
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-20 md:pb-0">
           <div className="p-4 md:p-6 lg:p-8">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <BottomNavigation items={mobileNavItems} />
 
       {/* Notifications Sidebar - Right */}
       {notificationsOpen && (
