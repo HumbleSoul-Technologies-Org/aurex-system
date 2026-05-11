@@ -1,8 +1,91 @@
-export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions' | 'maintenance' | 'notifications' | 'server:notifications'
+import { migrateDatabase } from '@/lib/migrations'
 
 const DB_KEY = 'propman:v1'
 
+export interface SystemSettings {
+  id: string
+  version: string
+  companyInfo?: {
+    name?: string
+    address?: string
+    phone?: string
+    email?: string
+    logoUrl?: string
+    licenseNumber?: string
+  }
+  propertyTypeDefaults: {
+    [propertyType: string]: {
+      requiredFields: string[]
+      optionalFields: string[]
+      defaultLeaseTerms: {
+        duration: string
+        renewal: string
+        noticePeriod: string
+      }
+      financialRules: {
+        securityDeposit: string
+        lateFee: string
+        gracePeriod: string
+      }
+      validationRules: Record<string, any>
+    }
+  }
+  tenantTypeConfigurations: {
+    [tenantType: string]: {
+      requiredFields: string[]
+      optionalFields?: string[]
+      validationRules: Record<string, any>
+      defaultSettings: {
+        preferredContactMethod: 'email' | 'phone' | 'sms'
+        applicationFee: number
+        screeningRequirements?: string[]
+      }
+    }
+  }
+  complianceSettings: {
+    [jurisdiction: string]: {
+      commercialRequirements: string[]
+      residentialRequirements: string[]
+      reportingRequirements: {
+        frequency: string
+        includeFinancials: boolean
+        includeOccupancy: boolean
+      }
+    }
+  }
+  notifications?: {
+    templates: Record<
+      string,
+      {
+        subject: string
+        body: string
+        channels: Array<'email' | 'sms' | 'in_app' | 'portal'>
+      }
+    >
+    schedules: Record<
+      string,
+      {
+        enabled: boolean
+        timing: string
+        conditions: string[]
+      }
+    >
+  }
+  tenantPortalSettings?: {
+    portalUrl: string
+    enabledFeatures: Record<string, boolean>
+    invitationExpirationDays: number
+    allowDocumentUploads: boolean
+  }
+  createdAt?: string
+  updatedAt?: string
+  lastMigrationDate?: string
+}
+
+export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions' | 'maintenance' | 'notifications' | 'server:notifications' | 'settings' | 'system-settings'
+
 export interface DBSchema {
+  version: string
   users: any[]
   properties: any[]
   tenants: any[]
@@ -14,9 +97,14 @@ export interface DBSchema {
   maintenance: any[]
   notifications: any[]
   'server:notifications': any[]
+  settings: SystemSettings[]
+  'system-settings': SystemSettings[]
 }
 
+const CURRENT_VERSION = '2.0.0'
+
 const defaultDB: DBSchema = {
+  version: CURRENT_VERSION,
   users: [],
   properties: [],
   tenants: [],
@@ -28,6 +116,8 @@ const defaultDB: DBSchema = {
   maintenance: [],
   notifications: [],
   'server:notifications': [],
+  settings: [],
+  'system-settings': [],
 }
 
 function readRaw(): DBSchema {
@@ -36,7 +126,17 @@ function readRaw(): DBSchema {
     const txt = localStorage.getItem(DB_KEY)
     if (!txt) return defaultDB
     const parsed = JSON.parse(txt)
-    return { ...defaultDB, ...parsed }
+    const dbWithDefaults = { ...defaultDB, ...parsed }
+
+    // Apply migrations if needed
+    const migratedDb = migrateDatabase(dbWithDefaults)
+
+    // Save migrated database back to localStorage
+    if (migratedDb.version !== dbWithDefaults.version) {
+      writeRaw(migratedDb)
+    }
+
+    return migratedDb
   } catch (e) {
     console.error('local-store read error', e)
     return defaultDB

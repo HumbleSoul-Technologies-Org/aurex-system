@@ -10,6 +10,7 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 ## 1. `tenants` Collection
 
 ### Schema
+
 - `_id: ObjectId`
 - `tenantType: 'residential' | 'commercial' | 'mixed'`
 - `name: string`
@@ -29,6 +30,7 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 - `preferredContactMethod?: 'email' | 'sms' | 'phone'`
 
 ### Residential fields
+
 - `dateOfBirth?: ISODate`
 - `employmentInfo?: { employer: string; jobTitle: string; annualIncome: number; employmentStatus: string }`
 - `previousAddresses?: Array<{ address: string; city: string; state: string; postalCode: string; fromDate: ISODate; toDate: ISODate }>`
@@ -37,12 +39,14 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 - `vehicles?: Array<{ make: string; model: string; year: number; licensePlate: string; color: string }>`
 
 ### Commercial fields
+
 - `businessInfo?: { businessName: string; businessType: string; taxId: string; businessLicense: string; incorporationDate: ISODate; industry: string; website?: string }`
 - `businessContacts?: Array<{ name: string; title: string; phone: string; email: string; isPrimary: boolean }>`
 - `financialInfo?: { creditScore?: number; bankReferences: Array<{ bankName: string; accountType: string; contactName: string; contactPhone: string }>; tradeReferences: Array<{ companyName: string; contactName: string; contactPhone: string; accountBalance: number }> }`
 - `leaseTerms?: { term: number; termUnit: 'months'|'years'; renewalOptions: string; escalationClause?: string; useClause?: string; operatingExpenses?: 'triple_net'|'modified_gross'|'full_service' }`
 
 ### Shared fields
+
 - `emergencyContact?: { name: string; email: string; phone: string }`
 - `notificationPreferences?: { overdue: { email: boolean; sms: boolean }; leaseEnd: { email: boolean; sms: boolean }; maintenance: { email: boolean; sms: boolean }; messages: { email: boolean; sms: boolean } }`
 - `documentDelivery?: 'email' | 'in_app' | 'both'`
@@ -51,6 +55,7 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 - `updatedAt: ISODate`
 
 ### Indexes
+
 - `email`
 - `propertyId`
 - `tenantType`
@@ -61,6 +66,7 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 ## 2. `properties` Collection
 
 ### Schema
+
 - `_id: ObjectId`
 - `name: string`
 - `address: string`
@@ -95,10 +101,12 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 - `updatedAt: ISODate`
 
 ### Relationships
+
 - `tenantIds?: ObjectId[]` optional denormalized list to speed tenant lookup
 - `propertyId` referenced from `tenants`, `transactions`, `documents`, `maintenance`
 
 ### Indexes
+
 - `propertyType`
 - `city`
 - `location`
@@ -110,6 +118,7 @@ Design MongoDB collections and field schemas for tenants, properties, transactio
 This can cover rent payments, expenses, and general financial records.
 
 ### Schema
+
 - `_id: ObjectId`
 - `transactionId: string`
 - `tenantId?: ObjectId` (ref `tenants`)
@@ -132,6 +141,7 @@ This can cover rent payments, expenses, and general financial records.
 - `notes?: string`
 
 ### Commercial-specific fields
+
 - `commercialPaymentDetails?: { baseRent: number; additionalRent: number; percentageRent?: number; escalation: number }`
 - `expenseType?: 'residential' | 'commercial' | 'both'`
 - `tripleNetAllocation?: 'tenant' | 'landlord' | 'shared'`
@@ -139,10 +149,12 @@ This can cover rent payments, expenses, and general financial records.
 - `depreciationSchedule?: { method: string; usefulLife: number; salvageValue?: number }`
 
 ### Recurring / plan fields
+
 - `paymentPlan?: { totalAmount: number; installments: number; frequency: 'weekly'|'monthly'|'quarterly'; nextPaymentDate: ISODate }`
 - `autoPay?: { enabled: boolean; method: 'ach'|'credit_card'; last4: string; nextPaymentDate: ISODate }`
 
 ### Indexes
+
 - `tenantId`
 - `propertyId`
 - `type`
@@ -156,6 +168,7 @@ This can cover rent payments, expenses, and general financial records.
 If you need a dedicated payment history separate from transactions.
 
 ### Schema
+
 - `_id: ObjectId`
 - `tenantId: ObjectId`
 - `propertyId?: ObjectId`
@@ -171,6 +184,7 @@ If you need a dedicated payment history separate from transactions.
 - `updatedAt: ISODate`
 
 ### Relationship
+
 - Optional reference: `transactionId: ObjectId`
 
 ---
@@ -178,6 +192,7 @@ If you need a dedicated payment history separate from transactions.
 ## 5. `announcements` Collection
 
 ### Schema
+
 - `_id: ObjectId`
 - `title: string`
 - `message: string`
@@ -196,6 +211,7 @@ If you need a dedicated payment history separate from transactions.
 - `updatedAt: ISODate`
 
 ### Indexes
+
 - `propertyId`
 - `status`
 - `scheduledDate`
@@ -205,6 +221,7 @@ If you need a dedicated payment history separate from transactions.
 ## 6. `documents` Collection
 
 ### Schema
+
 - `_id: ObjectId`
 - `title: string`
 - `type: 'lease' | 'invoice' | 'maintenance_report' | 'notice' | 'other'`
@@ -227,21 +244,31 @@ If you need a dedicated payment history separate from transactions.
 ## 7. `settings` Collection
 
 ### Schema
+
 - `_id: ObjectId`
 - `companyInfo: { name: string; address: string; phone: string; email: string; logoUrl?: string; licenseNumber?: string }`
-- `propertyTypeDefaults: Array<{ propertyType: string; defaultLeaseTerm: number; rentDueDate: number; lateFeePolicy: { gracePeriod: number; feeAmount: number; feeType: 'fixed' | 'percentage' }; securityDeposit: { amount: number; type: string; months: number } }>`
-- `tenantTypeConfigs: Array<{ tenantType: string; requiredFields: string[]; optionalFields: string[]; screeningRequirements: string[] }>`
+- `propertyTypeDefaults: Array<{ propertyType: string; requiredFields: string[]; optionalFields: string[]; defaultLeaseTerms: { duration: string; renewal: string; noticePeriod: string }; financialRules: { securityDeposit: string; lateFee: string; gracePeriod: string }; validationRules: Record<string, any> }>`
+- `tenantTypeConfigs: Array<{ tenantType: string; requiredFields: string[]; optionalFields?: string[]; validationRules: Record<string, any>; defaultSettings: { preferredContactMethod: 'email' | 'phone' | 'sms'; applicationFee: number; screeningRequirements?: string[] } }>`
 - `financial: { defaultCurrency: string; taxRate: number; lateFeePolicy: { gracePeriodDays: number; feeAmount: number; maxLateFees: number }; paymentMethods: Array<{ type: string; enabled: boolean; processingFee?: number }> }`
-- `compliance: { fairHousing: boolean; adaCompliance: boolean; dataRetention: { documents: number; financial: number; communications: number }; requiredDisclosures: string[] }`
-- `notifications: { templates: Record<string, { subject: string; body: string; channels: Array<'email' | 'sms' | 'in_app'> }>; schedules: Record<string, { enabled: boolean; timing: string; conditions: string[] }> }`
+- `compliance: { default: { commercialRequirements: string[]; residentialRequirements: string[]; reportingRequirements: { frequency: string; includeFinancials: boolean; includeOccupancy: boolean } } }`
+- `notifications: { templates: Record<string, { subject: string; body: string; channels: Array<'email' | 'sms' | 'in_app' | 'portal'> }>; schedules: Record<string, { enabled: boolean; timing: string; conditions: string[] }> }`
+- `tenantPortalSettings: { portalUrl: string; enabledFeatures: Record<string, boolean>; invitationExpirationDays: number; allowDocumentUploads: boolean }`
 - `createdAt: ISODate`
 - `updatedAt: ISODate`
+
+### Relationships
+
+- `propertyTypeDefaults.propertyType` maps to `properties.propertyType`
+- `tenantTypeConfigs.tenantType` maps to `tenants.tenantType`
+- `notifications.templates` drive tenant and manager communication channels
+- `tenantPortalSettings.enabledFeatures` controls portal capabilities for tenant-facing flows
 
 ---
 
 ## Relationships & Data Modeling Rules
 
 ### Core References
+
 - `tenants.propertyId -> properties._id`
 - `transactions.tenantId -> tenants._id`
 - `transactions.propertyId -> properties._id`
@@ -252,10 +279,12 @@ If you need a dedicated payment history separate from transactions.
 - `documents.tenantId -> tenants._id`
 
 ### Embedding vs Referencing
+
 - Use **references** for major entities: tenants, properties, transactions, announcements, documents
 - Use **embedded subdocuments** for nested object groups like employmentInfo, pets, units, marketData, paymentSource, and settings
 
 ### Suggested Relationship Patterns
+
 - Store `properties.units` array with unit details and status, not tenant data.
 - Keep `tenants.propertyId` + `unit` on tenant records.
 - Use `transactions` for both rent and expense records, keyed by `type` and `category`.
@@ -275,6 +304,7 @@ If you need a dedicated payment history separate from transactions.
 ---
 
 ## Recommended Collections
+
 - `tenants`
 - `properties`
 - `transactions`

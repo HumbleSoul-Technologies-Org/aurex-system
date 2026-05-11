@@ -1,101 +1,128 @@
-'use client'
+"use client";
 
-import { useEffect, useState, useMemo } from 'react'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Download, Filter, MoreHorizontal, Printer, Share2, Lock, AlertCircle, CheckCircle, CreditCard } from 'lucide-react'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import Link from 'next/link'
-import { currentTenant } from '@/app/lib/tenant-data'
-import { listPayments, createPayment, PaymentRecord } from '@/lib/services/payments'
-import { listProperties } from '@/lib/services/properties'
-import { getCurrentUser } from '@/lib/services/auth'
-import { getTenant } from '@/lib/services/tenants'
-import { getProperty } from '@/lib/services/properties'
+import { useEffect, useState, useMemo } from "react";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Download,
+  Filter,
+  MoreHorizontal,
+  Printer,
+  Share2,
+  Lock,
+  AlertCircle,
+  CheckCircle,
+  CreditCard,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import Link from "next/link";
+import { currentTenant } from "@/app/lib/tenant-data";
+import {
+  listPayments,
+  createPayment,
+  PaymentRecord,
+} from "@/lib/services/payments";
+import { listProperties } from "@/lib/services/properties";
+import { getCurrentUser } from "@/lib/services/auth";
+import { getTenant } from "@/lib/services/tenants";
+import { getProperty } from "@/lib/services/properties";
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<any[]>([])
-  const [properties, setProperties] = useState<any[]>([])
-  
-  // Make Payment state
-  const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">("amount")
-  const [amount, setAmount] = useState<number>(0)
-  const [method, setMethod] = useState("bank-transfer")
-  const [processing, setProcessing] = useState(false)
-  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null)
+  const [payments, setPayments] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
 
-  const user = useMemo(() => getCurrentUser(), [])
+  // Make Payment state
+  const [step, setStep] = useState<
+    "amount" | "method" | "confirm" | "success" | "history"
+  >("amount");
+  const [amount, setAmount] = useState<number>(0);
+  const [method, setMethod] = useState("bank-transfer");
+  const [processing, setProcessing] = useState(false);
+  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null);
+
+  const user = useMemo(() => getCurrentUser(), []);
   const tenant = useMemo(
     () => (user?.role === "tenant" ? getTenant(user.id) : null),
     [user],
-  )
+  );
   const property = useMemo(
     () => (tenant?.propertyId ? getProperty(tenant.propertyId) : null),
     [tenant],
-  )
+  );
 
-  const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0
-  
-  useEffect(() => {
-    const defaultAmount = defaultRent > 0 ? defaultRent : 0
-    setAmount(defaultAmount)
-  }, [defaultRent])
+  const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
 
   useEffect(() => {
-    setPayments(listPayments())
-    setProperties(listProperties())
+    const defaultAmount = defaultRent > 0 ? defaultRent : 0;
+    setAmount(defaultAmount);
+  }, [defaultRent]);
 
-    const onPaymentsUpdated = () => setPayments(listPayments())
-    if (typeof window !== 'undefined') window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+  useEffect(() => {
+    setPayments(listPayments());
+    setProperties(listProperties());
+
+    const onPaymentsUpdated = () => setPayments(listPayments());
+    if (typeof window !== "undefined")
+      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
     return () => {
-      if (typeof window !== 'undefined') window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
-    }
-  }, [])
+      if (typeof window !== "undefined")
+        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    };
+  }, []);
 
-  const tenantPayments = payments.filter(p => !currentTenant || p.tenantId === currentTenant.id)
+  const tenantPayments = payments.filter(
+    (p) => !currentTenant || p.tenantId === currentTenant.id,
+  );
   const totalPaid = tenantPayments
-    .filter((p) => p.status === 'completed' || p.status === 'paid')
-    .reduce((sum, p) => sum + (p.amount || 0), 0)
+    .filter((p) => p.status === "completed" || p.status === "paid")
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
 
   const handlePaymentSubmit = async () => {
-    if (step === "amount") setStep("method")
-    else if (step === "method") setStep("confirm")
+    if (step === "amount") setStep("method");
+    else if (step === "method") setStep("confirm");
     else if (step === "confirm") {
-      setProcessing(true)
+      setProcessing(true);
       try {
         const payload: Partial<PaymentRecord> = {
-          tenantId: tenant?.id || user?.id || '',
+          tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           unit: tenant?.unit,
           amount,
           price_per_unit: property?.price_per_unit,
           lease_start: tenant?.lease_start,
           lease_type: tenant?.lease_type,
-          balance: (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
+          balance:
+            (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
           method,
           date: new Date().toISOString(),
-        }
-        const rec = createPayment(payload)
-        setSavedPayment(rec)
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('paymentsUpdated'))
+        };
+        const rec = createPayment(payload);
+        setSavedPayment(rec);
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new CustomEvent("paymentsUpdated"));
         setTimeout(() => {
-          setStep('success')
-          setProcessing(false)
-        }, 800)
+          setStep("success");
+          setProcessing(false);
+        }, 800);
       } catch (err) {
-        setProcessing(false)
-        setTimeout(() => setStep('success'), 800)
+        setProcessing(false);
+        setTimeout(() => setStep("success"), 800);
       }
     }
-  }
+  };
 
   const handlePaymentReset = () => {
-    setStep("amount")
-    setAmount(defaultRent)
-    setMethod("bank-transfer")
-  }
+    setStep("amount");
+    setAmount(defaultRent);
+    setMethod("bank-transfer");
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -118,150 +145,210 @@ export default function PaymentsPage() {
 
         {/* Payment History Tab */}
         <TabsContent value="history" className="space-y-6 md:space-y-8">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+            <Card className="border border-border p-4 md:p-6">
+              <p className="text-xs md:text-sm text-muted-foreground mb-2">
+                Total Paid (YTD)
+              </p>
+              <p className="text-2xl md:text-3xl font-bold text-foreground">
+                ${totalPaid.toLocaleString()}
+              </p>
+            </Card>
 
+            <Card className="border border-border p-4 md:p-6">
+              <p className="text-xs md:text-sm text-muted-foreground mb-2">
+                Monthly Rent
+              </p>
+              <p className="text-2xl md:text-3xl font-bold text-foreground">
+                ${currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0}
+              </p>
+            </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-        <Card className="border border-border p-4 md:p-6">
-          <p className="text-xs md:text-sm text-muted-foreground mb-2">
-            Total Paid (YTD)
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-foreground">
-            ${totalPaid.toLocaleString()}
-          </p>
-        </Card>
+            <Card className="border border-border p-4 md:p-6">
+              <p className="text-xs md:text-sm text-muted-foreground mb-2">
+                Payments Made
+              </p>
+              <p className="text-2xl md:text-3xl font-bold text-foreground">
+                {
+                  tenantPayments.filter(
+                    (p) => p.status === "completed" || p.status === "paid",
+                  ).length
+                }
+              </p>
+            </Card>
+          </div>
 
-        <Card className="border border-border p-4 md:p-6">
-          <p className="text-xs md:text-sm text-muted-foreground mb-2">
-            Monthly Rent
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-foreground">
-            ${currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0}
-          </p>
-        </Card>
+          {/* Filters and Actions */}
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="border-border gap-2 text-foreground bg-transparent"
+              >
+                <Filter className="w-4 h-4" />
+                <span className="hidden sm:inline">Filter</span>
+              </Button>
+            </div>
 
-        <Card className="border border-border p-4 md:p-6">
-          <p className="text-xs md:text-sm text-muted-foreground mb-2">
-            Payments Made
-          </p>
-          <p className="text-2xl md:text-3xl font-bold text-foreground">
-            {tenantPayments.filter((p) => p.status === 'completed' || p.status === 'paid').length}
-          </p>
-        </Card>
-      </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="border-border gap-2 text-foreground flex-1 sm:flex-none bg-transparent"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download</span>
+              </Button>
+              <Button
+                asChild
+                className="bg-primary hover:bg-primary/90 text-white flex-1 sm:flex-none"
+              >
+                <Link href="/tenant/make-payment">Make Payment</Link>
+              </Button>
+            </div>
+          </div>
 
-      {/* Filters and Actions */}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="border-border gap-2 text-foreground bg-transparent"
-          >
-            <Filter className="w-4 h-4" />
-            <span className="hidden sm:inline">Filter</span>
-          </Button>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="border-border gap-2 text-foreground flex-1 sm:flex-none bg-transparent"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Download</span>
-          </Button>
-          <Button
-            asChild
-            className="bg-primary hover:bg-primary/90 text-white flex-1 sm:flex-none"
-          >
-            <Link href="/tenant/make-payment">Make Payment</Link>
-          </Button>
-        </div>
-      </div>
-
-      {/* Payment History Table */}
-      <Card className="border border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-secondary border-b border-border">
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Date</th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Trans ID</th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Amount</th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Status</th>
-                <th className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Method</th>
-                <th className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Property</th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Unit</th>
-                <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {tenantPayments.map((payment) => (
-                <tr key={payment.id} className="hover:bg-secondary transition-colors">
-                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-foreground">
-                    {payment.date ? new Date(payment.date).toLocaleDateString() : '—'}
-                  </td>
-                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-mono text-foreground">{payment.transId || payment.id}</td>
-                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">${(payment.amount || 0).toFixed(2)}</td>
-                  <td className="px-4 md:px-6 py-3 md:py-4">
-                    <Badge className={payment.status === 'completed' || payment.status === 'paid' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'}>
-                      {(payment.status === 'completed' || payment.status === 'paid') ? 'Paid' : (payment.status || 'Pending')}
-                    </Badge>
-                  </td>
-                  <td className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{payment.method || '—'}</td>
-                  <td className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{properties.find(p => p.id === payment.propertyId)?.name || '—'}</td>
-                  <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">{payment.unit || '—'}</td>
-                  <td className="px-4 md:px-6 py-3 md:py-4">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => {
-                          if (typeof window === 'undefined') return
-                          const w = window.open('', '_blank')
-                          if (!w) return
-                          w.document.write(`<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`)
-                          w.document.close()
-                          w.print()
-                        }}>
-                          <Printer className="mr-2 h-4 w-4" />
-                          Print
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={async () => {
-                          try {
-                            const text = `Payment ${payment.transId || payment.id}: $${(payment.amount||0).toFixed(2)}`
-                            if (navigator.share) {
-                              await navigator.share({ title: 'Payment', text, url: window.location.href })
-                            } else if (navigator.clipboard) {
-                              await navigator.clipboard.writeText(text)
-                              // small feedback
-                              // eslint-disable-next-line no-alert
-                              alert('Payment details copied to clipboard')
-                            } else {
-                              // fallback
-                              // eslint-disable-next-line no-alert
-                              alert(text)
-                            }
-                          } catch (e) {
-                            // eslint-disable-next-line no-console
-                            console.error('Share failed', e)
+          {/* Payment History Table */}
+          <Card className="border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-secondary border-b border-border">
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Date
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Trans ID
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Amount
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Status
+                    </th>
+                    <th className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Method
+                    </th>
+                    <th className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Property
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Unit
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {tenantPayments.map((payment) => (
+                    <tr
+                      key={payment.id}
+                      className="hover:bg-secondary transition-colors"
+                    >
+                      <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-foreground">
+                        {payment.date
+                          ? new Date(payment.date).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-mono text-foreground">
+                        {payment.transId || payment.id}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">
+                        ${(payment.amount || 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-4">
+                        <Badge
+                          className={
+                            payment.status === "completed" ||
+                            payment.status === "paid"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                           }
-                        }}>
-                          <Share2 className="mr-2 h-4 w-4" />
-                          Share
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                        >
+                          {payment.status === "completed" ||
+                          payment.status === "paid"
+                            ? "Paid"
+                            : payment.status || "Pending"}
+                        </Badge>
+                      </td>
+                      <td className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
+                        {payment.method || "—"}
+                      </td>
+                      <td className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
+                        {properties.find((p) => p.id === payment.propertyId)
+                          ?.name || "—"}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
+                        {payment.unit || "—"}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (typeof window === "undefined") return;
+                                const w = window.open("", "_blank");
+                                if (!w) return;
+                                w.document.write(
+                                  `<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`,
+                                );
+                                w.document.close();
+                                w.print();
+                              }}
+                            >
+                              <Printer className="mr-2 h-4 w-4" />
+                              Print
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                try {
+                                  const text = `Payment ${payment.transId || payment.id}: $${(payment.amount || 0).toFixed(2)}`;
+                                  if (navigator.share) {
+                                    await navigator.share({
+                                      title: "Payment",
+                                      text,
+                                      url: window.location.href,
+                                    });
+                                  } else if (navigator.clipboard) {
+                                    await navigator.clipboard.writeText(text);
+                                    // small feedback
+                                    // eslint-disable-next-line no-alert
+                                    alert(
+                                      "Payment details copied to clipboard",
+                                    );
+                                  } else {
+                                    // fallback
+                                    // eslint-disable-next-line no-alert
+                                    alert(text);
+                                  }
+                                } catch (e) {
+                                  // eslint-disable-next-line no-console
+                                  console.error("Share failed", e);
+                                }
+                              }}
+                            >
+                              <Share2 className="mr-2 h-4 w-4" />
+                              Share
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </TabsContent>
 
         {/* Make Payment Tab */}
@@ -297,8 +384,8 @@ export default function PaymentsPage() {
                               : "border-border"
                           }`}
                           onClick={() => {
-                            if (option.value > 0) setAmount(option.value)
-                            else setAmount(0)
+                            if (option.value > 0) setAmount(option.value);
+                            else setAmount(0);
                           }}
                         >
                           <div className="flex flex-col items-start">
@@ -344,7 +431,8 @@ export default function PaymentsPage() {
                   <div className="text-sm text-foreground">
                     <p className="font-medium mb-1">Payment Details</p>
                     <p className="text-xs md:text-sm text-muted-foreground">
-                      Your payment will be processed securely. You will receive a confirmation email immediately after successful payment.
+                      Your payment will be processed securely. You will receive
+                      a confirmation email immediately after successful payment.
                     </p>
                   </div>
                 </div>
@@ -452,7 +540,8 @@ export default function PaymentsPage() {
                   <div className="text-sm text-green-800 dark:text-green-300">
                     <p className="font-medium mb-1">Secure Payment</p>
                     <p className="text-xs md:text-sm">
-                      All transactions are encrypted and secure. Your payment information will never be shared.
+                      All transactions are encrypted and secure. Your payment
+                      information will never be shared.
                     </p>
                   </div>
                 </div>
@@ -474,14 +563,19 @@ export default function PaymentsPage() {
                     Payment Successful!
                   </h2>
                   <p className="text-muted-foreground text-sm md:text-base">
-                    Your payment of ${amount.toFixed(2)} has been processed successfully.
+                    Your payment of ${amount.toFixed(2)} has been processed
+                    successfully.
                   </p>
                 </div>
 
                 <div className="bg-secondary p-4 rounded-lg border border-border space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Transaction ID</span>
-                    <span className="font-mono text-foreground">{savedPayment?.transId ?? '—'}</span>
+                    <span className="text-muted-foreground">
+                      Transaction ID
+                    </span>
+                    <span className="font-mono text-foreground">
+                      {savedPayment?.transId ?? "—"}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Amount</span>
@@ -491,12 +585,16 @@ export default function PaymentsPage() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Date</span>
-                    <span className="text-foreground">{savedPayment ? new Date(savedPayment.date).toLocaleDateString() : new Date().toLocaleDateString()}</span>
+                    <span className="text-foreground">
+                      {savedPayment
+                        ? new Date(savedPayment.date).toLocaleDateString()
+                        : new Date().toLocaleDateString()}
+                    </span>
                   </div>
                 </div>
 
                 <p className="text-xs md:text-sm text-muted-foreground">
-                  A confirmation email has been sent to {" "}
+                  A confirmation email has been sent to{" "}
                   {tenant?.email || "your email"}
                 </p>
 
@@ -525,9 +623,9 @@ export default function PaymentsPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (step === "amount") setStep("history")
-                  else if (step === "method") setStep("amount")
-                  else if (step === "confirm") setStep("method")
+                  if (step === "amount") setStep("history");
+                  else if (step === "method") setStep("amount");
+                  else if (step === "confirm") setStep("method");
                 }}
                 className="border-border text-foreground flex-1"
                 disabled={step === "amount"}
@@ -549,6 +647,5 @@ export default function PaymentsPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }
-

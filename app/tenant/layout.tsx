@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import React, { Suspense, useState } from 'react'
-import { useAuth } from '@/app/lib/auth-context'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import React, { Suspense, useState } from "react";
+import { useAuth } from "@/app/lib/auth-context";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Home,
   CreditCard,
@@ -16,101 +16,101 @@ import {
   Moon,
   Sun,
   ChevronRight,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { BottomNavigation } from '@/components/ui/bottom-navigation'
-import { notifications, currentTenant } from '@/app/lib/tenant-data'
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { BottomNavigation } from "@/components/ui/bottom-navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { notifications, currentTenant } from "@/app/lib/tenant-data";
 
 interface NavItem {
-  label: string
-  href: string
-  icon: React.ReactNode
-  badge?: number
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  badge?: number;
 }
 
 function TenantLayoutContent({ children }: { children: React.ReactNode }) {
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [isDarkMode, setIsDarkMode] = useState(false)
-  const pathname = usePathname()
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const pathname = usePathname();
 
-  const { user: authUser, isAuthenticated, isLoading } = useAuth()
+  const { user: authUser, isAuthenticated, isLoading } = useAuth();
 
   React.useEffect(() => {
     // Don't redirect while loading
     if (isLoading) return;
-    
+
     if (!isAuthenticated) {
       // Not authenticated -> send to login
-      window.location.href = '/auth/login'
-      return
+      window.location.href = "/auth/login";
+      return;
     }
-    if (authUser?.role !== 'tenant') {
-      window.location.href = '/auth/login'
+    if (authUser?.role !== "tenant") {
+      window.location.href = "/auth/login";
     }
-  }, [isAuthenticated, isLoading, authUser])
+  }, [isAuthenticated, isLoading, authUser]);
 
-  const unreadNotifications = notifications.filter((n) => !n.read).length
+  const unreadNotifications = notifications.filter((n) => !n.read).length;
 
   // Desktop sidebar items (all navigation options)
   const desktopNavItems: NavItem[] = [
     {
-      label: 'Dashboard',
-      href: '/tenant',
+      label: "Dashboard",
+      href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
     {
-      label: 'Payments',
-      href: '/tenant/payments',
+      label: "Payments",
+      href: "/tenant/payments",
       icon: <CreditCard className="w-4 h-4" />,
     },
     {
-      label: 'Report Maintenance',
-      href: '/tenant/maintenance',
+      label: "Report Maintenance",
+      href: "/tenant/maintenance",
       icon: <Wrench className="w-4 h-4" />,
     },
     {
-      label: 'Messages',
-      href: '/tenant/messages',
+      label: "Messages",
+      href: "/tenant/messages",
       icon: <MessageSquare className="w-4 h-4" />,
     },
     {
-      label: 'Settings',
-      href: '/tenant/settings',
+      label: "Settings",
+      href: "/tenant/settings",
       icon: <Settings className="w-4 h-4" />,
     },
-  ]
+  ];
 
   // Mobile bottom nav items (5 primary items)
   const mobileNavItems: NavItem[] = [
     {
-      label: 'Dashboard',
-      href: '/tenant',
+      label: "Dashboard",
+      href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
     {
-      label: 'Maintenance',
-      href: '/tenant/maintenance',
+      label: "Maintenance",
+      href: "/tenant/maintenance",
       icon: <Wrench className="w-4 h-4" />,
     },
     {
-      label: 'Messages',
-      href: '/tenant/messages',
+      label: "Messages",
+      href: "/tenant/messages",
       icon: <MessageSquare className="w-4 h-4" />,
       badge: unreadNotifications > 0 ? unreadNotifications : undefined,
     },
     {
-      label: 'Payments',
-      href: '/tenant/payments',
+      label: "Payments",
+      href: "/tenant/payments",
       icon: <CreditCard className="w-4 h-4" />,
     },
     {
-      label: 'Settings',
-      href: '/tenant/settings',
+      label: "Settings",
+      href: "/tenant/settings",
       icon: <Settings className="w-4 h-4" />,
     },
-  ]
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,7 +123,9 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">PT</span>
               </div>
-              <span className="hidden sm:inline font-bold text-foreground">Tenant Portal</span>
+              <span className="hidden sm:inline font-bold text-foreground">
+                Tenant Portal
+              </span>
             </Link>
           </div>
 
@@ -144,17 +146,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
             </button>
 
             {/* Dark Mode Toggle */}
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              aria-label="Toggle dark mode"
-            >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5 text-foreground" />
-              ) : (
-                <Moon className="w-5 h-5 text-foreground" />
-              )}
-            </button>
+            <ThemeToggle />
 
             {/* Profile Menu */}
             <button className="flex items-center gap-2 px-2 py-1 hover:bg-secondary rounded-lg transition-colors">
@@ -162,8 +154,12 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                 <span className="text-white font-bold text-xs">SA</span>
               </div>
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-semibold text-foreground">{currentTenant?.name || 'Tenant'}</p>
-                <p className="text-xs text-muted-foreground">Unit {currentTenant?.unit || 'N/A'}</p>
+                <p className="text-xs font-semibold text-foreground">
+                  {currentTenant?.name || "Tenant"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Unit {currentTenant?.unit || "N/A"}
+                </p>
               </div>
             </button>
           </div>
@@ -176,24 +172,29 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
         <aside className="hidden md:flex flex-col w-64 border-r border-border bg-secondary">
           <nav className="flex-1 p-4 space-y-2">
             {desktopNavItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              const isActive =
+                pathname === item.href || pathname.startsWith(item.href + "/");
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-primary text-white'
-                      : 'text-foreground hover:bg-background'
+                      ? "bg-primary text-white"
+                      : "text-foreground hover:bg-background"
                   }`}
                 >
                   {item.icon}
-                  <span className="flex-1 text-sm font-medium">{item.label}</span>
+                  <span className="flex-1 text-sm font-medium">
+                    {item.label}
+                  </span>
                   {item.badge && (
-                    <Badge className="bg-red-500 text-white text-xs">{item.badge}</Badge>
+                    <Badge className="bg-red-500 text-white text-xs">
+                      {item.badge}
+                    </Badge>
                   )}
                 </Link>
-              )
+              );
             })}
           </nav>
 
@@ -214,9 +215,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto pb-20 md:pb-0">
-          <div className="p-4 md:p-6 lg:p-8">
-            {children}
-          </div>
+          <div className="p-4 md:p-6 lg:p-8">{children}</div>
         </main>
       </div>
 
@@ -247,7 +246,10 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
               </p>
             ) : (
               [...notifications]
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .sort(
+                  (a, b) =>
+                    new Date(b.date).getTime() - new Date(a.date).getTime(),
+                )
                 .map((notif) => (
                   <Link
                     key={notif.id}
@@ -256,7 +258,9 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                   >
                     <Card
                       className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
-                        notif.read ? 'border-border' : 'border-primary bg-primary/5'
+                        notif.read
+                          ? "border-border"
+                          : "border-primary bg-primary/5"
                       }`}
                     >
                       <div className="flex items-start gap-3">
@@ -299,13 +303,17 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
         />
       )}
     </div>
-  )
+  );
 }
 
-export default function TenantLayout({ children }: { children: React.ReactNode }) {
+export default function TenantLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <TenantLayoutContent>{children}</TenantLayoutContent>
     </Suspense>
-  )
+  );
 }

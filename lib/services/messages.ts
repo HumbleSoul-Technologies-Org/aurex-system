@@ -77,6 +77,10 @@ export function getReply(id: string): ReplyRecord | null {
   return listReplies().find((r) => r.id === id) ?? null
 }
 
+export function updateReply(id: string, patch: Partial<ReplyRecord>): ReplyRecord | null {
+  return updateInCollection<ReplyRecord>('replies', id, patch)
+}
+
 export function createReply(payload: Partial<ReplyRecord>): ReplyRecord {
   const rec: ReplyRecord = {
     id: generateId('reply'),

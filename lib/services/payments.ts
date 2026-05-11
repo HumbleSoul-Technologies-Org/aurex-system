@@ -1,4 +1,4 @@
-import { insertIntoCollection, getCollection, generateId, removeFromCollection } from '@/lib/local-store'
+import { insertIntoCollection, getCollection, generateId, removeFromCollection, updateInCollection } from '@/lib/local-store'
 import { getTenant, updateTenant } from '@/lib/services/tenants'
 
 function generateShortId(len = 8) {
@@ -19,6 +19,23 @@ export interface PaymentRecord {
   currency?: string
   date: string
   method?: string
+  paymentType?: 'rent' | 'commercial' | 'residential' | 'misc'
+  commercialPaymentDetails?: {
+    baseRent?: number
+    additionalRent?: number
+    percentageRent?: number
+    escalation?: string
+  }
+  residentialPaymentDetails?: {
+    petFee?: number
+    parkingFee?: number
+    utilitiesIncluded?: boolean
+  }
+  paymentPlan?: {
+    installments?: number
+    frequency?: 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
+  }
+  autoPay?: boolean
   status?: 'pending' | 'completed' | 'failed'
   note?: string
   lease_start?: string
@@ -31,6 +48,17 @@ export interface PaymentRecord {
 
 export function listPayments(): PaymentRecord[] {
   return getCollection<PaymentRecord>('payments')
+}
+
+export function getPayment(id: string): PaymentRecord | null {
+  return listPayments().find((payment) => payment.id === id) ?? null
+}
+
+export function updatePayment(id: string, patch: Partial<PaymentRecord>): PaymentRecord | null {
+  return updateInCollection<PaymentRecord>('payments', id, {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  })
 }
 
 export function deletePayment(id: string): boolean {

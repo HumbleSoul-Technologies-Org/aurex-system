@@ -2,6 +2,7 @@
 import { createUser } from '@/lib/services/auth'
 import { findInCollection } from '@/lib/local-store'
 import { createProperty } from '@/lib/services/properties'
+import { initializeSystemSettings } from '@/lib/services/settings'
 
 export function ensureSeed() {
   // Create admin user if not exists
@@ -17,6 +18,13 @@ export function ensureSeed() {
     }
   } catch (e) {
     // Ignore errors during seeding
+  }
+
+  // Initialize system settings
+  try {
+    initializeSystemSettings()
+  } catch (e) {
+    console.warn('Failed to initialize system settings:', e)
   }
 
   // Add sample properties if none exist

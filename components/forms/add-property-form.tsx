@@ -1,126 +1,183 @@
-'use client'
+"use client";
 
-import React, { useState, useRef, useEffect } from "react"
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { X, MapPin, Home, DollarSign, Loader2 } from 'lucide-react'
+import React, { useState, useRef, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { X, MapPin, Home, DollarSign, Loader2 } from "lucide-react";
 
 interface AddPropertyFormProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit?: (data: PropertyFormData, file?: File | null) => void
-  isLoading?: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit?: (data: PropertyFormData, file?: File | null) => void;
+  isLoading?: boolean;
 }
 
 interface PropertyFormData {
-  name: string
-  address: string
-  city: string
-  country: string
-  units: number
-  pricePerUnit: number
-  propertyType: string
-  geography: string
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  units: number;
+  pricePerUnit: number;
+  propertyType: string;
+  geography: string;
   location: {
-    lat: string
-    lng: string
-  }
-  features: string
-  imageUrl?: string
-  description: string
+    lat: string;
+    lng: string;
+  };
+  features: string;
+  residentialFeatures: string;
+  commercialFeatures: string;
+  zoning: string;
+  permittedUses: string;
+  loadingDocks: string;
+  ceilingHeight: string;
+  powerCapacity: string;
+  annualPropertyTaxes: string;
+  annualInsurance: string;
+  appraisedValue: string;
+  lastAppraisalDate: string;
+  noi: string;
+  capRate: string;
+  bedrooms: string;
+  bathrooms: string;
+  petPolicy: string;
+  imageUrl?: string;
+  description: string;
 }
 
-export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading = false }: AddPropertyFormProps) {
+export default function AddPropertyForm({
+  isOpen,
+  onClose,
+  onSubmit,
+  isLoading = false,
+}: AddPropertyFormProps) {
   const [formData, setFormData] = useState<PropertyFormData>({
-    name: '',
-    address: '',
-    city: '',
-    country: '',
+    name: "",
+    address: "",
+    city: "",
+    country: "",
     units: 1,
     pricePerUnit: 0,
-    propertyType: 'apartment',
-    geography: '',
-    location: { lat: '', lng: '' },
-    features: '',
-    imageUrl: '',
-    description: '',
-  })
+    propertyType: "apartment",
+    geography: "",
+    location: { lat: "", lng: "" },
+    features: "",
+    residentialFeatures: "",
+    commercialFeatures: "",
+    zoning: "",
+    permittedUses: "",
+    loadingDocks: "",
+    ceilingHeight: "",
+    powerCapacity: "",
+    annualPropertyTaxes: "",
+    annualInsurance: "",
+    appraisedValue: "",
+    lastAppraisalDate: "",
+    noi: "",
+    capRate: "",
+    bedrooms: "",
+    bathrooms: "",
+    petPolicy: "",
+    imageUrl: "",
+    description: "",
+  });
 
-  const [selectedImage, setSelectedImage] = useState<File | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedImage) {
-      setPreviewUrl(null)
-      return
+      setPreviewUrl(null);
+      return;
     }
 
-    const url = URL.createObjectURL(selectedImage)
-    setPreviewUrl(url)
+    const url = URL.createObjectURL(selectedImage);
+    setPreviewUrl(url);
 
     return () => {
-      URL.revokeObjectURL(url)
-    }
-  }, [selectedImage])
+      URL.revokeObjectURL(url);
+    };
+  }, [selectedImage]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
+    const { name, value } = e.target;
 
     // nested fields like location.lat
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.')
+    if (name.includes(".")) {
+      const [parent, child] = name.split(".");
       setFormData((prev: any) => ({
         ...prev,
         [parent]: {
           ...(prev as any)[parent],
           [child]: value,
         },
-      }))
-      return
+      }));
+      return;
     }
 
-    if (name === 'units' || name === 'pricePerUnit') {
-      setFormData((prev) => ({ ...prev, [name]: Number(value) }))
-      return
+    if (name === "units" || name === "pricePerUnit") {
+      setFormData((prev) => ({ ...prev, [name]: Number(value) }));
+      return;
     }
 
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null
-    setSelectedImage(file)
-  }
+    const file = e.target.files?.[0] ?? null;
+    setSelectedImage(file);
+  };
 
   const triggerFileSelect = () => {
-    fileInputRef.current?.click()
-  }
+    fileInputRef.current?.click();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSubmit?.(formData, selectedImage)
+    e.preventDefault();
+    onSubmit?.(formData, selectedImage);
     setFormData({
-      name: '',
-      address: '',
-      city: '',
-      country: '',
+      name: "",
+      address: "",
+      city: "",
+      country: "",
       units: 1,
       pricePerUnit: 0,
-      propertyType: 'apartment',
-      geography: '',
-      location: { lat: '', lng: '' },
-      features: '',
-      imageUrl: '',
-      description: '',
-    })
-    setSelectedImage(null)
-    onClose()
-  }
+      propertyType: "apartment",
+      geography: "",
+      location: { lat: "", lng: "" },
+      features: "",
+      residentialFeatures: "",
+      commercialFeatures: "",
+      zoning: "",
+      permittedUses: "",
+      loadingDocks: "",
+      ceilingHeight: "",
+      powerCapacity: "",
+      annualPropertyTaxes: "",
+      annualInsurance: "",
+      appraisedValue: "",
+      lastAppraisalDate: "",
+      noi: "",
+      capRate: "",
+      bedrooms: "",
+      bathrooms: "",
+      petPolicy: "",
+      imageUrl: "",
+      description: "",
+    });
+    setSelectedImage(null);
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <>
@@ -133,8 +190,12 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Add New Property</h2>
-              <p className="text-sm text-muted-foreground">Create a new rental property</p>
+              <h2 className="text-2xl font-bold text-foreground">
+                Add New Property
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Create a new rental property
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -184,7 +245,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
             {/* City, Country */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">City</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  City
+                </label>
                 <Input
                   name="city"
                   value={formData.city}
@@ -194,7 +257,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Country</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Country
+                </label>
                 <Input
                   name="country"
                   value={formData.country}
@@ -207,7 +272,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
             {/* Property Type */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Property Type</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Property Type
+              </label>
               <select
                 name="propertyType"
                 value={formData.propertyType}
@@ -264,18 +331,204 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
               </select>
             </div>
 
-           
+            {(formData.propertyType === "office" ||
+              formData.propertyType === "retail" ||
+              formData.propertyType === "warehouse" ||
+              formData.propertyType === "industrial" ||
+              formData.propertyType === "hotel" ||
+              formData.propertyType === "restaurant" ||
+              formData.propertyType === "shopping-center" ||
+              formData.propertyType === "mixed-use" ||
+              formData.propertyType === "medical" ||
+              formData.propertyType === "flex-space" ||
+              formData.propertyType === "commercial-land") && (
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
+                <p className="text-sm font-semibold text-foreground">
+                  Commercial Property Details
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Zoning
+                    </label>
+                    <Input
+                      name="zoning"
+                      value={formData.zoning}
+                      onChange={handleChange}
+                      placeholder="e.g., C2, M1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Permitted Uses
+                    </label>
+                    <Textarea
+                      name="permittedUses"
+                      value={formData.permittedUses}
+                      onChange={handleChange}
+                      placeholder="List permitted commercial uses"
+                      className="h-24"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Loading Docks
+                    </label>
+                    <Input
+                      name="loadingDocks"
+                      value={formData.loadingDocks}
+                      onChange={handleChange}
+                      placeholder="Number or details"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Ceiling Height
+                    </label>
+                    <Input
+                      name="ceilingHeight"
+                      value={formData.ceilingHeight}
+                      onChange={handleChange}
+                      placeholder="e.g., 18 ft"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Power Capacity
+                    </label>
+                    <Input
+                      name="powerCapacity"
+                      value={formData.powerCapacity}
+                      onChange={handleChange}
+                      placeholder="e.g., 480V"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Appraised Value
+                    </label>
+                    <Input
+                      type="number"
+                      name="appraisedValue"
+                      value={formData.appraisedValue}
+                      onChange={handleChange}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      NOI
+                    </label>
+                    <Input
+                      type="number"
+                      name="noi"
+                      value={formData.noi}
+                      onChange={handleChange}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Cap Rate
+                    </label>
+                    <Input
+                      type="number"
+                      name="capRate"
+                      value={formData.capRate}
+                      onChange={handleChange}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!(
+              formData.propertyType === "office" ||
+              formData.propertyType === "retail" ||
+              formData.propertyType === "warehouse" ||
+              formData.propertyType === "industrial" ||
+              formData.propertyType === "hotel" ||
+              formData.propertyType === "restaurant" ||
+              formData.propertyType === "shopping-center" ||
+              formData.propertyType === "mixed-use" ||
+              formData.propertyType === "medical" ||
+              formData.propertyType === "flex-space" ||
+              formData.propertyType === "commercial-land"
+            ) && (
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
+                <p className="text-sm font-semibold text-foreground">
+                  Residential Property Details
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Bedrooms
+                    </label>
+                    <Input
+                      type="number"
+                      name="bedrooms"
+                      value={formData.bedrooms}
+                      onChange={handleChange}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Bathrooms
+                    </label>
+                    <Input
+                      type="number"
+                      name="bathrooms"
+                      value={formData.bathrooms}
+                      onChange={handleChange}
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Pet Policy
+                  </label>
+                  <Textarea
+                    name="petPolicy"
+                    value={formData.petPolicy}
+                    onChange={handleChange}
+                    placeholder="Describe pet policy"
+                    className="h-24"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Residential Features
+                  </label>
+                  <Textarea
+                    name="residentialFeatures"
+                    value={formData.residentialFeatures}
+                    onChange={handleChange}
+                    placeholder="List residential features"
+                    className="h-24"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Units and Price per Unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Number of Units</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Number of Units
+                </label>
                 <Input
-                  
                   name="units"
                   value={formData.units}
                   onChange={handleChange}
-                   
                   required
                 />
               </div>
@@ -287,12 +540,10 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                   </div>
                 </label>
                 <Input
-                 
                   name="pricePerUnit"
                   value={formData.pricePerUnit}
                   onChange={handleChange}
                   placeholder="2500"
-                   
                   required
                 />
               </div>
@@ -300,7 +551,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
             {/* Geography */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Geography</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Geography
+              </label>
               <Input
                 name="geography"
                 value={formData.geography}
@@ -312,7 +565,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
             {/* Location (lat, lng) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Latitude
+                </label>
                 <Input
                   type="text"
                   name="location.lat"
@@ -322,7 +577,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Longitude
+                </label>
                 <Input
                   type="text"
                   name="location.lng"
@@ -335,7 +592,9 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
             {/* Features */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Features</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Features
+              </label>
               <Textarea
                 name="features"
                 value={formData.features}
@@ -346,16 +605,20 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
             </div>
             {/* Image URL or Upload */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Image URL
+              </label>
               <Input
                 name="imageUrl"
-                value={formData.imageUrl || ''}
+                value={formData.imageUrl || ""}
                 onChange={handleChange}
                 placeholder="https://example.com/image.jpg"
               />
 
               <div className="mt-3">
-                <p className="text-sm text-muted-foreground mb-2">Or upload from your computer</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Or upload from your computer
+                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -364,12 +627,24 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                   className="hidden"
                 />
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <Button type="button" variant="outline" onClick={triggerFileSelect} className="px-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={triggerFileSelect}
+                    className="px-3"
+                  >
                     Upload Image
                   </Button>
-                  <span className="text-sm text-foreground">{selectedImage ? selectedImage.name : 'No file selected'}</span>
+                  <span className="text-sm text-foreground">
+                    {selectedImage ? selectedImage.name : "No file selected"}
+                  </span>
                   {selectedImage && (
-                    <Button type="button" variant="ghost" onClick={() => setSelectedImage(null)} className="text-sm">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setSelectedImage(null)}
+                      className="text-sm"
+                    >
                       Remove
                     </Button>
                   )}
@@ -377,15 +652,23 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
 
                 {previewUrl && (
                   <div className="mt-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Preview</p>
-                    <img src={previewUrl} alt="Selected preview" className="max-h-40 w-auto rounded border" />
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Preview
+                    </p>
+                    <img
+                      src={previewUrl}
+                      alt="Selected preview"
+                      className="max-h-40 w-auto rounded border"
+                    />
                   </div>
                 )}
               </div>
             </div>
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Description
+              </label>
               <Textarea
                 name="description"
                 value={formData.description}
@@ -405,8 +688,8 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="flex-1 bg-primary hover:bg-primary/90 text-white"
                 disabled={isLoading}
               >
@@ -416,7 +699,7 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
                     Adding...
                   </>
                 ) : (
-                  'Add Property'
+                  "Add Property"
                 )}
               </Button>
             </div>
@@ -424,5 +707,5 @@ export default function AddPropertyForm({ isOpen, onClose, onSubmit, isLoading =
         </Card>
       </div>
     </>
-  )
+  );
 }

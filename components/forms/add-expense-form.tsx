@@ -1,108 +1,161 @@
-'use client'
+"use client";
 
-import React from "react"
+import React from "react";
 
-import { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { X, DollarSign, Calendar, Tag } from 'lucide-react'
-import { createTransaction } from '@/app/lib/transactions-client'
-import { listProperties } from '@/lib/services/properties'
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { X, DollarSign, Calendar, Tag } from "lucide-react";
+import { createTransaction } from "@/app/lib/transactions-client";
+import { listProperties } from "@/lib/services/properties";
 
 interface AddExpenseFormProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit?: (data: ExpenseFormData) => void
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit?: (data: ExpenseFormData) => void;
 }
 
 interface ExpenseFormData {
-  category: string
-  amount: string
-  date: string
-  description: string
-  property: string
-  receipt?: string
-  unit?: string
-  paymentMethod?: string
+  category: string;
+  expenseType: "residential" | "commercial" | "both";
+  amount: string;
+  date: string;
+  description: string;
+  property: string;
+  receipt?: string;
+  unit?: string;
+  paymentMethod?: string;
+  vendorId?: string;
+  vendorName?: string;
+  invoiceNumber?: string;
+  dueDate?: string;
+  requiresApproval: boolean;
+  approvedBy?: string;
+  approvalDate?: string;
+  recurringFrequency?: "weekly" | "monthly" | "quarterly" | "yearly";
+  autoPay: boolean;
 }
 
-export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpenseFormProps) {
+export default function AddExpenseForm({
+  isOpen,
+  onClose,
+  onSubmit,
+}: AddExpenseFormProps) {
   const [formData, setFormData] = useState<ExpenseFormData>({
-    category: 'maintenance',
-    amount: '',
-    date: new Date().toISOString().split('T')[0],
-    description: '',
-    property: '',
-    receipt: '',
-    unit: '',
-    paymentMethod: '',
-  })
+    category: "maintenance",
+    expenseType: "commercial",
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    description: "",
+    property: "",
+    receipt: "",
+    unit: "",
+    paymentMethod: "",
+    vendorId: "",
+    vendorName: "",
+    invoiceNumber: "",
+    dueDate: "",
+    requiresApproval: false,
+    approvedBy: "",
+    approvalDate: "",
+    recurringFrequency: "monthly",
+    autoPay: false,
+  });
 
-  const [properties, setProperties] = useState<any[]>([])
-  const [availableUnits, setAvailableUnits] = useState<string[] | null>(null)
+  const [properties, setProperties] = useState<any[]>([]);
+  const [availableUnits, setAvailableUnits] = useState<string[] | null>(null);
 
   // Load properties on mount
   useEffect(() => {
-    setProperties(listProperties())
-  }, [])
+    setProperties(listProperties());
+  }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    if (name === 'property') {
-      const prop = properties.find((p) => p.id === value)
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
+    const { name, value } = e.target;
+    if (name === "property") {
+      const prop = properties.find((p) => p.id === value);
       if (prop && Array.isArray(prop.units) && prop.units.length > 0) {
-        setAvailableUnits(prop.units)
+        setAvailableUnits(prop.units);
         if (prop.units.length === 1) {
-          setFormData((prev) => ({ ...prev, property: value, unit: prop.units[0] }))
-          return
+          setFormData((prev) => ({
+            ...prev,
+            property: value,
+            unit: prop.units[0],
+          }));
+          return;
         }
       } else {
-        setAvailableUnits(null)
+        setAvailableUnits(null);
       }
     }
 
     setFormData((prev) => ({
       ...prev,
       [name]: value,
-    }))
-  }
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     // create transaction record
     try {
       createTransaction({
         amount: parseFloat(formData.amount) || 0,
-        type: 'expense',
+        type: "expense",
+        expenseType: formData.expenseType,
         description: formData.description,
         propertyId: formData.property || undefined,
-        status: 'completed',
+        status: "completed",
         category: formData.category,
         date: formData.date,
         receiptReference: formData.receipt || undefined,
         unit: formData.unit || undefined,
         paymentMethod: formData.paymentMethod || undefined,
-      })
+        vendorName: formData.vendorName || undefined,
+        invoiceNumber: formData.invoiceNumber || undefined,
+        dueDate: formData.dueDate || undefined,
+        requiresApproval: formData.requiresApproval,
+        approvedBy: formData.approvedBy || undefined,
+        approvalDate: formData.approvalDate || undefined,
+        recurring: {
+          frequency: formData.recurringFrequency,
+          autoPay: formData.autoPay,
+        },
+      });
     } catch (err) {
       // ignore
     }
-    onSubmit?.(formData)
+    onSubmit?.(formData);
     setFormData({
-      category: 'maintenance',
-      amount: '',
-      date: new Date().toISOString().split('T')[0],
-      description: '',
-      property: '',
-      receipt: '',
-      unit: '',
-      paymentMethod: '',
-    })
-    onClose()
-  }
+      category: "maintenance",
+      expenseType: "commercial",
+      amount: "",
+      date: new Date().toISOString().split("T")[0],
+      description: "",
+      property: "",
+      receipt: "",
+      unit: "",
+      paymentMethod: "",
+      vendorId: "",
+      vendorName: "",
+      invoiceNumber: "",
+      dueDate: "",
+      requiresApproval: false,
+      approvedBy: "",
+      approvalDate: "",
+      recurringFrequency: "monthly",
+      autoPay: false,
+    });
+    onClose();
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <>
@@ -111,8 +164,12 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
         <Card className="border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Add Expense</h2>
-              <p className="text-sm text-muted-foreground">Record a new property expense</p>
+              <h2 className="text-2xl font-bold text-foreground">
+                Add Expense
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Record a new property expense
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -185,9 +242,28 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
               />
             </div>
 
+            {/* Expense Type */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Expense Type
+              </label>
+              <select
+                name="expenseType"
+                value={formData.expenseType}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="commercial">Commercial</option>
+                <option value="residential">Residential</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+
             {/* Property */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Property</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Property
+              </label>
               <select
                 name="property"
                 value={formData.property}
@@ -207,7 +283,9 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
             {/* Unit (conditional) */}
             {availableUnits && availableUnits.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Unit</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Unit
+                </label>
                 <select
                   name="unit"
                   value={formData.unit}
@@ -216,7 +294,9 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
                 >
                   <option value="">Select Unit</option>
                   {availableUnits.map((u) => (
-                    <option key={u} value={u}>{u}</option>
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -224,7 +304,9 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
 
             {/* Payment Method */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Payment Method</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Payment Method
+              </label>
               <select
                 name="paymentMethod"
                 value={formData.paymentMethod}
@@ -239,9 +321,135 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
               </select>
             </div>
 
+            {/* Vendor Info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Vendor Name
+                </label>
+                <Input
+                  name="vendorName"
+                  value={formData.vendorName}
+                  onChange={handleChange}
+                  placeholder="Vendor name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Invoice #
+                </label>
+                <Input
+                  name="invoiceNumber"
+                  value={formData.invoiceNumber}
+                  onChange={handleChange}
+                  placeholder="Invoice number"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Due Date
+                </label>
+                <Input
+                  type="date"
+                  name="dueDate"
+                  value={formData.dueDate}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Approval Required
+                </label>
+                <select
+                  name="requiresApproval"
+                  value={String(formData.requiresApproval)}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      requiresApproval: e.target.value === "true",
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+            </div>
+
+            {formData.requiresApproval && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Approved By
+                  </label>
+                  <Input
+                    name="approvedBy"
+                    value={formData.approvedBy}
+                    onChange={handleChange}
+                    placeholder="Approver name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Approval Date
+                  </label>
+                  <Input
+                    type="date"
+                    name="approvalDate"
+                    value={formData.approvalDate}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Recurring Frequency
+                </label>
+                <select
+                  name="recurringFrequency"
+                  value={formData.recurringFrequency}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="yearly">Yearly</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Auto-pay
+                </label>
+                <select
+                  name="autoPay"
+                  value={String(formData.autoPay)}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      autoPay: e.target.value === "true",
+                    }))
+                  }
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+            </div>
+
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Description
+              </label>
               <Textarea
                 name="description"
                 value={formData.description}
@@ -254,7 +462,9 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
 
             {/* Receipt */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Receipt/Invoice Reference</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Receipt/Invoice Reference
+              </label>
               <Input
                 name="receipt"
                 value={formData.receipt}
@@ -273,7 +483,10 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 text-white">
+              <Button
+                type="submit"
+                className="flex-1 bg-primary hover:bg-primary/90 text-white"
+              >
                 Add Expense
               </Button>
             </div>
@@ -281,5 +494,5 @@ export default function AddExpenseForm({ isOpen, onClose, onSubmit }: AddExpense
         </Card>
       </div>
     </>
-  )
+  );
 }

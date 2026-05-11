@@ -47,7 +47,7 @@ export function markAnnouncementRead(announcementId: string, tenantId: string): 
   const announcement = getAnnouncement(announcementId)
   if (announcement && !announcement.readBy.includes(tenantId)) {
     announcement.readBy.push(tenantId)
-    updateInCollection('announcements', announcement)
+    updateInCollection('announcements', announcementId, { readBy: announcement.readBy })
   }
 }
 
@@ -55,7 +55,7 @@ export function updateAnnouncement(id: string, updates: Partial<AnnouncementReco
   const announcement = getAnnouncement(id)
   if (announcement) {
     const updated = { ...announcement, ...updates }
-    updateInCollection('announcements', updated)
+    updateInCollection('announcements', id, updates)
     return updated
   }
   return null

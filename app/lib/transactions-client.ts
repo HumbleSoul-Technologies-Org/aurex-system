@@ -5,6 +5,7 @@ export type TransactionCreate = {
   propertyId?: string
   amount: number
   type?: 'rent' | 'expense' | string
+  expenseType?: 'residential' | 'commercial' | 'both'
   description?: string
   status?: 'completed' | 'pending' | 'failed'
   category?: string
@@ -12,6 +13,21 @@ export type TransactionCreate = {
   date?: string
   receiptReference?: string
   unit?: string
+  // Commercial expense fields
+  tripleNetAllocation?: string
+  capitalizable?: boolean
+  depreciationSchedule?: string
+  vendorId?: string
+  vendorName?: string
+  invoiceNumber?: string
+  dueDate?: string
+  requiresApproval?: boolean
+  approvedBy?: string
+  approvalDate?: string
+  recurring?: {
+    frequency?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+    autoPay?: boolean
+  }
 }
 
 export type Transaction = TransactionCreate & { id: string; date: string; transID: string; receiptReference?: string }
@@ -40,12 +56,21 @@ export function createTransaction(payload: TransactionCreate): Transaction {
     amount: payload.amount,
     date: txDate,
     type: payload.type || 'rent',
+    expenseType: payload.expenseType,
     description: payload.description || '',
     status: payload.status || 'completed',
     category: payload.category,
     paymentMethod: payload.paymentMethod,
     receiptReference: payload.receiptReference,
     unit: payload.unit,
+    vendorId: payload.vendorId,
+    vendorName: payload.vendorName,
+    invoiceNumber: payload.invoiceNumber,
+    dueDate: payload.dueDate,
+    requiresApproval: payload.requiresApproval,
+    approvedBy: payload.approvedBy,
+    approvalDate: payload.approvalDate,
+    recurring: payload.recurring,
   }
   insertIntoCollection('transactions', tx)
   return tx

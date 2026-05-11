@@ -33,10 +33,16 @@ import {
   MapPin,
   Trash2,
 } from "lucide-react";
-import { getNotifications, markAsRead, getUnreadCount, deleteNotification } from "@/lib/services/notifications";
+import {
+  getNotifications,
+  markAsRead,
+  getUnreadCount,
+  deleteNotification,
+} from "@/lib/services/notifications";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { listMessages } from "@/lib/services/messages";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavItem {
   label: string;
@@ -57,7 +63,6 @@ export default function DashboardLayout({
   const [pendingMaintenanceCount, setPendingMaintenanceCount] = useState(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const router = useRouter();
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
 
@@ -70,7 +75,7 @@ export default function DashboardLayout({
 
   // Function to delete all notifications from DB and UI
   const clearAllNotifications = () => {
-    notifications.forEach(n => deleteNotification(n.id));
+    notifications.forEach((n) => deleteNotification(n.id));
     setTimeout(() => {
       setNotifications(getNotifications());
       // Force UI update if needed
@@ -81,11 +86,15 @@ export default function DashboardLayout({
   // Load maintenance and messages counts
   React.useEffect(() => {
     const maintenanceRequests = getMaintenanceRequests();
-    const pendingCount = maintenanceRequests.filter(req => req.status === 'pending').length;
+    const pendingCount = maintenanceRequests.filter(
+      (req) => req.status === "pending",
+    ).length;
     setPendingMaintenanceCount(pendingCount);
 
     const messages = listMessages();
-    const unreadCount = messages.filter(msg => !msg.seen && msg.from !== 'management').length;
+    const unreadCount = messages.filter(
+      (msg) => !msg.seen && msg.from !== "management",
+    ).length;
     setUnreadMessagesCount(unreadCount);
   }, []);
 
@@ -231,7 +240,7 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className={isDarkMode ? "dark" : ""}>
+    <div>
       <Suspense fallback={<div>Loading...</div>}>
         <div className="flex h-screen bg-background text-foreground">
           {/* Mobile Menu Overlay */}
@@ -368,16 +377,7 @@ export default function DashboardLayout({
                 </button>
 
                 {/* Dark Mode Toggle */}
-                <button
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                >
-                  {isDarkMode ? (
-                    <Sun className="w-5 h-5" />
-                  ) : (
-                    <Moon className="w-5 h-5" />
-                  )}
-                </button>
+                <ThemeToggle />
 
                 {/* User Menu */}
                 <button className="flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg transition-colors">
@@ -402,11 +402,19 @@ export default function DashboardLayout({
               <div className="hidden md:fixed md:right-0 md:top-16 md:h-[calc(100vh-64px)] md:w-80 md:border-l md:border-border md:bg-background md:flex md:flex-col md:z-40 md:shadow-lg">
                 <div className="p-4 border-b border-border sticky top-0 bg-background">
                   <div className="flex items-center justify-between">
-                    <h2 className="font-bold flex-1 text-foreground">Notifications</h2>
+                    <h2 className="font-bold flex-1 text-foreground">
+                      Notifications
+                    </h2>
                     {notifications.length > 0 && (
                       <span className="flex mr-5 hover:border-0 gap-2 items-center border rounded-md p-2 cursor-pointer hover:bg-red-600 hover:text-white justify-center">
-                        <Trash2 className="w-4   h-4     cursor-pointer" onClick={clearAllNotifications} aria-label="Clear all notifications" />  <p className="text-xs">Clear All</p></span>
-                  )}
+                        <Trash2
+                          className="w-4   h-4     cursor-pointer"
+                          onClick={clearAllNotifications}
+                          aria-label="Clear all notifications"
+                        />{" "}
+                        <p className="text-xs">Clear All</p>
+                      </span>
+                    )}
                     <button
                       onClick={() => setNotificationsOpen(false)}
                       className="p-1 hover:bg-secondary rounded-lg"
@@ -419,60 +427,67 @@ export default function DashboardLayout({
 
                 {/* Notifications List */}
                 <div className="flex-1 overflow-y-auto space-y-2 p-4">
-                  
                   {notifications.length === 0 ? (
                     <p className="text-center text-muted-foreground text-sm py-8">
                       No notifications
                     </p>
                   ) : (
-                    [...notifications].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((notif) => (
-                      <Link
-                        key={notif.id}
-                        href={notif.actionUrl}
-                        onClick={() => {
-                          if (!notif.read) {
-                            markAsRead(notif.id);
-                            setNotifications(prev => prev.map(n => 
-                              n.id === notif.id ? { ...n, read: true } : n
-                            ));
-                          }
-                          setNotificationsOpen(false);
-                        }}
-                      >
-                        <Card
-                          className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
-                            notif.read
-                              ? "border-border"
-                              : "border-primary bg-primary/5"
-                          }`}
+                    [...notifications]
+                      .sort(
+                        (a, b) =>
+                          new Date(b.date).getTime() -
+                          new Date(a.date).getTime(),
+                      )
+                      .map((notif) => (
+                        <Link
+                          key={notif.id}
+                          href={notif.actionUrl}
+                          onClick={() => {
+                            if (!notif.read) {
+                              markAsRead(notif.id);
+                              setNotifications((prev) =>
+                                prev.map((n) =>
+                                  n.id === notif.id ? { ...n, read: true } : n,
+                                ),
+                              );
+                            }
+                            setNotificationsOpen(false);
+                          }}
                         >
-                          <div className="flex items-start gap-3">
-                            <div className="mt-1">
-                              {!notif.read && (
-                                <div className="w-2 h-2 bg-primary rounded-full" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-semibold text-sm text-foreground truncate">
-                                  {notif.title}
-                                </p>
-                                <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
-                                  {notif.type}
-                                </span>
+                          <Card
+                            className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
+                              notif.read
+                                ? "border-border"
+                                : "border-primary bg-primary/5"
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="mt-1">
+                                {!notif.read && (
+                                  <div className="w-2 h-2 bg-primary rounded-full" />
+                                )}
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {notif.message}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(notif.date).toLocaleDateString()}
-                              </p>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-sm text-foreground truncate">
+                                    {notif.title}
+                                  </p>
+                                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
+                                    {notif.type}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                  {notif.message}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  {new Date(notif.date).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
                             </div>
-                            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
-                          </div>
-                        </Card>
-                      </Link>
-                    ))
+                          </Card>
+                        </Link>
+                      ))
                   )}
                 </div>
               </div>
@@ -506,9 +521,11 @@ export default function DashboardLayout({
                         onClick={() => {
                           if (!notif.read) {
                             markAsRead(notif.id);
-                            setNotifications(prev => prev.map(n => 
-                              n.id === notif.id ? { ...n, read: true } : n
-                            ));
+                            setNotifications((prev) =>
+                              prev.map((n) =>
+                                n.id === notif.id ? { ...n, read: true } : n,
+                              ),
+                            );
                           }
                           setNotificationsOpen(false);
                         }}

@@ -31,11 +31,26 @@ export interface TenantRecord {
   email: string
   password?: string
   phone?: string
+  tenantType?: 'residential' | 'commercial' | 'mixed'
   unit?: string
   propertyId?: string
   rentAmount?: number
   lease_type?: string
   lease_start?: string
+  leaseTerms?: string
+  preferredContactMethod?: 'email' | 'phone' | 'sms'
+  applicationDate?: string
+  moveInDate?: string
+  dateOfBirth?: string
+  employmentInfo?: string
+  previousAddresses?: string[]
+  coSigner?: string
+  pets?: string
+  vehicles?: string
+  businessInfo?: string
+  businessContacts?: string
+  financialInfo?: string
+  securityDeposit?: string
   status?: string
   image?: string
   address?: string
@@ -65,11 +80,26 @@ export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
     email: payload.email ?? '',
     password: payload.password,
     phone: payload.phone,
+    tenantType: payload.tenantType ?? 'residential',
     unit: payload.unit,
     propertyId: payload.propertyId,
     rentAmount: payload.rentAmount ?? 0,
     lease_type: payload.lease_type ?? 'month-to-month',
     lease_start: payload.lease_start,
+    leaseTerms: payload.leaseTerms,
+    preferredContactMethod: payload.preferredContactMethod,
+    applicationDate: payload.applicationDate,
+    moveInDate: payload.moveInDate,
+    dateOfBirth: payload.dateOfBirth,
+    employmentInfo: payload.employmentInfo,
+    previousAddresses: payload.previousAddresses,
+    coSigner: payload.coSigner,
+    pets: payload.pets,
+    vehicles: payload.vehicles,
+    businessInfo: payload.businessInfo,
+    businessContacts: payload.businessContacts,
+    financialInfo: payload.financialInfo,
+    securityDeposit: payload.securityDeposit,
     status: payload.status ?? 'due',
     image: payload.image,
     announcements: payload.announcements ?? true,

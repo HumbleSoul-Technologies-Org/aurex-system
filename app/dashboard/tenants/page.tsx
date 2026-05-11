@@ -1,14 +1,14 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import AddTenantForm from '@/components/forms/add-tenant-form'
-import { listTenants } from '@/lib/services/tenants'
-import { listProperties } from '@/lib/services/properties'
-import { createTenant } from '@/lib/services/tenants'
+import { useState } from "react";
+import Link from "next/link";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import AddTenantForm from "@/components/forms/add-tenant-form";
+import { listTenants } from "@/lib/services/tenants";
+import { listProperties } from "@/lib/services/properties";
+import { createTenant } from "@/lib/services/tenants";
 import {
   Plus,
   Search,
@@ -20,69 +20,73 @@ import {
   ArrowRight,
   MoreVertical,
   Eye,
-} from 'lucide-react'
+} from "lucide-react";
 
 export default function TenantsPage() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'due' | 'moving-out'>('all')
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [tenants, setTenants] = useState(() => listTenants())
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<
+    "all" | "paid" | "due" | "moving-out"
+  >("all");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [tenants, setTenants] = useState(() => listTenants());
 
   const enrichedTenants = tenants.map((tenant) => {
-    const property = listProperties().find((p) => p.id === tenant.propertyId)
+    const property = listProperties().find((p) => p.id === tenant.propertyId);
     return {
       ...tenant,
       property,
-    }
-  })
+    };
+  });
 
   const filteredTenants = enrichedTenants.filter((tenant) => {
     const matchesSearch =
       tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchQuery.toLowerCase())  
+      tenant.email.toLowerCase().includes(searchQuery.toLowerCase());
 
-    let matchesStatus = true
-    if (filterStatus === 'paid') {
-      matchesStatus = tenant.status === 'paid'
-    } else if (filterStatus === 'due') {
-      matchesStatus = tenant.status === 'due'
-    } else if (filterStatus === 'moving-out') {
-      matchesStatus = tenant.status === 'moving out'
+    let matchesStatus = true;
+    if (filterStatus === "paid") {
+      matchesStatus = tenant.status === "paid";
+    } else if (filterStatus === "due") {
+      matchesStatus = tenant.status === "due";
+    } else if (filterStatus === "moving-out") {
+      matchesStatus = tenant.status === "moving out";
     }
 
-    return matchesSearch && matchesStatus
-  })
+    return matchesSearch && matchesStatus;
+  });
 
-  const getStatusColor = (tenant: ReturnType<typeof getEnrichedTenants>[0]) => {
-    if (tenant.status === 'moving out') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-    if (tenant.status === 'due') return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
-    return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-  }
+  const getStatusColor = (tenant: (typeof enrichedTenants)[number]) => {
+    if (tenant.status === "moving out")
+      return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+    if (tenant.status === "due")
+      return "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400";
+    return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400";
+  };
 
-  const getStatusLabel = (tenant: ReturnType<typeof getEnrichedTenants>[0]) => {
-    if (tenant.status === 'moving out') return 'leaving'
-    if (tenant.status === 'due') return 'Due'
-    return 'Paid'
-  }
+  const getStatusLabel = (tenant: (typeof enrichedTenants)[number]) => {
+    if (tenant.status === "moving out") return "leaving";
+    if (tenant.status === "due") return "Due";
+    return "Paid";
+  };
 
   const calculateLeaseEnd = (leaseStart: string, leaseType: string) => {
-    const startDate = new Date(leaseStart)
-    let months = 1
+    const startDate = new Date(leaseStart);
+    let months = 1;
 
-    if (leaseType === 'full year') {
-      months = 12
-    } else if (leaseType === '6mnths') {
-      months = 6
-    } else if (leaseType === '3mnths') {
-      months = 3
-    } else if (leaseType === 'monthly') {
-      months = 1
+    if (leaseType === "full year") {
+      months = 12;
+    } else if (leaseType === "6mnths") {
+      months = 6;
+    } else if (leaseType === "3mnths") {
+      months = 3;
+    } else if (leaseType === "monthly") {
+      months = 1;
     }
 
-    const leaseEnd = new Date(startDate)
-    leaseEnd.setMonth(leaseEnd.getMonth() + months)
-    return leaseEnd
-  }
+    const leaseEnd = new Date(startDate);
+    leaseEnd.setMonth(leaseEnd.getMonth() + months);
+    return leaseEnd;
+  };
 
   const handleAddTenant = (data: any) => {
     try {
@@ -91,23 +95,40 @@ export default function TenantsPage() {
         email: data.email,
         password: data.password,
         phone: data.phone,
+        tenantType: data.tenantType,
         unit: data.unitNumber,
         propertyId: data.propertyId,
         rentAmount: data.monthlyRent,
         lease_type: data.leaseType,
         lease_start: data.leaseStartDate,
-        status: 'due',
-      })
-      setTenants((prev) => [tenant, ...prev])
-      console.log('New tenant created:', tenant)
+        leaseTerms: data.leaseTerms,
+        preferredContactMethod: data.preferredContactMethod,
+        applicationDate: data.applicationDate,
+        moveInDate: data.moveInDate,
+        dateOfBirth: data.dateOfBirth,
+        employmentInfo: data.employmentInfo,
+        previousAddresses: data.previousAddresses
+          ? data.previousAddresses.split("\n").filter(Boolean)
+          : undefined,
+        coSigner: data.coSigner,
+        pets: data.pets,
+        vehicles: data.vehicles,
+        businessInfo: data.businessInfo,
+        businessContacts: data.businessContacts,
+        financialInfo: data.financialInfo,
+        securityDeposit: data.securityDeposit,
+        status: "due",
+      });
+      setTenants((prev) => [tenant, ...prev]);
+      console.log("New tenant created:", tenant);
     } catch (error) {
-      console.error('Failed to create tenant:', error)
+      console.error("Failed to create tenant:", error);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
-      <AddTenantForm 
+      <AddTenantForm
         isOpen={showAddForm}
         onClose={() => setShowAddForm(false)}
         onSubmit={handleAddTenant}
@@ -116,9 +137,11 @@ export default function TenantsPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-1">Tenants</h1>
-          <p className="text-muted-foreground">Manage tenant information, leases, and communications</p>
+          <p className="text-muted-foreground">
+            Manage tenant information, leases, and communications
+          </p>
         </div>
-        <Button 
+        <Button
           onClick={() => setShowAddForm(true)}
           className="bg-primary hover:bg-primary/90 text-white"
         >
@@ -164,53 +187,105 @@ export default function TenantsPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-secondary">
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Tenant</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Property</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Unit</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Email</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Phone</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Monthly Rent</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease Type</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Status</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease Start</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Lease End</th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Actions</th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Tenant
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Property
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Unit
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Phone
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Monthly Rent
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Lease Type
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Lease Start
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Lease End
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {filteredTenants.map((tenant) => (
-                <tr key={tenant.id} className="border-b border-border hover:bg-secondary transition-colors">
-                  <td className="px-6 py-4 font-semibold text-foreground">{tenant.name}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-blue-600">
-                    {tenant.property?.name || 'Unknown'}
+                <tr
+                  key={tenant.id}
+                  className="border-b border-border hover:bg-secondary transition-colors"
+                >
+                  <td className="px-6 py-4 font-semibold text-foreground">
+                    {tenant.name}
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground text-sm">{tenant.unit}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-blue-600">
+                    {tenant.property?.name || "Unknown"}
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground text-sm">
+                    {tenant.unit}
+                  </td>
                   <td className="px-6 py-4 text-sm">
-                    <a href={`mailto:${tenant.email}`} className="text-blue-600 hover:underline">
+                    <a
+                      href={`mailto:${tenant.email}`}
+                      className="text-blue-600 hover:underline"
+                    >
                       {tenant.email}
                     </a>
                   </td>
                   <td className="px-6 py-4 text-sm">
-                    <a href={`tel:${tenant.phone}`} className="text-blue-600 hover:underline">
+                    <a
+                      href={`tel:${tenant.phone}`}
+                      className="text-blue-600 hover:underline"
+                    >
                       {tenant.phone}
                     </a>
                   </td>
-                  <td className="px-6 py-4 font-semibold text-foreground">${(tenant.rentAmount ?? 0).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-sm text-foreground capitalize">{tenant.lease_type}</td>
+                  <td className="px-6 py-4 font-semibold text-foreground">
+                    ${(tenant.rentAmount ?? 0).toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-foreground capitalize">
+                    {tenant.lease_type}
+                  </td>
                   <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(tenant)}`}>
+                    <span
+                      className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(tenant)}`}
+                    >
                       {getStatusLabel(tenant)}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {new Date(tenant?.lease_start).toLocaleDateString()}
+                    {tenant.lease_start
+                      ? new Date(tenant.lease_start).toLocaleDateString()
+                      : "--"}
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {calculateLeaseEnd(tenant?.lease_start, tenant.lease_type).toLocaleDateString()}
+                    {tenant.lease_start
+                      ? calculateLeaseEnd(
+                          tenant.lease_start ?? "",
+                          tenant.lease_type ?? "",
+                        ).toLocaleDateString()
+                      : "--"}
                   </td>
                   <td className="px-6 py-4">
                     <Link href={`/dashboard/tenants/${tenant.id}`}>
-                      <Button size="sm" variant="outline" className="border-border bg-transparent">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-border bg-transparent"
+                      >
                         View
                       </Button>
                     </Link>
@@ -225,11 +300,21 @@ export default function TenantsPage() {
       {/* Empty State */}
       {filteredTenants.length === 0 && (
         <Card className="border flex justify-center items-center border-border flex-1 h-screen p-12 text-center">
-          <span><img src="/no-user.webp" alt="No tenants found" className="w-96 h-96 text-muted-foreground mx-auto mb-4 opacity-50" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">No tenants found</h3>
-          <p className="text-muted-foreground mb-4">Try adjusting your search or filters</p></span>
+          <span>
+            <img
+              src="/no-user.webp"
+              alt="No tenants found"
+              className="w-96 h-96 text-muted-foreground mx-auto mb-4 opacity-50"
+            />
+            <h3 className="text-lg font-semibold text-foreground mb-2">
+              No tenants found
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Try adjusting your search or filters
+            </p>
+          </span>
         </Card>
       )}
     </div>
-  )
+  );
 }

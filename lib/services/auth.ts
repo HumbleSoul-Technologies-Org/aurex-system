@@ -5,6 +5,8 @@ import {
   setValue,
   getValue,
   generateId,
+  removeFromCollection,
+  updateInCollection,
 } from '@/lib/local-store'
 import { listTenants } from '@/lib/services/tenants'
 
@@ -101,4 +103,12 @@ export function getUserById(id: string): UserRecord | null {
 
 export function listUsers() {
   return getCollection<UserRecord>('users')
+}
+
+export function updateUser(id: string, patch: Partial<UserRecord>): UserRecord | null {
+  return updateInCollection<UserRecord>('users', id, patch)
+}
+
+export function deleteUser(id: string): boolean {
+  return removeFromCollection('users', id)
 }
