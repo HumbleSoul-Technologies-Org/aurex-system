@@ -296,6 +296,55 @@ export async function resetPassword(
 }
 
 /**
+ * Verify password reset code
+ */
+export async function verifyResetCode(
+  email: string,
+  code: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/verify-reset-code`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, code }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to verify code');
+  }
+
+  return data;
+}
+
+/**
+ * Set new password after code verification
+ */
+export async function setNewPassword(
+  email: string,
+  code: string,
+  password: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/set-new-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, code, password }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Failed to set new password');
+  }
+
+  return data;
+}
+
+/**
  * Admin: Create new user
  */
 export async function createAdminUser(

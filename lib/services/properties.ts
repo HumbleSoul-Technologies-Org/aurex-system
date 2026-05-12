@@ -1,6 +1,12 @@
 import { getCollection, insertIntoCollection, updateInCollection, removeFromCollection, generateId } from '@/lib/local-store'
 import { notifyNewProperty } from '@/lib/services/notifications'
 import { listTenants } from '@/lib/services/tenants'
+import { getCategoryForType } from '@/lib/constants/property-types'
+
+export interface PropertySpecification {
+  title: string
+  value: string
+}
 
 export interface PropertyRecord {
   id: string
@@ -8,6 +14,7 @@ export interface PropertyRecord {
   address: string
   city: string
   country: string
+  category?: string
   units_available: number
   units: string[] // unit identifiers like LKU-1
   price_per_unit: number
@@ -15,8 +22,7 @@ export interface PropertyRecord {
   propertyType?: 'residential' | 'commercial' | 'mixed_use' | 'industrial' | 'retail' | 'office' | 'apartment' | 'house' | 'villa' | 'condo' | 'townhouse' | 'duplex' | 'mixed-use' | 'warehouse' | 'hotel' | 'restaurant' | 'shopping-center' | 'medical' | 'flex-space' | 'other'
   images?: string[]
   features?: string[]
-  residentialFeatures?: string[]
-  commercialFeatures?: string[]
+  specifications?: PropertySpecification[]
   description?: string
   tenants?: string[] // tenant ids
   occupancy?: number
@@ -27,20 +33,12 @@ export interface PropertyRecord {
   }
   zoning?: string
   permittedUses?: string[]
-  loadingDocks?: string
-  ceilingHeight?: string
-  powerCapacity?: string
-  environmentalReports?: string
   annualPropertyTaxes?: number
   annualInsurance?: number
-  operatingExpenses?: number
   appraisedValue?: number
   lastAppraisalDate?: string
   noi?: number
   capRate?: number
-  bedrooms?: number
-  bathrooms?: number
-  petPolicy?: string
 }
 
 function makePrefix(name: string, city: string, country: string) {
@@ -101,6 +99,10 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
     address: payload.address ?? '',
     city,
     country,
+    category:
+      payload.category ??
+      getCategoryForType(payload.propertyType ?? (payload.type as string)) ??
+      'residential',
     units_available,
     units,
     price_per_unit: payload.price_per_unit ?? 0,
@@ -108,27 +110,18 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
     propertyType: payload.propertyType ?? (payload.type as PropertyRecord['propertyType']) ?? 'residential',
     images: payload.images ?? [],
     features: payload.features ?? [],
-    residentialFeatures: payload.residentialFeatures ?? [],
-    commercialFeatures: payload.commercialFeatures ?? [],
+    specifications: payload.specifications ?? [],
     description: payload.description ?? '',
     tenants: [],
     location: payload.location,
     zoning: payload.zoning,
     permittedUses: payload.permittedUses,
-    loadingDocks: payload.loadingDocks,
-    ceilingHeight: payload.ceilingHeight,
-    powerCapacity: payload.powerCapacity,
-    environmentalReports: payload.environmentalReports,
     annualPropertyTaxes: payload.annualPropertyTaxes,
     annualInsurance: payload.annualInsurance,
-    operatingExpenses: payload.operatingExpenses,
     appraisedValue: payload.appraisedValue,
     lastAppraisalDate: payload.lastAppraisalDate,
     noi: payload.noi,
     capRate: payload.capRate,
-    bedrooms: payload.bedrooms,
-    bathrooms: payload.bathrooms,
-    petPolicy: payload.petPolicy,
   }
   insertIntoCollection('properties', record)
 

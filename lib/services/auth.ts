@@ -78,7 +78,26 @@ export async function signOut() {
 
 export function getCurrentUser(): UserRecord | null {
   const session = getValue<{ userId: string; type?: string }>(SESSION_KEY)
-  if (!session?.userId) return null
+  if (!session?.userId) {
+    // Fallback: check tokenManager stored user (for backend auth)
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = JSON.parse(localStorage.getItem('propman:user') || 'null')
+        if (stored) {
+          return {
+            id: stored.data?.user?.id || stored.id,
+            email: stored.data?.user?.email || stored.email,
+            name: `${stored.data?.user?.firstName || stored.firstName || ''} ${stored.data?.user?.lastName || stored.lastName || ''}`.trim(),
+            role: stored.data?.user?.role || stored.role || 'tenant',
+            password: stored.password,
+          }
+        }
+      }
+    } catch (e) {
+      // ignore parsing errors
+    }
+    return null
+  }
   if (session.type === 'tenant') {
     const tenant = listTenants().find(t => t.id === session.userId)
     if (tenant) {

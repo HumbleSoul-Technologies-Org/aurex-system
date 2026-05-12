@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import {
   getSystemSettings,
+  initializeSystemSettings,
   updateSystemSettings,
 } from "@/lib/services/settings";
 import { SystemSettings } from "@/lib/local-store";
@@ -33,7 +34,8 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const systemSettings = getSystemSettings();
+        const systemSettings =
+          getSystemSettings() ?? initializeSystemSettings();
         setSettings(systemSettings);
       } catch (error) {
         console.error("Error loading settings:", error);

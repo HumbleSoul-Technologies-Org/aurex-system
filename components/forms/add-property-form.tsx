@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
@@ -6,6 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { X, MapPin, Home, DollarSign, Loader2 } from "lucide-react";
+import {
+  PROPERTY_CATEGORIES,
+  getSpecificationsForType,
+  PropertyCategory,
+} from "@/lib/constants/property-types";
+
+interface SpecificationRow {
+  title: string;
+  value: string;
+}
 
 interface AddPropertyFormProps {
   isOpen: boolean;
@@ -19,34 +29,45 @@ interface PropertyFormData {
   address: string;
   city: string;
   country: string;
-  units: number;
-  pricePerUnit: number;
+  category: PropertyCategory;
   propertyType: string;
   geography: string;
   location: {
     lat: string;
     lng: string;
   };
+  units: number;
+  pricePerUnit: number;
   features: string;
-  residentialFeatures: string;
-  commercialFeatures: string;
+  specificationValues: Record<string, string>;
+  customSpecifications: SpecificationRow[];
   zoning: string;
   permittedUses: string;
-  loadingDocks: string;
-  ceilingHeight: string;
-  powerCapacity: string;
   annualPropertyTaxes: string;
   annualInsurance: string;
   appraisedValue: string;
   lastAppraisalDate: string;
   noi: string;
   capRate: string;
-  bedrooms: string;
-  bathrooms: string;
-  petPolicy: string;
   imageUrl?: string;
   description: string;
 }
+
+const defaultPropertyType =
+  Object.keys(PROPERTY_CATEGORIES.residential.types)[0] || "apartment";
+
+const createSpecificationValues = (
+  propertyType: string,
+  currentValues: Record<string, string> = {},
+) => {
+  return getSpecificationsForType(propertyType).reduce(
+    (acc, spec) => {
+      acc[spec.key] = currentValues[spec.key] ?? "";
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+};
 
 export default function AddPropertyForm({
   isOpen,
@@ -59,28 +80,23 @@ export default function AddPropertyForm({
     address: "",
     city: "",
     country: "",
-    units: 1,
-    pricePerUnit: 0,
-    propertyType: "apartment",
+    category: "residential",
+    propertyType: defaultPropertyType,
     geography: "",
     location: { lat: "", lng: "" },
+    units: 1,
+    pricePerUnit: 0,
     features: "",
-    residentialFeatures: "",
-    commercialFeatures: "",
+    specificationValues: createSpecificationValues(defaultPropertyType),
+    customSpecifications: [],
     zoning: "",
     permittedUses: "",
-    loadingDocks: "",
-    ceilingHeight: "",
-    powerCapacity: "",
     annualPropertyTaxes: "",
     annualInsurance: "",
     appraisedValue: "",
     lastAppraisalDate: "",
     noi: "",
     capRate: "",
-    bedrooms: "",
-    bathrooms: "",
-    petPolicy: "",
     imageUrl: "",
     description: "",
   });
@@ -110,7 +126,6 @@ export default function AddPropertyForm({
   ) => {
     const { name, value } = e.target;
 
-    // nested fields like location.lat
     if (name.includes(".")) {
       const [parent, child] = name.split(".");
       setFormData((prev: any) => ({
@@ -128,7 +143,81 @@ export default function AddPropertyForm({
       return;
     }
 
+    if (name === "category") {
+      const nextCategory = value as PropertyCategory;
+      const nextType =
+        Object.keys(PROPERTY_CATEGORIES[nextCategory].types)[0] ||
+        formData.propertyType;
+      setFormData((prev) => ({
+        ...prev,
+        category: nextCategory,
+        propertyType: nextType,
+        specificationValues: createSpecificationValues(nextType, prev.specificationValues),
+      }));
+      return;
+    }
+
+    if (name === "propertyType") {
+      const nextType = value;
+      setFormData((prev) => ({
+        ...prev,
+        propertyType: nextType,
+        specificationValues: createSpecificationValues(nextType, prev.specificationValues),
+      }));
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSpecificationValueChange = (
+    key: string,
+    value: string,
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      specificationValues: {
+        ...prev.specificationValues,
+        [key]: value,
+      },
+    }));
+  };
+
+  const handleCustomSpecificationChange = (
+    index: number,
+    field: keyof SpecificationRow,
+    value: string,
+  ) => {
+    setFormData((prev) => {
+      const nextCustom = [...prev.customSpecifications];
+      nextCustom[index] = {
+        ...nextCustom[index],
+        [field]: value,
+      };
+      return {
+        ...prev,
+        customSpecifications: nextCustom,
+      };
+    });
+  };
+
+  const addCustomSpecification = () => {
+    setFormData((prev) => ({
+      ...prev,
+      customSpecifications: [
+        ...prev.customSpecifications,
+        { title: "", value: "" },
+      ],
+    }));
+  };
+
+  const removeCustomSpecification = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      customSpecifications: prev.customSpecifications.filter(
+        (_, i) => i !== index,
+      ),
+    }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,62 +229,55 @@ export default function AddPropertyForm({
     fileInputRef.current?.click();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit?.(formData, selectedImage);
+  const resetForm = () => {
     setFormData({
       name: "",
       address: "",
       city: "",
       country: "",
-      units: 1,
-      pricePerUnit: 0,
-      propertyType: "apartment",
+      category: "residential",
+      propertyType: defaultPropertyType,
       geography: "",
       location: { lat: "", lng: "" },
+      units: 1,
+      pricePerUnit: 0,
       features: "",
-      residentialFeatures: "",
-      commercialFeatures: "",
+      specificationValues: createSpecificationValues(defaultPropertyType),
+      customSpecifications: [],
       zoning: "",
       permittedUses: "",
-      loadingDocks: "",
-      ceilingHeight: "",
-      powerCapacity: "",
       annualPropertyTaxes: "",
       annualInsurance: "",
       appraisedValue: "",
       lastAppraisalDate: "",
       noi: "",
       capRate: "",
-      bedrooms: "",
-      bathrooms: "",
-      petPolicy: "",
       imageUrl: "",
       description: "",
     });
     setSelectedImage(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit?.(formData, selectedImage);
+    resetForm();
     onClose();
   };
 
   if (!isOpen) return null;
 
+  const typeSpecifications = getSpecificationsForType(formData.propertyType);
+
   return (
     <>
-      {/* Overlay */}
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
-
-      {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <Card className="border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                Add New Property
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Create a new rental property
-              </p>
+              <h2 className="text-2xl font-bold text-foreground">Add New Property</h2>
+              <p className="text-sm text-muted-foreground">Create a new rental property</p>
             </div>
             <button
               onClick={onClose}
@@ -206,9 +288,7 @@ export default function AddPropertyForm({
             </button>
           </div>
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Property Name */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 <div className="flex items-center gap-2 mb-2">
@@ -225,7 +305,6 @@ export default function AddPropertyForm({
               />
             </div>
 
-            {/* Address */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 <div className="flex items-center gap-2">
@@ -242,12 +321,9 @@ export default function AddPropertyForm({
               />
             </div>
 
-            {/* City, Country */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  City
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">City</label>
                 <Input
                   name="city"
                   value={formData.city}
@@ -257,9 +333,7 @@ export default function AddPropertyForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Country
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">Country</label>
                 <Input
                   name="country"
                   value={formData.country}
@@ -270,261 +344,125 @@ export default function AddPropertyForm({
               </div>
             </div>
 
-            {/* Property Type */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Property Type
-              </label>
-              <select
-                name="propertyType"
-                value={formData.propertyType}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {/* Residential */}
-                <option value="apartment">Apartment Building</option>
-                <option value="single-family">Single Family Home</option>
-                <option value="condo">Condo</option>
-                <option value="townhouse">Townhouse</option>
-                <option value="duplex">Duplex</option>
-                <option value="triplex">Triplex</option>
-                <option value="quadplex">Quadplex</option>
-                <option value="mobile-home">Mobile Home</option>
-                <option value="tiny-house">Tiny House</option>
-                <option value="mansion">Mansion</option>
-                <option value="villa">Villa</option>
-                <option value="cottage">Cottage</option>
-                <option value="bungalow">Bungalow</option>
-                <option value="cabin">Cabin</option>
-                <option value="farmhouse">Farmhouse</option>
-                <option value="penthouse">Penthouse</option>
-                <option value="loft">Loft</option>
-                <option value="studio">Studio Apartment</option>
-                {/* Commercial */}
-                <option value="office">Office Building</option>
-                <option value="retail">Retail Space</option>
-                <option value="warehouse">Warehouse</option>
-                <option value="industrial">Industrial</option>
-                <option value="hotel">Hotel/Motel</option>
-                <option value="restaurant">Restaurant</option>
-                <option value="shopping-center">Shopping Center</option>
-                <option value="mixed-use">Mixed-Use</option>
-                <option value="medical">Medical Office</option>
-                <option value="flex-space">Flex Space</option>
-                {/* Land */}
-                <option value="vacant-land">Vacant Land</option>
-                <option value="agricultural-land">Agricultural Land</option>
-                <option value="commercial-land">Commercial Land</option>
-                <option value="residential-land">Residential Land</option>
-                {/* Special Purpose */}
-                <option value="parking-lot">Parking Lot</option>
-                <option value="storage-facility">Storage Facility</option>
-                <option value="boat-slip">Boat Slip</option>
-                <option value="rv-park">RV Park</option>
-                <option value="car-wash">Car Wash</option>
-                <option value="gas-station">Gas Station</option>
-                <option value="church">Church/Religious</option>
-                <option value="school">School/Educational</option>
-                <option value="hospital">Hospital/Healthcare</option>
-                <option value="government">Government Building</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            {(formData.propertyType === "office" ||
-              formData.propertyType === "retail" ||
-              formData.propertyType === "warehouse" ||
-              formData.propertyType === "industrial" ||
-              formData.propertyType === "hotel" ||
-              formData.propertyType === "restaurant" ||
-              formData.propertyType === "shopping-center" ||
-              formData.propertyType === "mixed-use" ||
-              formData.propertyType === "medical" ||
-              formData.propertyType === "flex-space" ||
-              formData.propertyType === "commercial-land") && (
-              <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
-                <p className="text-sm font-semibold text-foreground">
-                  Commercial Property Details
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Zoning
-                    </label>
-                    <Input
-                      name="zoning"
-                      value={formData.zoning}
-                      onChange={handleChange}
-                      placeholder="e.g., C2, M1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Permitted Uses
-                    </label>
-                    <Textarea
-                      name="permittedUses"
-                      value={formData.permittedUses}
-                      onChange={handleChange}
-                      placeholder="List permitted commercial uses"
-                      className="h-24"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Loading Docks
-                    </label>
-                    <Input
-                      name="loadingDocks"
-                      value={formData.loadingDocks}
-                      onChange={handleChange}
-                      placeholder="Number or details"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Ceiling Height
-                    </label>
-                    <Input
-                      name="ceilingHeight"
-                      value={formData.ceilingHeight}
-                      onChange={handleChange}
-                      placeholder="e.g., 18 ft"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Power Capacity
-                    </label>
-                    <Input
-                      name="powerCapacity"
-                      value={formData.powerCapacity}
-                      onChange={handleChange}
-                      placeholder="e.g., 480V"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Appraised Value
-                    </label>
-                    <Input
-                      type="number"
-                      name="appraisedValue"
-                      value={formData.appraisedValue}
-                      onChange={handleChange}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      NOI
-                    </label>
-                    <Input
-                      type="number"
-                      name="noi"
-                      value={formData.noi}
-                      onChange={handleChange}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Cap Rate
-                    </label>
-                    <Input
-                      type="number"
-                      name="capRate"
-                      value={formData.capRate}
-                      onChange={handleChange}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!(
-              formData.propertyType === "office" ||
-              formData.propertyType === "retail" ||
-              formData.propertyType === "warehouse" ||
-              formData.propertyType === "industrial" ||
-              formData.propertyType === "hotel" ||
-              formData.propertyType === "restaurant" ||
-              formData.propertyType === "shopping-center" ||
-              formData.propertyType === "mixed-use" ||
-              formData.propertyType === "medical" ||
-              formData.propertyType === "flex-space" ||
-              formData.propertyType === "commercial-land"
-            ) && (
-              <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
-                <p className="text-sm font-semibold text-foreground">
-                  Residential Property Details
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Bedrooms
-                    </label>
-                    <Input
-                      type="number"
-                      name="bedrooms"
-                      value={formData.bedrooms}
-                      onChange={handleChange}
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Bathrooms
-                    </label>
-                    <Input
-                      type="number"
-                      name="bathrooms"
-                      value={formData.bathrooms}
-                      onChange={handleChange}
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Pet Policy
-                  </label>
-                  <Textarea
-                    name="petPolicy"
-                    value={formData.petPolicy}
-                    onChange={handleChange}
-                    placeholder="Describe pet policy"
-                    className="h-24"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Residential Features
-                  </label>
-                  <Textarea
-                    name="residentialFeatures"
-                    value={formData.residentialFeatures}
-                    onChange={handleChange}
-                    placeholder="List residential features"
-                    className="h-24"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Units and Price per Unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Number of Units
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {Object.entries(PROPERTY_CATEGORIES).map(([key, category]) => (
+                    <option key={key} value={key}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Property Type</label>
+                <select
+                  name="propertyType"
+                  value={formData.propertyType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {Object.entries(PROPERTY_CATEGORIES[formData.category].types).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">Type-Specific Fields</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {typeSpecifications.map((spec) => (
+                  <div key={spec.key}>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      {spec.label}
+                    </label>
+                    {spec.type === "textarea" ? (
+                      <Textarea
+                        name={`specificationValues.${spec.key}`}
+                        value={formData.specificationValues[spec.key] ?? ""}
+                        onChange={(event) =>
+                          handleSpecificationValueChange(spec.key, event.target.value)
+                        }
+                        placeholder={spec.placeholder}
+                        className="h-24"
+                      />
+                    ) : (
+                      <Input
+                        type={spec.type === "number" ? "number" : "text"}
+                        name={`specificationValues.${spec.key}`}
+                        value={formData.specificationValues[spec.key] ?? ""}
+                        onChange={(event) =>
+                          handleSpecificationValueChange(spec.key, event.target.value)
+                        }
+                        placeholder={spec.placeholder}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">Custom Specifications</p>
+                <Button type="button" variant="outline" size="sm" onClick={addCustomSpecification}>
+                  Add Specification
+                </Button>
+              </div>
+              {formData.customSpecifications.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Add any extra title/value specification pairs here.
+                </p>
+              )}
+              <div className="space-y-3">
+                {formData.customSpecifications.map((spec, index) => (
+                  <div
+                    key={`${spec.title}-${index}`}
+                    className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1.4fr_auto]"
+                  >
+                    <Input
+                      value={spec.title}
+                      placeholder="Specification title"
+                      onChange={(event) =>
+                        handleCustomSpecificationChange(index, "title", event.target.value)
+                      }
+                    />
+                    <Input
+                      value={spec.value}
+                      placeholder="Specification value"
+                      onChange={(event) =>
+                        handleCustomSpecificationChange(index, "value", event.target.value)
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => removeCustomSpecification(index)}
+                      className="text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">Number of Units</label>
                 <Input
                   name="units"
                   value={formData.units}
@@ -549,11 +487,8 @@ export default function AddPropertyForm({
               </div>
             </div>
 
-            {/* Geography */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Geography
-              </label>
+              <label className="block text-sm font-medium text-foreground mb-2">Geography</label>
               <Input
                 name="geography"
                 value={formData.geography}
@@ -562,12 +497,9 @@ export default function AddPropertyForm({
               />
             </div>
 
-            {/* Location (lat, lng) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Latitude
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
                 <Input
                   type="text"
                   name="location.lat"
@@ -577,9 +509,7 @@ export default function AddPropertyForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Longitude
-                </label>
+                <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
                 <Input
                   type="text"
                   name="location.lng"
@@ -590,24 +520,19 @@ export default function AddPropertyForm({
               </div>
             </div>
 
-            {/* Features */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Features
-              </label>
+              <label className="block text-sm font-medium text-foreground mb-2">Features</label>
               <Textarea
                 name="features"
                 value={formData.features}
                 onChange={handleChange}
-                placeholder="List property features..."
+                placeholder="List key property features..."
                 className="h-20"
               />
             </div>
-            {/* Image URL or Upload */}
+
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Image URL
-              </label>
+              <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
               <Input
                 name="imageUrl"
                 value={formData.imageUrl || ""}
@@ -616,9 +541,7 @@ export default function AddPropertyForm({
               />
 
               <div className="mt-3">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Or upload from your computer
-                </p>
+                <p className="text-sm text-muted-foreground mb-2">Or upload from your computer</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -652,9 +575,7 @@ export default function AddPropertyForm({
 
                 {previewUrl && (
                   <div className="mt-3">
-                    <p className="text-sm font-medium text-foreground mb-2">
-                      Preview
-                    </p>
+                    <p className="text-sm font-medium text-foreground mb-2">Preview</p>
                     <img
                       src={previewUrl}
                       alt="Selected preview"
@@ -664,11 +585,9 @@ export default function AddPropertyForm({
                 )}
               </div>
             </div>
-            {/* Description */}
+
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Description
-              </label>
+              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
               <Textarea
                 name="description"
                 value={formData.description}
@@ -678,7 +597,6 @@ export default function AddPropertyForm({
               />
             </div>
 
-            {/* Buttons */}
             <div className="flex gap-3 pt-6 border-t border-border">
               <Button
                 type="button"

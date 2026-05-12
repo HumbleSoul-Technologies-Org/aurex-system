@@ -1097,6 +1097,33 @@ export default function PropertyDetailPage({
                   </div>
                 </div>
 
+                {/* Property Specifications */}
+                {property?.specifications &&
+                  property.specifications.length > 0 && (
+                    <div className="border-t border-border pt-6">
+                      <h3 className="text-lg font-bold text-foreground mb-4">
+                        Property Specifications
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {property.specifications
+                          .filter(
+                            (spec: any) =>
+                              spec.title?.trim() && spec.value?.trim(),
+                          )
+                          .map((spec: any, index: number) => (
+                            <div key={index} className="flex flex-col">
+                              <p className="text-sm text-muted-foreground mb-1">
+                                {spec.title}
+                              </p>
+                              <p className="font-semibold text-foreground">
+                                {spec.value}
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                 <div className="border-t border-border pt-6">
                   <h3 className="text-lg font-bold text-foreground mb-4">
                     Rental Details

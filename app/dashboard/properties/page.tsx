@@ -12,6 +12,7 @@ import {
   PropertyRecord,
 } from "@/lib/services/properties";
 import { uploadToCloudinary } from "@/lib/cloudinary";
+import { getSpecificationsForType } from "@/lib/constants/property-types";
 import {
   Plus,
   Search,
@@ -45,11 +46,26 @@ export default function PropertiesPage() {
   const handleAddProperty = async (data: any, file?: File | null) => {
     setIsCreatingProperty(true);
     try {
+      const typeSpecs = getSpecificationsForType(
+        data.propertyType || "apartment",
+      );
+      const dynamicSpecifications = Object.entries(
+        data.specificationValues || {},
+      ).flatMap(([key, value]) => {
+        const label = typeSpecs.find((spec) => spec.key === key)?.label ?? key;
+        const trimmed = value?.toString().trim();
+        return trimmed ? [{ title: label, value: trimmed }] : [];
+      });
+      const customSpecifications = data.customSpecifications?.filter(
+        (spec: any) => spec.title?.trim() !== "" || spec.value?.trim() !== "",
+      );
+
       const payload: Partial<PropertyRecord> = {
         name: data.name,
         address: data.address,
         city: data.city,
         country: data.country,
+        category: data.category,
         units_available: data.units,
         price_per_unit: data.pricePerUnit,
         type: data.propertyType,
@@ -60,18 +76,10 @@ export default function PropertiesPage() {
               .map((f: string) => f.trim())
               .filter(Boolean)
           : [],
-        commercialFeatures: data.commercialFeatures
-          ? data.commercialFeatures
-              .split("\n")
-              .map((f: string) => f.trim())
-              .filter(Boolean)
-          : [],
-        residentialFeatures: data.residentialFeatures
-          ? data.residentialFeatures
-              .split("\n")
-              .map((f: string) => f.trim())
-              .filter(Boolean)
-          : [],
+        specifications: [
+          ...dynamicSpecifications,
+          ...(customSpecifications ?? []),
+        ],
         description: data.description,
         zoning: data.zoning,
         permittedUses: data.permittedUses
@@ -80,9 +88,6 @@ export default function PropertiesPage() {
               .map((f: string) => f.trim())
               .filter(Boolean)
           : undefined,
-        loadingDocks: data.loadingDocks,
-        ceilingHeight: data.ceilingHeight,
-        powerCapacity: data.powerCapacity,
         annualPropertyTaxes: data.annualPropertyTaxes
           ? Number(data.annualPropertyTaxes)
           : undefined,
@@ -95,9 +100,6 @@ export default function PropertiesPage() {
         lastAppraisalDate: data.lastAppraisalDate,
         noi: data.noi ? Number(data.noi) : undefined,
         capRate: data.capRate ? Number(data.capRate) : undefined,
-        bedrooms: data.bedrooms ? Number(data.bedrooms) : undefined,
-        bathrooms: data.bathrooms ? Number(data.bathrooms) : undefined,
-        petPolicy: data.petPolicy,
         location:
           data.location.lat.trim() !== "" && data.location.lng.trim() !== ""
             ? { lat: Number(data.location.lat), lng: Number(data.location.lng) }
@@ -117,8 +119,8 @@ export default function PropertiesPage() {
       // Simulate 3-second delay for property creation
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      const created = createProperty(payload);
-      setProperties((prev) => [created, ...prev]);
+      createProperty(payload);
+      setProperties(listProperties());
     } catch (e) {
       console.error("Create property failed", e);
     } finally {
