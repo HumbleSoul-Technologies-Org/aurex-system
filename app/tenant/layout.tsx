@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useState } from "react";
-import { useAuth } from "@/app/lib/auth-context";
+import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {

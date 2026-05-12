@@ -1,44 +1,44 @@
-'use client'
+"use client";
 
-import React from "react"
+import React from "react";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { useAuth } from '@/app/lib/auth-context'
-import { Mail, Lock, ArrowRight } from 'lucide-react'
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { useAuth } from "@/lib/auth-context";
+import { Mail, Lock, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const { login, user } = useAuth()
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { login, user } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
     try {
-      const newUser = await login(email, password)
-      if (newUser?.role === 'admin') {
-        router.push('/dashboard')
-      } else if (newUser?.role === 'tenant') {
-        router.push('/tenant')
+      const newUser = await login(email, password);
+      if (newUser?.role === "admin") {
+        router.push("/dashboard");
+      } else if (newUser?.role === "tenant") {
+        router.push("/tenant");
       } else {
-        router.push('/onboarding')
+        router.push("/onboarding");
       }
-    } catch (err) {
-      setError('Invalid email or password')
+    } catch (err: any) {
+      setError(err?.message || "Invalid email or password");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary flex items-center justify-center p-4">
@@ -51,7 +51,9 @@ export default function LoginPage() {
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-lg">PM</span>
                 </div>
-                <span className="text-xl font-bold text-foreground">PropManager</span>
+                <span className="text-xl font-bold text-foreground">
+                  PropManager
+                </span>
               </div>
               <p className="text-sm text-muted-foreground">
                 Professional property management simplified
@@ -60,7 +62,9 @@ export default function LoginPage() {
 
             {/* Welcome Message */}
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-foreground mb-2">Welcome back</h1>
+              <h1 className="text-2xl font-bold text-foreground mb-2">
+                Welcome back
+              </h1>
               <p className="text-sm text-muted-foreground">
                 Sign in to your account to continue managing your properties
               </p>
@@ -111,7 +115,10 @@ export default function LoginPage() {
 
               <div className="flex items-center justify-between text-sm">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded border-border" />
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-border"
+                  />
                   <span className="text-muted-foreground">Remember me</span>
                 </label>
                 <Link
@@ -148,7 +155,9 @@ export default function LoginPage() {
                   <div className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-muted-foreground">Or continue with</span>
+                  <span className="px-2 bg-white text-muted-foreground">
+                    Or continue with
+                  </span>
                 </div>
               </div>
 
@@ -182,8 +191,11 @@ export default function LoginPage() {
             {/* Signup Link */}
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <Link href="/auth/signup" className="text-primary hover:text-primary/80 font-medium">
+                Don't have an account?{" "}
+                <Link
+                  href="/auth/signup"
+                  className="text-primary hover:text-primary/80 font-medium"
+                >
                   Create one
                 </Link>
               </p>
@@ -191,8 +203,14 @@ export default function LoginPage() {
             {/* Demo credentials */}
             <div className="mt-4 text-xs text-muted-foreground">
               <p className="mb-1">Demo credentials:</p>
-              <p>Admin: <span className="font-medium">admin@example.com</span> / <span className="font-medium">adminpass</span></p>
-              <p>Tenant: <span className="font-medium">tenant@example.com</span> / <span className="font-medium">tenantpass</span></p>
+              <p>
+                Admin: <span className="font-medium">admin@example.com</span> /{" "}
+                <span className="font-medium">adminpass</span>
+              </p>
+              <p>
+                Tenant: <span className="font-medium">tenant@example.com</span>{" "}
+                / <span className="font-medium">tenantpass</span>
+              </p>
             </div>
           </div>
         </Card>
@@ -214,5 +232,5 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

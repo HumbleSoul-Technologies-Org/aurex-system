@@ -82,7 +82,7 @@ export interface SystemSettings {
   lastMigrationDate?: string
 }
 
-export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions' | 'maintenance' | 'notifications' | 'server:notifications' | 'settings' | 'system-settings'
+export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions' | 'maintenance' | 'notifications' | 'documents' | 'server:notifications' | 'settings' | 'system-settings'
 
 export interface DBSchema {
   version: string
@@ -96,6 +96,7 @@ export interface DBSchema {
   transactions: any[]
   maintenance: any[]
   notifications: any[]
+  documents: any[]
   'server:notifications': any[]
   settings: SystemSettings[]
   'system-settings': SystemSettings[]
@@ -115,13 +116,28 @@ const defaultDB: DBSchema = {
   transactions: [],
   maintenance: [],
   notifications: [],
+  documents: [],
   'server:notifications': [],
   settings: [],
   'system-settings': [],
 }
 
+declare global {
+  var __PROP_MAN_DB__: DBSchema | undefined
+}
+
+function getServerDatabase(): DBSchema {
+  const globalAny = globalThis as typeof globalThis & { __PROP_MAN_DB__?: DBSchema }
+  if (!globalAny.__PROP_MAN_DB__) {
+    globalAny.__PROP_MAN_DB__ = { ...defaultDB }
+  }
+  return globalAny.__PROP_MAN_DB__ as DBSchema
+}
+
 function readRaw(): DBSchema {
-  if (typeof window === 'undefined') return defaultDB
+  if (typeof window === 'undefined') {
+    return getServerDatabase()
+  }
   try {
     const txt = localStorage.getItem(DB_KEY)
     if (!txt) return defaultDB
@@ -144,7 +160,11 @@ function readRaw(): DBSchema {
 }
 
 function writeRaw(db: DBSchema) {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    const globalAny = globalThis as typeof globalThis & { __PROP_MAN_DB__?: DBSchema }
+    globalAny.__PROP_MAN_DB__ = db
+    return
+  }
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(db))
   } catch (e) {

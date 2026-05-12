@@ -1,13 +1,16 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/app/lib/auth-context";
+import { useAuth } from "@/lib/auth-context";
 import {
   listMessages,
   createMessage,
   markMessageSeen,
   MessageRecord,
 } from "@/lib/services/messages";
-import { listAnnouncements, markAnnouncementRead } from "@/lib/services/announcements";
+import {
+  listAnnouncements,
+  markAnnouncementRead,
+} from "@/lib/services/announcements";
 import { listTenants } from "@/lib/services/tenants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -20,7 +23,7 @@ import {
   Send,
   X,
 } from "lucide-react";
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 
 type Reply = { repliedOn: string | null; reply: string | null };
 
@@ -30,16 +33,16 @@ type Reply = { repliedOn: string | null; reply: string | null };
 interface Message {
   id: string;
   sender: string;
-  senderType: 'tenant' | 'manager';
+  senderType: "tenant" | "manager";
   content: string;
   timestamp: string;
   isRead: boolean;
-  sent?: boolean;      // true if authored by current user
-  replied?: boolean;   // true if there is a reply record
-  subject?: string;    // optional subject field
+  sent?: boolean; // true if authored by current user
+  replied?: boolean; // true if there is a reply record
+  subject?: string; // optional subject field
   isStarred?: boolean;
   isArchived?: boolean;
-  type?: 'message' | 'announcement';
+  type?: "message" | "announcement";
 }
 
 export default function TenantMessagesPage() {
@@ -128,47 +131,51 @@ export default function TenantMessagesPage() {
       // Get messages from database scoped to this user
       // only keep messages where the current user is either sender or recipient
       const dbMessages = listMessages().filter(
-        (msg) => msg.from === user?.email || msg.to === user?.email
+        (msg) => msg.from === user?.email || msg.to === user?.email,
       );
 
       // Get tenant record for announcements
-      const tenant = listTenants().find(t => t.email === user?.email);
+      const tenant = listTenants().find((t) => t.email === user?.email);
       const tenantId = tenant?.id;
 
       // Get announcements for this tenant
-      const tenantAnnouncements = listAnnouncements().filter(ann => {
-        if (ann.recipients === 'all') return true;
-        return tenantId && ann.tenantIds.includes(tenantId);
-      }).map(ann => ({
-        id: ann.id,
-        sender: 'management',
-        senderType: 'manager' as const,
-        content: ann.message,
-        timestamp: ann.sentAt || ann.createdAt,
-        isRead: tenantId ? ann.readBy.includes(tenantId) : false,
-        sent: false,
-        replied: false,
-        subject: ann.title,
-        isStarred: false,
-        isArchived: false,
-        type: 'announcement' as const,
-      }));
+      const tenantAnnouncements = listAnnouncements()
+        .filter((ann) => {
+          if (ann.recipients === "all") return true;
+          return tenantId && ann.tenantIds.includes(tenantId);
+        })
+        .map((ann) => ({
+          id: ann.id,
+          sender: "management",
+          senderType: "manager" as const,
+          content: ann.message,
+          timestamp: ann.sentAt || ann.createdAt,
+          isRead: tenantId ? ann.readBy.includes(tenantId) : false,
+          sent: false,
+          replied: false,
+          subject: ann.title,
+          isStarred: false,
+          isArchived: false,
+          type: "announcement" as const,
+        }));
 
       // Map to local Message type using shared schema
-      const tenantMessages = dbMessages.map((msg): Message => ({
-        id: msg.id,
-        sender: msg.from,
-        senderType: msg.from === 'management' ? 'manager' : 'tenant',
-        content: msg.message,
-        timestamp: msg.createdAt,
-        isRead: !!msg.seen,
-        sent: msg.from === user?.email,
-        replied: !!msg.replyId,
-        subject: msg.subject || undefined,
-        isStarred: false,
-        isArchived: false,
-        type: 'message',
-      }));
+      const tenantMessages = dbMessages.map(
+        (msg): Message => ({
+          id: msg.id,
+          sender: msg.from,
+          senderType: msg.from === "management" ? "manager" : "tenant",
+          content: msg.message,
+          timestamp: msg.createdAt,
+          isRead: !!msg.seen,
+          sent: msg.from === user?.email,
+          replied: !!msg.replyId,
+          subject: msg.subject || undefined,
+          isStarred: false,
+          isArchived: false,
+          type: "message",
+        }),
+      );
 
       // Combine messages and announcements
       const allItems = [...tenantMessages, ...tenantAnnouncements];
@@ -191,11 +198,11 @@ export default function TenantMessagesPage() {
     if (user) {
       fetchMessages();
     }
-  }, [user])
+  }, [user]);
 
   // reset selection when filter changes so details pane only shows items in current view
   useEffect(() => {
-    setSelectedId(null)
+    setSelectedId(null);
   }, [filter]);
 
   // send immediately using quick message field
@@ -208,7 +215,7 @@ export default function TenantMessagesPage() {
       // `from` uses current user's email for tracking
       const newMsg = createMessage({
         from: user?.name || "tenant",
-        to: "You",              // manager's inbox uses 'You'
+        to: "You", // manager's inbox uses 'You'
         message: messageText.trim(),
         seen: false,
       });
@@ -228,7 +235,7 @@ export default function TenantMessagesPage() {
     try {
       const newMsg = createMessage({
         from: "management",
-        to: user?.name || 'tenant',
+        to: user?.name || "tenant",
         message: "Message from management",
         subject: "Notice",
       });
@@ -245,11 +252,11 @@ export default function TenantMessagesPage() {
     return messages.filter((m) => {
       if (filter === "inbox") {
         // messages received from management (including announcements)
-        return m.senderType === 'manager';
+        return m.senderType === "manager";
       }
       if (filter === "sent") {
         // messages sent by tenant
-        return m.senderType === 'tenant';
+        return m.senderType === "tenant";
       }
       if (filter === "starred") return !!m.isStarred;
       if (filter === "archived") return !!m.isArchived;
@@ -335,17 +342,25 @@ export default function TenantMessagesPage() {
             {loading && <div className="text-gray-500">Loading...</div>}
             {!loading && filtered.length === 0 && (
               <div className="text-gray-500 flex-1 flex relative w-full pt-[50%] items-center justify-center text-center">
-                <span>No messages.
-                <img src="/no-message2.avif" className="w-34 h-34" alt="No messages" /></span>
+                <span>
+                  No messages.
+                  <img
+                    src="/no-message2.avif"
+                    className="w-34 h-34"
+                    alt="No messages"
+                  />
+                </span>
               </div>
             )}
             {filtered.map((m) => (
               <div
                 key={m.id}
                 onClick={() => {
-                  if (m.senderType === 'manager' && !m.isRead) {
-                    if (m.type === 'announcement') {
-                      const tenant = listTenants().find(t => t.email === user?.email);
+                  if (m.senderType === "manager" && !m.isRead) {
+                    if (m.type === "announcement") {
+                      const tenant = listTenants().find(
+                        (t) => t.email === user?.email,
+                      );
                       if (tenant) markAnnouncementRead(m.id, tenant.id);
                     } else {
                       markMessageSeen(m.id);
@@ -389,7 +404,7 @@ export default function TenantMessagesPage() {
                           : "font-medium text-gray-600"
                       }`}
                     >
-                      {m.senderType === 'manager' ? 'Management' : 'You'}
+                      {m.senderType === "manager" ? "Management" : "You"}
                     </div>
                     <div
                       className={`text-xs whitespace-nowrap ${
@@ -447,11 +462,12 @@ export default function TenantMessagesPage() {
                   </div>
                   <div>
                     <div className="text-lg font-semibold">
-                      {selected.senderType === 'manager' ? 'Management' : 'You'}
+                      {selected.senderType === "manager" ? "Management" : "You"}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {selected.senderType === 'manager' ?
-                        'management@company.com' : user?.email || '—'}
+                      {selected.senderType === "manager"
+                        ? "management@company.com"
+                        : user?.email || "—"}
                     </div>
                   </div>
                 </div>
@@ -526,12 +542,12 @@ export default function TenantMessagesPage() {
                   </div>
                   <div>
                     <div className="text-lg font-semibold">
-                      {selected.senderType === 'manager' ? 'Management' : 'You'}
+                      {selected.senderType === "manager" ? "Management" : "You"}
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {selected.senderType === 'manager'
-                        ? 'management@company.com'
-                        : user?.email || '—'}
+                      {selected.senderType === "manager"
+                        ? "management@company.com"
+                        : user?.email || "—"}
                     </div>
                   </div>
                 </div>

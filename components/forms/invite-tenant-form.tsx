@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { createTenant } from "@/lib/services/tenants";
 import { acceptTenantInvite } from "@/lib/services/tenant-invites";
-import { useAuth } from "@/app/lib/auth-context";
+import { useAuth } from "@/lib/auth-context";
 import { Calendar, Mail, Phone, User, Lock, AlertCircle } from "lucide-react";
 
 interface InviteTenantFormProps {

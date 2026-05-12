@@ -27,13 +27,13 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<User>;
-  signup: (
+  register: (
     firstName: string,
     lastName: string,
     email: string,
     password: string,
     phone?: string,
-  ) => Promise<{ user: User; password?: string }>;
+  ) => Promise<{ user: User; token: string }>;
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   clearError: () => void;
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const signup = useCallback(
+  const register = useCallback(
     async (
       firstName: string,
       lastName: string,
@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tokenManager.setAuthToken(response.data.token, response.data.user);
         setUser(response.data.user);
 
-        return { user: response.data.user, password: undefined };
+        return { user: response.data.user, token: response.data.token };
       } catch (err: any) {
         const errorMessage = err.message || "Registration failed";
         setError(errorMessage);
@@ -239,7 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         error,
         login,
-        signup,
+        register,
         logout,
         setUser,
         clearError,

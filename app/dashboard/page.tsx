@@ -213,11 +213,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
         {/* Total Properties */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Total Properties</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">{metrics.totalProperties}</p>
               <p className="text-xs text-muted-foreground mt-2">{metrics.totalUnits} units total</p>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
         {/* Occupancy Rate */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Occupancy Rate</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">{metrics.averageOccupancy}%</p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">Based on current tenants</p>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
         {/* Monthly Revenue */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Monthly Revenue</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 ${(metrics.totalMonthlyRevenue / 1000).toFixed(1)}K
@@ -261,7 +261,7 @@ export default function DashboardPage() {
         {/* Pending Payments */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Pending Payments</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">{metrics.pendingPayments}</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-2">Awaiting processing</p>
@@ -275,7 +275,7 @@ export default function DashboardPage() {
         {/* Open Maintenance */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">Open Maintenance</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">{metrics.openMaintenanceRequests}</p>
               <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">Pending requests</p>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
         {/* YTD Profit */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">YTD Profit</p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 ${(metrics.ytdProfit / 1000).toFixed(0)}K

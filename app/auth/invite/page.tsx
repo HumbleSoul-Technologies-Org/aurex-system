@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,6 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function InvitePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
 
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
@@ -24,6 +22,9 @@ export default function InvitePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
     if (!token) {
       setError("No invite token provided");
       setIsValidating(false);
@@ -42,7 +43,7 @@ export default function InvitePage() {
     setProperty(prop);
     setIsValid(true);
     setIsValidating(false);
-  }, [token]);
+  }, []);
 
   if (isValidating) {
     return (
