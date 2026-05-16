@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
 import { listTenants } from "@/lib/services/tenants";
 import { listProperties } from "@/lib/services/properties";
-import { createTenant } from "@/lib/services/tenants";
+import { createTenantApi } from "@/lib/services/tenants";
 import {
   Plus,
   Search,
@@ -22,6 +22,8 @@ import {
   Eye,
 } from "lucide-react";
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<
@@ -29,6 +31,8 @@ export default function TenantsPage() {
   >("all");
   const [showAddForm, setShowAddForm] = useState(false);
   const [tenants, setTenants] = useState(() => listTenants());
+
+  const { token } = useAuth();
 
   const enrichedTenants = tenants.map((tenant) => {
     const property = listProperties().find((p) => p.id === tenant.propertyId);
@@ -88,9 +92,9 @@ export default function TenantsPage() {
     return leaseEnd;
   };
 
-  const handleAddTenant = (data: any) => {
+  const handleAddTenant = async (data: any) => {
     try {
-      const tenant = createTenant({
+      const payload: Partial<TenantRecord> = {
         name: data.name,
         email: data.email,
         password: data.password,
@@ -99,8 +103,10 @@ export default function TenantsPage() {
         unit: data.unitNumber,
         propertyId: data.propertyId,
         rentAmount: data.monthlyRent,
-        lease_type: data.leaseType,
-        lease_start: data.leaseStartDate,
+        leaseType: data.leaseType,
+        leaseStartDate: data.leaseStartDate,
+        leaseRenewDate: data.leaseRenewDate,
+        leaseEndDate: data.leaseEndDate,
         leaseTerms: data.leaseTerms,
         preferredContactMethod: data.preferredContactMethod,
         applicationDate: data.applicationDate,
@@ -117,12 +123,16 @@ export default function TenantsPage() {
         businessContacts: data.businessContacts,
         financialInfo: data.financialInfo,
         securityDeposit: data.securityDeposit,
+        emergencyContact: data.emergencyContact,
+        notes: data.notes,
         status: "due",
-      });
+      };
+      const tenant = await createTenantApi(payload, token || undefined);
       setTenants((prev) => [tenant, ...prev]);
       console.log("New tenant created:", tenant);
     } catch (error) {
       console.error("Failed to create tenant:", error);
+      alert("Failed to create tenant. Please try again.");
     }
   };
 
@@ -257,7 +267,7 @@ export default function TenantsPage() {
                     ${(tenant.rentAmount ?? 0).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-sm text-foreground capitalize">
-                    {tenant.lease_type}
+                    {(tenant.leaseType || "").replace("_", " ")}
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -267,17 +277,19 @@ export default function TenantsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {tenant.lease_start
-                      ? new Date(tenant.lease_start).toLocaleDateString()
+                    {tenant.leaseStartDate
+                      ? new Date(tenant.leaseStartDate).toLocaleDateString()
                       : "--"}
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {tenant.lease_start
-                      ? calculateLeaseEnd(
-                          tenant.lease_start ?? "",
-                          tenant.lease_type ?? "",
-                        ).toLocaleDateString()
-                      : "--"}
+                    {tenant.leaseEndDate
+                      ? new Date(tenant.leaseEndDate).toLocaleDateString()
+                      : tenant.leaseStartDate
+                        ? calculateLeaseEnd(
+                            tenant.leaseStartDate || "",
+                            tenant.leaseType || "",
+                          ).toLocaleDateString()
+                        : "--"}
                   </td>
                   <td className="px-6 py-4">
                     <Link href={`/dashboard/tenants/${tenant.id}`}>

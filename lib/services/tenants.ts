@@ -1,6 +1,8 @@
 import { getCollection, insertIntoCollection, updateInCollection, findInCollection, removeFromCollection, generateId } from '@/lib/local-store'
 import { getProperty, updateProperty } from '@/lib/services/properties'
+import { apiRequest } from '@/lib/query-client'
 import { notifyNewTenant } from '@/lib/services/notifications'
+import { useAuth } from '../auth-context'
 
 export interface NotificationChannelSettings {
   email: boolean
@@ -35,9 +37,13 @@ export interface TenantRecord {
   unit?: string
   propertyId?: string
   rentAmount?: number
-  lease_type?: string
-  lease_start?: string
+  leaseType?: string
+  leaseStartDate?: string
+  leaseRenewDate?: string
+  leaseEndDate?: string
   leaseTerms?: string
+  emergencyContact?: string
+  notes?: string
   preferredContactMethod?: 'email' | 'phone' | 'sms'
   applicationDate?: string
   moveInDate?: string
@@ -84,8 +90,9 @@ export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
     unit: payload.unit,
     propertyId: payload.propertyId,
     rentAmount: payload.rentAmount ?? 0,
-    lease_type: payload.lease_type ?? 'month-to-month',
-    lease_start: payload.lease_start,
+    leaseType: payload.leaseType ?? 'month-to-month',
+    leaseStartDate: payload.leaseStartDate,
+    leaseEndDate: payload.leaseEndDate,
     leaseTerms: payload.leaseTerms,
     preferredContactMethod: payload.preferredContactMethod,
     applicationDate: payload.applicationDate,
@@ -134,6 +141,16 @@ export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
 
 export function updateTenant(id: string, patch: Partial<TenantRecord>): TenantRecord | null {
   return updateInCollection<TenantRecord>('tenants', id, patch)
+}
+
+export async function createTenantApi(
+  payload: Partial<TenantRecord>,
+  token?: string,
+): Promise<TenantRecord> {
+   
+  const res = await apiRequest('POST', '/tenants/create', payload, token)
+  const json = await res.json()
+  return json.data as TenantRecord
 }
 
 export function deleteTenant(id: string): boolean {

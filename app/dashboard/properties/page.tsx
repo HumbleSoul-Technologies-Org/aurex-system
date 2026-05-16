@@ -24,12 +24,14 @@ import {
   Users,
   DollarSign,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
+  const { user, token } = useAuth();
 
   const [properties, setProperties] = useState<PropertyRecord[]>(() =>
     listProperties(),
@@ -66,6 +68,7 @@ export default function PropertiesPage() {
         city: data.city,
         country: data.country,
         category: data.category,
+        geography: data.geography,
         units_available: data.units,
         price_per_unit: data.pricePerUnit,
         type: data.propertyType,
@@ -100,6 +103,7 @@ export default function PropertiesPage() {
         lastAppraisalDate: data.lastAppraisalDate,
         noi: data.noi ? Number(data.noi) : undefined,
         capRate: data.capRate ? Number(data.capRate) : undefined,
+        estate: data.estate,
         location:
           data.location.lat.trim() !== "" && data.location.lng.trim() !== ""
             ? { lat: Number(data.location.lat), lng: Number(data.location.lng) }
@@ -110,7 +114,13 @@ export default function PropertiesPage() {
       if (file) {
         try {
           const res = await uploadToCloudinary(file);
-          payload.images = [res.secure_url];
+
+          if (res.secure_url && res.public_id) {
+            payload.images = [
+              ...(payload.images || []),
+              { url: res.secure_url, public_id: res.public_id },
+            ];
+          }
         } catch (e) {
           console.error("Image upload failed", e);
         }
@@ -119,7 +129,7 @@ export default function PropertiesPage() {
       // Simulate 3-second delay for property creation
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      createProperty(payload);
+      await createProperty(payload, token);
       setProperties(listProperties());
     } catch (e) {
       console.error("Create property failed", e);

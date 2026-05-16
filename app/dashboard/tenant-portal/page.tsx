@@ -39,6 +39,18 @@ import {
 import { listTenants, TenantRecord } from "@/lib/services/tenants";
 import { listProperties } from "@/lib/services/properties";
 import { listPayments } from "@/lib/services/payments";
+import {
+  getTenantPortalSettings,
+  initializeSystemSettings,
+  updateFeatureToggles,
+} from "@/lib/services/settings";
+
+const featureToggleMap: Record<string, string> = {
+  "rent-payment": "paymentPortal",
+  messaging: "messages",
+  maintenance: "maintenanceRequests",
+  documents: "documentAccess",
+};
 
 export default function TenantPortalPage() {
   const [portalFeatures, setPortalFeatures] = useState([
@@ -188,22 +200,50 @@ export default function TenantPortalPage() {
     setDialogAction("");
   };
 
-  // Load settings from localStorage on mount
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("tenant-portal-settings");
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        setPortalFeatures((prev) =>
-          prev.map((feature) => ({
-            ...feature,
-            enabled: parsed[feature.id] ?? feature.enabled,
-          })),
-        );
-      } catch (error) {
-        console.error("Error loading portal settings:", error);
-      }
+  const updatePortalFeaturesFromSettings = () => {
+    const tenantSettings =
+      getTenantPortalSettings() ??
+      initializeSystemSettings().tenantPortalSettings;
+
+    if (tenantSettings?.featureToggles) {
+      setPortalFeatures((prev) =>
+        prev.map((feature) => ({
+          ...feature,
+          enabled:
+            tenantSettings.featureToggles[
+              featureToggleMap[feature.id] ?? feature.id
+            ] ?? feature.enabled,
+        })),
+      );
     }
+  };
+
+  useEffect(() => {
+    updatePortalFeaturesFromSettings();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "propman:v1") {
+        updatePortalFeaturesFromSettings();
+      }
+    };
+
+    const handleSettingsChanged = () => {
+      updatePortalFeaturesFromSettings();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(
+      "system-settings-changed",
+      handleSettingsChanged as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(
+        "system-settings-changed",
+        handleSettingsChanged as EventListener,
+      );
+    };
   }, []);
 
   const handleFeatureToggle = (featureId: string) => {
@@ -217,17 +257,23 @@ export default function TenantPortalPage() {
   };
 
   const handleSaveSettings = () => {
-    // Save to localStorage
-    const settings = portalFeatures.reduce(
+    const settingsUpdates = portalFeatures.reduce(
       (acc, feature) => {
-        acc[feature.id] = feature.enabled;
+        const settingKey = featureToggleMap[feature.id];
+        if (settingKey) {
+          acc[settingKey] = feature.enabled;
+        }
         return acc;
       },
       {} as Record<string, boolean>,
     );
 
-    localStorage.setItem("tenant-portal-settings", JSON.stringify(settings));
-    alert("Settings saved successfully!");
+    const updatedSettings = updateFeatureToggles(settingsUpdates);
+    if (updatedSettings) {
+      alert("Settings saved successfully!");
+    } else {
+      alert("Failed to save tenant portal settings.");
+    }
   };
 
   return (

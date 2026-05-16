@@ -12,6 +12,21 @@ export interface TransactionRecord {
   type: TransactionType
   description?: string
   status?: TransactionStatus
+  category?: string
+  paymentMethod?: string
+  receiptReference?: string
+  unit?: string
+  currency?: string
+  paymentSource?: {
+    type?: 'card' | 'bank' | 'other'
+    last4?: string
+    provider?: string
+  }
+  scheduledDate?: string
+  processedDate?: string
+  reversed?: boolean
+  appliedTo?: string[]
+  notes?: string
   metadata?: Record<string, any>
 }
 
@@ -33,6 +48,17 @@ export function createTransaction(payload: Partial<TransactionRecord>): Transact
     type: payload.type ?? 'rent',
     description: payload.description,
     status: payload.status ?? 'completed',
+    category: payload.category,
+    paymentMethod: payload.paymentMethod,
+    receiptReference: payload.receiptReference,
+    unit: payload.unit,
+    currency: payload.currency ?? 'USD',
+    paymentSource: payload.paymentSource,
+    scheduledDate: payload.scheduledDate,
+    processedDate: payload.processedDate,
+    reversed: payload.reversed ?? false,
+    appliedTo: payload.appliedTo || [],
+    notes: payload.notes,
     metadata: payload.metadata,
   }
   insertIntoCollection('transactions', transaction)

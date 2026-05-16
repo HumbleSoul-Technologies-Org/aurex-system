@@ -71,15 +71,80 @@ export interface SystemSettings {
       }
     >
   }
-  tenantPortalSettings?: {
-    portalUrl: string
-    enabledFeatures: Record<string, boolean>
-    invitationExpirationDays: number
-    allowDocumentUploads: boolean
-  }
+  tenantPortalSettings?: Partial<TenantPortalSettings>
   createdAt?: string
   updatedAt?: string
   lastMigrationDate?: string
+}
+
+export interface TenantPortalSettings {
+  portalUrl?: string
+  enabledFeatures?: Record<string, boolean>
+  invitationExpirationDays?: number
+  allowDocumentUploads?: boolean
+  notificationPreferences: {
+    email: boolean
+    sms: boolean
+    inApp: boolean
+    smsProvider?: string
+    emailTemplate?: string
+  }
+  paymentSettings: {
+    enableAutopay: boolean
+    autopayThreshold?: number
+    acceptedMethods: Array<{
+      type: string
+      enabled: boolean
+      processingFee: number
+    }>
+    paymentProviders: Array<{
+      name: string
+      apiKey?: string
+      config?: Record<string, any>
+    }>
+  }
+  documentAccess: {
+    allowUploads: boolean
+    maxFileSize?: number
+    allowedFileTypes: string[]
+    requireApproval: boolean
+    retentionDays?: number
+  }
+  maintenancePreferences: {
+    enableRequests: boolean
+    requireTenantApproval?: boolean
+    estimatedResponseTime?: number
+    allowEmergencyAfterHours: boolean
+    priorityLevels: Array<{
+      name: string
+      responseTime: number
+    }>
+  }
+  featureToggles: {
+    paymentPortal: boolean
+    maintenanceRequests: boolean
+    documentAccess: boolean
+    messages: boolean
+    announcements: boolean
+    leaseInfo: boolean
+  }
+  communicationPreferences: {
+    preferredContactMethod: 'email' | 'sms' | 'in-app'
+    languages: string[]
+    timezone?: string
+    doNotDisturb?: {
+      enabled?: boolean
+      startTime?: string
+      endTime?: string
+    }
+  }
+  securitySettings: {
+    allowPasswordChange: boolean
+    autoLogoutInactivityMinutes?: number
+    allowAccountDeletion: boolean
+    requirePasswordReset?: boolean
+    passwordExpirationDays?: number
+  }
 }
 
 export type CollectionName = 'users' | 'properties' | 'tenants' | 'payments' | 'messages' | 'replies' | 'announcements' | 'transactions' | 'maintenance' | 'notifications' | 'documents' | 'server:notifications' | 'settings' | 'system-settings'

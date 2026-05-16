@@ -79,6 +79,13 @@ function migrateToV2(db: DBSchema): DBSchema {
   db.transactions = db.transactions.map((transaction: any) => ({
     ...transaction,
     expenseType: transaction.expenseType || 'both',
+    currency: transaction.currency || 'USD',
+    paymentSource: transaction.paymentSource || null,
+    scheduledDate: transaction.scheduledDate || '',
+    processedDate: transaction.processedDate || '',
+    reversed: transaction.reversed || false,
+    appliedTo: transaction.appliedTo || [],
+    notes: transaction.notes || '',
     // Add commercial expense fields
     tripleNetAllocation: transaction.tripleNetAllocation || '',
     capitalizable: transaction.capitalizable || false,

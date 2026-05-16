@@ -24,9 +24,14 @@ interface ExpenseFormData {
   date: string;
   description: string;
   property: string;
-  receipt?: string;
+  receiptReference?: string;
   unit?: string;
   paymentMethod?: string;
+  currency: string;
+  paymentSourceType?: "card" | "bank" | "other" | "";
+  paymentSourceProvider?: string;
+  paymentSourceLast4?: string;
+  notes?: string;
   vendorId?: string;
   vendorName?: string;
   invoiceNumber?: string;
@@ -50,9 +55,14 @@ export default function AddExpenseForm({
     date: new Date().toISOString().split("T")[0],
     description: "",
     property: "",
-    receipt: "",
+    receiptReference: "",
     unit: "",
     paymentMethod: "",
+    currency: "USD",
+    paymentSourceType: "",
+    paymentSourceProvider: "",
+    paymentSourceLast4: "",
+    notes: "",
     vendorId: "",
     vendorName: "",
     invoiceNumber: "",
@@ -114,9 +124,17 @@ export default function AddExpenseForm({
         status: "completed",
         category: formData.category,
         date: formData.date,
-        receiptReference: formData.receipt || undefined,
+        currency: formData.currency,
+        receiptReference: formData.receiptReference || undefined,
         unit: formData.unit || undefined,
         paymentMethod: formData.paymentMethod || undefined,
+        paymentSource: formData.paymentSourceType
+          ? {
+              type: formData.paymentSourceType,
+              provider: formData.paymentSourceProvider || undefined,
+              last4: formData.paymentSourceLast4 || undefined,
+            }
+          : undefined,
         vendorName: formData.vendorName || undefined,
         invoiceNumber: formData.invoiceNumber || undefined,
         dueDate: formData.dueDate || undefined,
@@ -127,6 +145,7 @@ export default function AddExpenseForm({
           frequency: formData.recurringFrequency,
           autoPay: formData.autoPay,
         },
+        notes: formData.notes || undefined,
       });
     } catch (err) {
       // ignore
@@ -139,9 +158,14 @@ export default function AddExpenseForm({
       date: new Date().toISOString().split("T")[0],
       description: "",
       property: "",
-      receipt: "",
+      receiptReference: "",
       unit: "",
       paymentMethod: "",
+      currency: "USD",
+      paymentSourceType: "",
+      paymentSourceProvider: "",
+      paymentSourceLast4: "",
+      notes: "",
       vendorId: "",
       vendorName: "",
       invoiceNumber: "",
@@ -321,6 +345,66 @@ export default function AddExpenseForm({
               </select>
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Currency
+                </label>
+                <select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Payment Source
+                </label>
+                <select
+                  name="paymentSourceType"
+                  value={formData.paymentSourceType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                >
+                  <option value="">Select Source</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Payment Provider
+                </label>
+                <Input
+                  name="paymentSourceProvider"
+                  value={formData.paymentSourceProvider}
+                  onChange={handleChange}
+                  placeholder="Stripe, Plaid, etc."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Card Last 4
+                </label>
+                <Input
+                  name="paymentSourceLast4"
+                  value={formData.paymentSourceLast4}
+                  onChange={handleChange}
+                  placeholder="1234"
+                />
+              </div>
+            </div>
+
             {/* Vendor Info */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -460,14 +544,27 @@ export default function AddExpenseForm({
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Notes
+              </label>
+              <Textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleChange}
+                placeholder="Internal notes or additional context"
+                className="h-20"
+              />
+            </div>
+
             {/* Receipt */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Receipt/Invoice Reference
               </label>
               <Input
-                name="receipt"
-                value={formData.receipt}
+                name="receiptReference"
+                value={formData.receiptReference}
                 onChange={handleChange}
                 placeholder="Receipt number or file name"
               />

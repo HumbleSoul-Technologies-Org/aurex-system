@@ -13,6 +13,17 @@ export type TransactionCreate = {
   date?: string
   receiptReference?: string
   unit?: string
+  currency?: string
+  paymentSource?: {
+    type?: 'card' | 'bank' | 'other'
+    last4?: string
+    provider?: string
+  }
+  scheduledDate?: string
+  processedDate?: string
+  reversed?: boolean
+  appliedTo?: string[]
+  notes?: string
   // Commercial expense fields
   tripleNetAllocation?: string
   capitalizable?: boolean
@@ -63,6 +74,13 @@ export function createTransaction(payload: TransactionCreate): Transaction {
     paymentMethod: payload.paymentMethod,
     receiptReference: payload.receiptReference,
     unit: payload.unit,
+    currency: payload.currency ?? 'USD',
+    paymentSource: payload.paymentSource,
+    scheduledDate: payload.scheduledDate,
+    processedDate: payload.processedDate,
+    reversed: payload.reversed ?? false,
+    appliedTo: payload.appliedTo || [],
+    notes: payload.notes,
     vendorId: payload.vendorId,
     vendorName: payload.vendorName,
     invoiceNumber: payload.invoiceNumber,

@@ -51,10 +51,11 @@ export default function TenantDashboard() {
 
   // Calculate lease expiration date
   const getLeaseExpiration = () => {
-    if (!tenant?.lease_start) return null;
+    const leaseStart = tenant?.leaseStartDate;
+    if (!leaseStart) return null;
 
-    const startDate = new Date(tenant.lease_start);
-    const leaseType = tenant.lease_type || "month-to-month";
+    const startDate = new Date(leaseStart);
+    const leaseType = tenant?.leaseType || "month-to-month";
 
     if (leaseType === "month-to-month" || leaseType === "monthly") {
       // For monthly leases, add exactly one month to the start date
@@ -134,8 +135,8 @@ export default function TenantDashboard() {
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 Lease Started on:{" "}
-                {tenant?.lease_start
-                  ? new Date(tenant.lease_start).toLocaleDateString()
+                {tenant?.leaseStartDate
+                  ? new Date(tenant?.leaseStartDate).toLocaleDateString()
                   : "N/A"}
               </p>
             </div>
@@ -158,7 +159,7 @@ export default function TenantDashboard() {
               <p className="text-xs text-muted-foreground mt-2">
                 {latestPayment?.status === "completed"
                   ? `Paid on: ${new Date(latestPayment.date).toLocaleDateString()}`
-                  : `Due: ${tenant?.lease_start ? new Date(new Date(tenant.lease_start).getFullYear(), new Date(tenant.lease_start).getMonth() + 1, new Date(tenant.lease_start).getDate()).toLocaleDateString() : "N/A"}`}
+                  : `Due: ${tenant?.leaseStartDate ? new Date(new Date(tenant?.leaseStartDate).getFullYear(), new Date(tenant?.leaseStartDate).getMonth() + 1, new Date(tenant?.leaseStartDate).getDate()).toLocaleDateString() : "N/A"}`}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -178,7 +179,7 @@ export default function TenantDashboard() {
                 {leaseExpiration ? leaseExpiration.toLocaleDateString() : "N/A"}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {tenant?.lease_type || "Month-to-month"}
+                {tenant?.leaseType || "Month-to-month"}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -354,7 +355,7 @@ export default function TenantDashboard() {
             <p className="text-sm text-yellow-800 dark:text-yellow-300 mt-2">
               {leaseExpiration ? (
                 <>
-                  Your {tenant?.lease_type || "month-to-month"} lease expires on{" "}
+                  Your {tenant?.leaseType || "month-to-month"} lease expires on{" "}
                   <span className="font-semibold">
                     {leaseExpiration.toLocaleDateString()}
                   </span>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -11,7 +11,6 @@ import { resetPassword } from "@/lib/services/authApi";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -20,13 +19,14 @@ export default function ResetPasswordPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const tokenParam = searchParams?.get("token");
+    const currentSearchParams = new URLSearchParams(window.location.search);
+    const tokenParam = currentSearchParams.get("token");
     if (!tokenParam) {
       router.replace("/auth/forgot-password");
       return;
     }
     setToken(tokenParam);
-  }, [router, searchParams]);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

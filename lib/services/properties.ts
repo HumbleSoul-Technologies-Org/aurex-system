@@ -2,6 +2,7 @@ import { getCollection, insertIntoCollection, updateInCollection, removeFromColl
 import { notifyNewProperty } from '@/lib/services/notifications'
 import { listTenants } from '@/lib/services/tenants'
 import { getCategoryForType } from '@/lib/constants/property-types'
+import { apiRequest } from '../query-client'
 
 export interface PropertySpecification {
   title: string
@@ -20,7 +21,8 @@ export interface PropertyRecord {
   price_per_unit: number
   type?: string
   propertyType?: 'residential' | 'commercial' | 'mixed_use' | 'industrial' | 'retail' | 'office' | 'apartment' | 'house' | 'villa' | 'condo' | 'townhouse' | 'duplex' | 'mixed-use' | 'warehouse' | 'hotel' | 'restaurant' | 'shopping-center' | 'medical' | 'flex-space' | 'other'
-  images?: string[]
+  geography?: string
+  images?: {url: string,public_id: string}[]
   features?: string[]
   specifications?: PropertySpecification[]
   description?: string
@@ -39,6 +41,7 @@ export interface PropertyRecord {
   lastAppraisalDate?: string
   noi?: number
   capRate?: number
+  estate?: string
 }
 
 function makePrefix(name: string, city: string, country: string) {
@@ -66,26 +69,36 @@ export function getProperty(id: string): PropertyRecord | null {
 }
 
 export function getAvailablePropertiesWithUnits() {
-  const properties = listProperties()
-  const tenants = listTenants()
-  
+  const properties = listProperties();
+  const tenants = listTenants();
+
   return properties.map(property => {
+    const units = Array.isArray(property.units)
+      ? property.units
+      : generateUnitNumbers(
+          property.name ?? '',
+          property.city ?? '',
+          property.country ?? '',
+          property.units_available ?? 1,
+        );
+
     // Find tenants assigned to this property
-    const propertyTenants = tenants.filter(tenant => tenant.propertyId === property.id)
+    const propertyTenants = tenants.filter(tenant => tenant.propertyId === property.id);
     // Get occupied units
-    const occupiedUnits = propertyTenants.map(tenant => tenant.unit).filter(Boolean)
+    const occupiedUnits = propertyTenants.map((tenant) => tenant.unit).filter(Boolean);
     // Get available units
-    const availableUnits = property.units.filter(unit => !occupiedUnits.includes(unit))
-    
+    const availableUnits = units.filter((unit) => !occupiedUnits.includes(unit));
+
     return {
       ...property,
+      units,
       availableUnits,
-      hasAvailableUnits: availableUnits.length > 0
-    }
-  }).filter(property => property.hasAvailableUnits)
+      hasAvailableUnits: availableUnits.length > 0,
+    };
+  });
 }
 
-export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord {
+export async function createProperty(payload: Partial<PropertyRecord>, token: string){
   const id = generateId('prop')
   const units_available = payload.units_available ?? 1
   const name = payload.name ?? 'Property'
@@ -93,8 +106,8 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
   const country = payload.country ?? ''
   const units = generateUnitNumbers(name, city, country, units_available)
 
-  const record: PropertyRecord = {
-    id,
+  const record= {
+   
     name,
     address: payload.address ?? '',
     city,
@@ -103,11 +116,13 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
       payload.category ??
       getCategoryForType(payload.propertyType ?? (payload.type as string)) ??
       'residential',
+    estate: payload.estate,
     units_available,
     units,
     price_per_unit: payload.price_per_unit ?? 0,
     type: payload.type ?? payload.propertyType ?? 'apartment',
     propertyType: payload.propertyType ?? (payload.type as PropertyRecord['propertyType']) ?? 'residential',
+    geography: payload.geography,
     images: payload.images ?? [],
     features: payload.features ?? [],
     specifications: payload.specifications ?? [],
@@ -123,12 +138,20 @@ export function createProperty(payload: Partial<PropertyRecord>): PropertyRecord
     noi: payload.noi,
     capRate: payload.capRate,
   }
-  insertIntoCollection('properties', record)
 
-  // Notify about new property
-  notifyNewProperty(record.name, record.id)
+  console.log('====================================');
+  console.log(record);
+  console.log('====================================');
 
-  return record
+  const res = await apiRequest('POST', '/property/create', record, token)
+
+
+  // insertIntoCollection('properties', record)
+
+  // // Notify about new property
+  // notifyNewProperty(record.name, record.id)
+
+  // return record
 }
 
 export function updateProperty(id: string, patch: Partial<PropertyRecord>): PropertyRecord | null {

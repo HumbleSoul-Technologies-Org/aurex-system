@@ -8,7 +8,7 @@ import { paymentHistory } from "@/app/lib/tenant-data";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getProperty } from "@/lib/services/properties";
-import { createPayment, PaymentRecord } from '@/lib/services/payments'
+import { createPayment, PaymentRecord } from "@/lib/services/payments";
 
 export default function MakePaymentPage() {
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">(
@@ -29,7 +29,7 @@ export default function MakePaymentPage() {
   const [amount, setAmount] = useState<number>(defaultRent);
   const [method, setMethod] = useState("bank-transfer");
   const [processing, setProcessing] = useState(false);
-  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null)
+  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null);
 
   const nextPayment = paymentHistory.find((p) => p.status === "pending");
 
@@ -40,28 +40,30 @@ export default function MakePaymentPage() {
       setProcessing(true);
       try {
         const payload: Partial<PaymentRecord> = {
-          tenantId: tenant?.id || user?.id || '',
+          tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           unit: tenant?.unit,
           amount,
           price_per_unit: property?.price_per_unit,
-          lease_start: tenant?.lease_start,
-          lease_type: tenant?.lease_type,
-          balance: (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
+          lease_start: tenant?.leaseStartDate,
+          lease_type: tenant?.leaseType,
+          balance:
+            (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
           method,
           date: new Date().toISOString(),
-        }
-        const rec = createPayment(payload)
-        setSavedPayment(rec)
-        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('paymentsUpdated'))
+        };
+        const rec = createPayment(payload);
+        setSavedPayment(rec);
+        if (typeof window !== "undefined")
+          window.dispatchEvent(new CustomEvent("paymentsUpdated"));
         setTimeout(() => {
-          setStep('success')
-          setProcessing(false)
-        }, 800)
+          setStep("success");
+          setProcessing(false);
+        }, 800);
       } catch (err) {
-        setProcessing(false)
+        setProcessing(false);
         // keep UI simple: fallback to success state after small delay
-        setTimeout(() => setStep('success'), 800)
+        setTimeout(() => setStep("success"), 800);
       }
     }
   };
@@ -132,7 +134,6 @@ export default function MakePaymentPage() {
                   {[
                     { label: "Monthly Rent", value: defaultRent },
                     { label: "Half", value: defaultRent / 2 },
-                    
                   ].map((option) => (
                     <Button
                       key={option.label}
@@ -183,7 +184,6 @@ export default function MakePaymentPage() {
                     onChange={(e) => setAmount(Number(e.target.value))}
                     className="flex-1 px-4 py-3 md:py-2 border border-border rounded-lg bg-background text-foreground"
                     placeholder="0.00"
-                     
                   />
                 </div>
               </div>
@@ -337,7 +337,9 @@ export default function MakePaymentPage() {
             <div className="bg-secondary p-4 rounded-lg border border-border space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Transaction ID</span>
-                <span className="font-mono text-foreground">{savedPayment?.transId ?? '—'}</span>
+                <span className="font-mono text-foreground">
+                  {savedPayment?.transId ?? "—"}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount</span>
@@ -347,7 +349,11 @@ export default function MakePaymentPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Date</span>
-                <span className="text-foreground">{savedPayment ? new Date(savedPayment.date).toLocaleDateString() : new Date().toLocaleDateString()}</span>
+                <span className="text-foreground">
+                  {savedPayment
+                    ? new Date(savedPayment.date).toLocaleDateString()
+                    : new Date().toLocaleDateString()}
+                </span>
               </div>
             </div>
 

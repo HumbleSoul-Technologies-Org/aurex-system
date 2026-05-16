@@ -51,6 +51,7 @@ interface PropertyFormData {
   capRate: string;
   imageUrl?: string;
   description: string;
+  estate: string;
 }
 
 const defaultPropertyType =
@@ -99,9 +100,10 @@ export default function AddPropertyForm({
     capRate: "",
     imageUrl: "",
     description: "",
+    estate: "",
   });
 
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [ selectedImage, setSelectedImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -152,7 +154,10 @@ export default function AddPropertyForm({
         ...prev,
         category: nextCategory,
         propertyType: nextType,
-        specificationValues: createSpecificationValues(nextType, prev.specificationValues),
+        specificationValues: createSpecificationValues(
+          nextType,
+          prev.specificationValues,
+        ),
       }));
       return;
     }
@@ -162,7 +167,10 @@ export default function AddPropertyForm({
       setFormData((prev) => ({
         ...prev,
         propertyType: nextType,
-        specificationValues: createSpecificationValues(nextType, prev.specificationValues),
+        specificationValues: createSpecificationValues(
+          nextType,
+          prev.specificationValues,
+        ),
       }));
       return;
     }
@@ -170,10 +178,7 @@ export default function AddPropertyForm({
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSpecificationValueChange = (
-    key: string,
-    value: string,
-  ) => {
+  const handleSpecificationValueChange = (key: string, value: string) => {
     setFormData((prev) => ({
       ...prev,
       specificationValues: {
@@ -254,6 +259,7 @@ export default function AddPropertyForm({
       capRate: "",
       imageUrl: "",
       description: "",
+      estate: "",
     });
     setSelectedImage(null);
   };
@@ -261,8 +267,8 @@ export default function AddPropertyForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit?.(formData, selectedImage);
-    resetForm();
-    onClose();
+    // resetForm();
+    // onClose();
   };
 
   if (!isOpen) return null;
@@ -276,8 +282,12 @@ export default function AddPropertyForm({
         <Card className="border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
-              <h2 className="text-2xl font-bold text-foreground">Add New Property</h2>
-              <p className="text-sm text-muted-foreground">Create a new rental property</p>
+              <h2 className="text-2xl font-bold text-foreground">
+                Add New Property
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Create a new rental property
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -323,7 +333,9 @@ export default function AddPropertyForm({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">City</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  City
+                </label>
                 <Input
                   name="city"
                   value={formData.city}
@@ -333,7 +345,9 @@ export default function AddPropertyForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Country</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Country
+                </label>
                 <Input
                   name="country"
                   value={formData.country}
@@ -344,44 +358,64 @@ export default function AddPropertyForm({
               </div>
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Estate
+              </label>
+              <Input
+                name="estate"
+                value={formData.estate}
+                onChange={handleChange}
+                placeholder="e.g., Riverside Estate"
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Category
+                </label>
                 <select
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  {Object.entries(PROPERTY_CATEGORIES).map(([key, category]) => (
-                    <option key={key} value={key}>
-                      {category.label}
-                    </option>
-                  ))}
+                  {Object.entries(PROPERTY_CATEGORIES).map(
+                    ([key, category]) => (
+                      <option key={key} value={key}>
+                        {category.label}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Property Type</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Property Type
+                </label>
                 <select
                   name="propertyType"
                   value={formData.propertyType}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  {Object.entries(PROPERTY_CATEGORIES[formData.category].types).map(
-                    ([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ),
-                  )}
+                  {Object.entries(
+                    PROPERTY_CATEGORIES[formData.category].types,
+                  ).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
             <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">Type-Specific Fields</p>
+                <p className="text-sm font-semibold text-foreground">
+                  Type-Specific Fields
+                </p>
               </div>
               <div className="grid grid-cols-1 gap-4">
                 {typeSpecifications.map((spec) => (
@@ -394,7 +428,10 @@ export default function AddPropertyForm({
                         name={`specificationValues.${spec.key}`}
                         value={formData.specificationValues[spec.key] ?? ""}
                         onChange={(event) =>
-                          handleSpecificationValueChange(spec.key, event.target.value)
+                          handleSpecificationValueChange(
+                            spec.key,
+                            event.target.value,
+                          )
                         }
                         placeholder={spec.placeholder}
                         className="h-24"
@@ -405,7 +442,10 @@ export default function AddPropertyForm({
                         name={`specificationValues.${spec.key}`}
                         value={formData.specificationValues[spec.key] ?? ""}
                         onChange={(event) =>
-                          handleSpecificationValueChange(spec.key, event.target.value)
+                          handleSpecificationValueChange(
+                            spec.key,
+                            event.target.value,
+                          )
                         }
                         placeholder={spec.placeholder}
                       />
@@ -417,8 +457,15 @@ export default function AddPropertyForm({
 
             <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-foreground">Custom Specifications</p>
-                <Button type="button" variant="outline" size="sm" onClick={addCustomSpecification}>
+                <p className="text-sm font-semibold text-foreground">
+                  Custom Specifications
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCustomSpecification}
+                >
                   Add Specification
                 </Button>
               </div>
@@ -430,21 +477,29 @@ export default function AddPropertyForm({
               <div className="space-y-3">
                 {formData.customSpecifications.map((spec, index) => (
                   <div
-                    key={`${spec.title}-${index}`}
+                    key={index}
                     className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1.4fr_auto]"
                   >
                     <Input
                       value={spec.title}
                       placeholder="Specification title"
                       onChange={(event) =>
-                        handleCustomSpecificationChange(index, "title", event.target.value)
+                        handleCustomSpecificationChange(
+                          index,
+                          "title",
+                          event.target.value,
+                        )
                       }
                     />
                     <Input
                       value={spec.value}
                       placeholder="Specification value"
                       onChange={(event) =>
-                        handleCustomSpecificationChange(index, "value", event.target.value)
+                        handleCustomSpecificationChange(
+                          index,
+                          "value",
+                          event.target.value,
+                        )
                       }
                     />
                     <Button
@@ -462,7 +517,9 @@ export default function AddPropertyForm({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Number of Units</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Number of Units
+                </label>
                 <Input
                   name="units"
                   value={formData.units}
@@ -488,7 +545,9 @@ export default function AddPropertyForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Geography</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Geography
+              </label>
               <Input
                 name="geography"
                 value={formData.geography}
@@ -499,7 +558,9 @@ export default function AddPropertyForm({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Latitude</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Latitude
+                </label>
                 <Input
                   type="text"
                   name="location.lat"
@@ -509,7 +570,9 @@ export default function AddPropertyForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Longitude</label>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Longitude
+                </label>
                 <Input
                   type="text"
                   name="location.lng"
@@ -521,7 +584,9 @@ export default function AddPropertyForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Features</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Features
+              </label>
               <Textarea
                 name="features"
                 value={formData.features}
@@ -532,7 +597,9 @@ export default function AddPropertyForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Image URL</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Image URL
+              </label>
               <Input
                 name="imageUrl"
                 value={formData.imageUrl || ""}
@@ -541,7 +608,9 @@ export default function AddPropertyForm({
               />
 
               <div className="mt-3">
-                <p className="text-sm text-muted-foreground mb-2">Or upload from your computer</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Or upload from your computer
+                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -575,7 +644,9 @@ export default function AddPropertyForm({
 
                 {previewUrl && (
                   <div className="mt-3">
-                    <p className="text-sm font-medium text-foreground mb-2">Preview</p>
+                    <p className="text-sm font-medium text-foreground mb-2">
+                      Preview
+                    </p>
                     <img
                       src={previewUrl}
                       alt="Selected preview"
@@ -587,7 +658,9 @@ export default function AddPropertyForm({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Description
+              </label>
               <Textarea
                 name="description"
                 value={formData.description}

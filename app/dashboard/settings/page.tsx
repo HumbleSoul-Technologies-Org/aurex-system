@@ -7,8 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   User,
-  Lock,
   Bell,
   CreditCard,
   Users,
@@ -17,11 +21,19 @@ import {
   Settings as SettingsIcon,
   Shield,
   FileText,
+  ChevronDown,
+  DollarSign,
+  Wrench,
+  ToggleLeft,
+  MessageSquare,
+  Lock as LockIcon,
 } from "lucide-react";
 import {
   getSystemSettings,
   initializeSystemSettings,
   updateSystemSettings,
+  getTenantPortalSettings,
+  updateTenantPortalSettings,
 } from "@/lib/services/settings";
 import { SystemSettings } from "@/lib/local-store";
 
@@ -53,6 +65,9 @@ export default function SettingsPage() {
       const updated = updateSystemSettings(settings);
       if (updated) {
         setSettings(updated);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("system-settings-changed"));
+        }
         alert("Settings saved successfully!");
       }
     } catch (error) {
@@ -621,100 +636,638 @@ export default function SettingsPage() {
             </div>
           </TabsContent>
 
-          {/* Portal Tab */}
-          <TabsContent value="portal" className="p-6 space-y-6">
+          {/* Portal Tab with Collapsible Sections */}
+          <TabsContent value="portal" className="p-6 space-y-4">
             <div>
-              <h3 className="text-lg font-bold text-foreground mb-4">
+              <h3 className="text-lg font-bold text-foreground mb-2">
                 Tenant Portal Settings
               </h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Portal URL
-                  </label>
-                  <Input
-                    value={settings.tenantPortalSettings?.portalUrl || ""}
-                    onChange={(e) =>
-                      updateSettings({
-                        tenantPortalSettings: {
-                          ...settings.tenantPortalSettings,
-                          portalUrl: e.target.value,
-                        },
-                      })
-                    }
-                  />
+              <p className="text-sm text-muted-foreground mb-6">
+                Configure portal features, security, and notification
+                preferences for tenants
+              </p>
+            </div>
+
+            {/* Notification Preferences Collapsible */}
+            <Collapsible defaultOpen>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-blue-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <Bell className="w-4 h-4" />
+                    <span>Notification Preferences</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Email Notifications
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.notificationPreferences
+                          ?.email ?? true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            notificationPreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.notificationPreferences,
+                              email: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      SMS Notifications
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.notificationPreferences
+                          ?.sms ?? false
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            notificationPreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.notificationPreferences,
+                              sms: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      In-App Notifications
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.notificationPreferences
+                          ?.inApp ?? true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            notificationPreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.notificationPreferences,
+                              inApp: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Invitation Expiration (Days)
-                  </label>
-                  <Input
-                    type="number"
-                    value={
-                      settings.tenantPortalSettings?.invitationExpirationDays ||
-                      30
-                    }
-                    onChange={(e) =>
-                      updateSettings({
-                        tenantPortalSettings: {
-                          ...settings.tenantPortalSettings,
-                          invitationExpirationDays: Number(e.target.value),
-                        },
-                      })
-                    }
-                  />
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Payment Settings Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-green-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="w-4 h-4" />
+                    <span>Payment Settings</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Enable Autopay
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.paymentSettings
+                          ?.enableAutopay ?? false
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            paymentSettings: {
+                              ...settings.tenantPortalSettings?.paymentSettings,
+                              enableAutopay: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  {settings.tenantPortalSettings?.paymentSettings
+                    ?.enableAutopay && (
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Autopay Threshold ($)
+                      </label>
+                      <Input
+                        type="number"
+                        value={
+                          settings.tenantPortalSettings?.paymentSettings
+                            ?.autopayThreshold || 0
+                        }
+                        onChange={(e) =>
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              paymentSettings: {
+                                ...settings.tenantPortalSettings
+                                  ?.paymentSettings,
+                                autopayThreshold: Number(e.target.value),
+                              },
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">
+                      Accepted Payment Methods
+                    </label>
+                    {settings.tenantPortalSettings?.paymentSettings?.acceptedMethods?.map(
+                      (method, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between bg-muted p-2 rounded"
+                        >
+                          <span className="text-sm capitalize">
+                            {method.type}
+                          </span>
+                          <Switch
+                            checked={method.enabled}
+                            onCheckedChange={(checked) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  paymentSettings: {
+                                    ...settings.tenantPortalSettings
+                                      ?.paymentSettings,
+                                    acceptedMethods: [
+                                      ...(
+                                        settings.tenantPortalSettings
+                                          ?.paymentSettings?.acceptedMethods ??
+                                        []
+                                      ).slice(0, idx),
+                                      { ...method, enabled: checked },
+                                      ...(
+                                        settings.tenantPortalSettings
+                                          ?.paymentSettings?.acceptedMethods ??
+                                        []
+                                      ).slice(idx + 1),
+                                    ],
+                                  },
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      ),
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-foreground">
-                    Enabled Features
-                  </h4>
-                  {settings.tenantPortalSettings?.enabledFeatures &&
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Document Access Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-purple-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-4 h-4" />
+                    <span>Document Access</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Allow Document Uploads
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.documentAccess
+                          ?.allowUploads ?? true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            documentAccess: {
+                              ...settings.tenantPortalSettings?.documentAccess,
+                              allowUploads: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Require Approval
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.documentAccess
+                          ?.requireApproval ?? false
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            documentAccess: {
+                              ...settings.tenantPortalSettings?.documentAccess,
+                              requireApproval: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Retention Days
+                    </label>
+                    <Input
+                      type="number"
+                      value={
+                        settings.tenantPortalSettings?.documentAccess
+                          ?.retentionDays || 365
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            documentAccess: {
+                              ...settings.tenantPortalSettings?.documentAccess,
+                              retentionDays: Number(e.target.value),
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Maintenance Preferences Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-orange-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <Wrench className="w-4 h-4" />
+                    <span>Maintenance Preferences</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Enable Maintenance Requests
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.maintenancePreferences
+                          ?.enableRequests ?? true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            maintenancePreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.maintenancePreferences,
+                              enableRequests: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Allow Emergency After Hours
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.maintenancePreferences
+                          ?.allowEmergencyAfterHours ?? true
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            maintenancePreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.maintenancePreferences,
+                              allowEmergencyAfterHours: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Estimated Response Time (hours)
+                    </label>
+                    <Input
+                      type="number"
+                      value={
+                        settings.tenantPortalSettings?.maintenancePreferences
+                          ?.estimatedResponseTime || 48
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            maintenancePreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.maintenancePreferences,
+                              estimatedResponseTime: Number(e.target.value),
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Feature Toggles Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-yellow-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <ToggleLeft className="w-4 h-4" />
+                    <span>Feature Toggles</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  {Object.entries(
+                    settings.tenantPortalSettings?.featureToggles || {},
+                  ).length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      No tenant portal feature toggles are configured.
+                    </div>
+                  ) : (
                     Object.entries(
-                      settings.tenantPortalSettings.enabledFeatures,
-                    ).map(([feature, enabled]: [string, boolean]) => (
-                      <div key={feature} className="flex items-center gap-2">
+                      settings.tenantPortalSettings?.featureToggles || {},
+                    ).map(([feature, enabled]) => (
+                      <div
+                        key={feature}
+                        className="flex items-center justify-between"
+                      >
+                        <label className="text-sm font-medium text-foreground capitalize">
+                          {feature.replace(/([A-Z])/g, " $1").trim()}
+                        </label>
                         <Switch
-                          checked={enabled}
+                          checked={enabled as boolean}
                           onCheckedChange={(checked) =>
                             updateSettings({
                               tenantPortalSettings: {
                                 ...settings.tenantPortalSettings,
-                                enabledFeatures: {
+                                featureToggles: {
                                   ...settings.tenantPortalSettings
-                                    ?.enabledFeatures,
+                                    ?.featureToggles,
                                   [feature]: checked,
                                 },
                               },
                             })
                           }
                         />
-                        <label className="text-sm font-medium text-foreground capitalize">
-                          {feature.replace(/-/g, " ")}
-                        </label>
                       </div>
-                    ))}
-                  <div className="flex items-center gap-2">
+                    ))
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Communication Preferences Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-cyan-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Communication Preferences</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Preferred Contact Method
+                    </label>
+                    <select
+                      value={
+                        settings.tenantPortalSettings?.communicationPreferences
+                          ?.preferredContactMethod || "email"
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            communicationPreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.communicationPreferences,
+                              preferredContactMethod: e.target.value as any,
+                            },
+                          },
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+                    >
+                      <option value="email">Email</option>
+                      <option value="sms">SMS</option>
+                      <option value="in-app">In-App</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Timezone
+                    </label>
+                    <Input
+                      value={
+                        settings.tenantPortalSettings?.communicationPreferences
+                          ?.timezone || "UTC"
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            communicationPreferences: {
+                              ...settings.tenantPortalSettings
+                                ?.communicationPreferences,
+                              timezone: e.target.value,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Security Settings Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-red-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <LockIcon className="w-4 h-4" />
+                    <span>Security Settings</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Allow Password Change
+                    </label>
                     <Switch
                       checked={
-                        settings.tenantPortalSettings?.allowDocumentUploads ||
-                        false
+                        settings.tenantPortalSettings?.securitySettings
+                          ?.allowPasswordChange ?? true
                       }
                       onCheckedChange={(checked) =>
                         updateSettings({
                           tenantPortalSettings: {
                             ...settings.tenantPortalSettings,
-                            allowDocumentUploads: checked,
+                            securitySettings: {
+                              ...settings.tenantPortalSettings
+                                ?.securitySettings,
+                              allowPasswordChange: checked,
+                            },
                           },
                         })
                       }
                     />
-                    <label className="text-sm font-medium text-foreground">
-                      Allow Document Uploads
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Auto-Logout Inactivity (minutes)
                     </label>
+                    <Input
+                      type="number"
+                      value={
+                        settings.tenantPortalSettings?.securitySettings
+                          ?.autoLogoutInactivityMinutes || 30
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            securitySettings: {
+                              ...settings.tenantPortalSettings
+                                ?.securitySettings,
+                              autoLogoutInactivityMinutes: Number(
+                                e.target.value,
+                              ),
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Allow Account Deletion
+                    </label>
+                    <Switch
+                      checked={
+                        settings.tenantPortalSettings?.securitySettings
+                          ?.allowAccountDeletion ?? false
+                      }
+                      onCheckedChange={(checked) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            securitySettings: {
+                              ...settings.tenantPortalSettings
+                                ?.securitySettings,
+                              allowAccountDeletion: checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Password Expiration (days)
+                    </label>
+                    <Input
+                      type="number"
+                      value={
+                        settings.tenantPortalSettings?.securitySettings
+                          ?.passwordExpirationDays || 90
+                      }
+                      onChange={(e) =>
+                        updateSettings({
+                          tenantPortalSettings: {
+                            ...settings.tenantPortalSettings,
+                            securitySettings: {
+                              ...settings.tenantPortalSettings
+                                ?.securitySettings,
+                              passwordExpirationDays: Number(e.target.value),
+                            },
+                          },
+                        })
+                      }
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             <div className="border-t border-border pt-6 flex justify-end gap-3">
               <Button

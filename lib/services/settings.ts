@@ -58,16 +58,215 @@ export interface NotificationsConfig {
   schedules: Record<string, NotificationSchedule>
 }
 
+// Tenant Portal Settings Interfaces
+export interface NotificationPreferences {
+  email: boolean
+  sms: boolean
+  inApp: boolean
+  smsProvider?: string
+  emailTemplate?: string
+}
+
+export interface PaymentMethod {
+  type: string
+  enabled: boolean
+  processingFee: number
+}
+
+export interface PaymentProvider {
+  name: string
+  apiKey?: string
+  config?: Record<string, any>
+}
+
+export interface PaymentSettings {
+  enableAutopay: boolean
+  autopayThreshold?: number
+  acceptedMethods: PaymentMethod[]
+  paymentProviders: PaymentProvider[]
+}
+
+export interface DocumentAccess {
+  allowUploads: boolean
+  maxFileSize?: number
+  allowedFileTypes: string[]
+  requireApproval: boolean
+  retentionDays?: number
+}
+
+export interface PriorityLevel {
+  name: string
+  responseTime: number
+}
+
+export interface MaintenancePreferences {
+  enableRequests: boolean
+  requireTenantApproval?: boolean
+  estimatedResponseTime?: number
+  allowEmergencyAfterHours: boolean
+  priorityLevels: PriorityLevel[]
+}
+
+export interface FeatureToggles {
+  paymentPortal: boolean
+  maintenanceRequests: boolean
+  documentAccess: boolean
+  messages: boolean
+   
+}
+
+export interface DoNotDisturb {
+  enabled: boolean
+  startTime?: string
+  endTime?: string
+}
+
+export interface CommunicationPreferences {
+  preferredContactMethod: 'email' | 'sms' | 'in-app'
+  languages: string[]
+  timezone?: string
+  doNotDisturb?: DoNotDisturb
+}
+
+export interface SecuritySettings {
+  allowPasswordChange: boolean
+  autoLogoutInactivityMinutes?: number
+  allowAccountDeletion: boolean
+  requirePasswordReset?: boolean
+  passwordExpirationDays?: number
+}
+
 export interface TenantPortalSettings {
-  portalUrl: string
-  enabledFeatures: Record<string, boolean>
-  invitationExpirationDays: number
-  allowDocumentUploads: boolean
+  notificationPreferences: any
+  paymentSettings: any
+  documentAccess: any
+  maintenancePreferences: any 
+  featureToggles:   any
+  communicationPreferences: any
+  securitySettings: any
+}
+
+const defaultTenantPortalSettings: TenantPortalSettings = {
+  notificationPreferences: {
+    email: true,
+    sms: false,
+    inApp: true,
+    smsProvider: '',
+    emailTemplate: ''
+  },
+  paymentSettings: {
+    enableAutopay: false,
+    autopayThreshold: 0,
+    acceptedMethods: [
+      { type: 'credit_card', enabled: false, processingFee: 2.9 },
+      { type: 'bank_transfer', enabled: false, processingFee: 0.5 },
+      { type: 'mpesa', enabled: false, processingFee: 0.5 },
+      { type: 'mobile money', enabled: false, processingFee: 0.5 },
+    ],
+    paymentProviders: []
+  },
+  documentAccess: {
+    allowUploads: true,
+    maxFileSize: 10485760,
+    allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+    requireApproval: false,
+    retentionDays: 365
+  },
+  maintenancePreferences: {
+    enableRequests: true,
+    requireTenantApproval: false,
+    estimatedResponseTime: 48,
+    allowEmergencyAfterHours: true,
+    priorityLevels: [
+      { name: 'Low', responseTime: 7 },
+      { name: 'Medium', responseTime: 72 },
+      { name: 'High', responseTime: 24 },
+      { name: 'Emergency', responseTime: 2 }
+    ]
+  },
+  featureToggles: {
+    paymentPortal: true,
+    maintenanceRequests: true,
+    documentAccess: true,
+    messages: true,
+    
+  },
+  communicationPreferences: {
+    preferredContactMethod: 'email',
+    languages: ['en'],
+    timezone: 'UTC',
+    doNotDisturb: {
+      enabled: false,
+      startTime: '',
+      endTime: ''
+    }
+  },
+  securitySettings: {
+    allowPasswordChange: true,
+    autoLogoutInactivityMinutes: 30,
+    allowAccountDeletion: false,
+    requirePasswordReset: false,
+    passwordExpirationDays: 90
+  }
+}
+
+function ensureTenantPortalSettings(settings: SystemSettings): SystemSettings {
+  const existing: Partial<TenantPortalSettings> =
+    settings.tenantPortalSettings || {}
+
+  const normalized: TenantPortalSettings = {
+    notificationPreferences: {
+      ...defaultTenantPortalSettings.notificationPreferences,
+      ...existing.notificationPreferences,
+    },
+    paymentSettings: {
+      ...defaultTenantPortalSettings.paymentSettings,
+      ...existing.paymentSettings,
+      acceptedMethods:
+        existing.paymentSettings?.acceptedMethods ||
+        defaultTenantPortalSettings.paymentSettings.acceptedMethods,
+      paymentProviders:
+        existing.paymentSettings?.paymentProviders ||
+        defaultTenantPortalSettings.paymentSettings.paymentProviders,
+    },
+    documentAccess: {
+      ...defaultTenantPortalSettings.documentAccess,
+      ...existing.documentAccess,
+    },
+    maintenancePreferences: {
+      ...defaultTenantPortalSettings.maintenancePreferences,
+      ...existing.maintenancePreferences,
+      priorityLevels:
+        existing.maintenancePreferences?.priorityLevels ||
+        defaultTenantPortalSettings.maintenancePreferences.priorityLevels,
+    },
+    featureToggles: {
+      ...defaultTenantPortalSettings.featureToggles,
+      ...existing.featureToggles,
+    },
+    communicationPreferences: {
+      ...defaultTenantPortalSettings.communicationPreferences,
+      ...existing.communicationPreferences,
+      doNotDisturb: {
+        ...defaultTenantPortalSettings.communicationPreferences.doNotDisturb,
+        ...existing.communicationPreferences?.doNotDisturb,
+      },
+    },
+    securitySettings: {
+      ...defaultTenantPortalSettings.securitySettings,
+      ...existing.securitySettings,
+    },
+  }
+
+  return {
+    ...settings,
+    tenantPortalSettings: normalized,
+  }
 }
 
 export function getSystemSettings(): SystemSettings | null {
   const settings = getCollection<SystemSettings>('system-settings')
-  return settings.length > 0 ? settings[0] : null
+  return settings.length > 0 ? ensureTenantPortalSettings(settings[0]) : null
 }
 
 export function createDefaultSystemSettings(): SystemSettings {
@@ -206,15 +405,66 @@ export function createDefaultSystemSettings(): SystemSettings {
       }
     },
     tenantPortalSettings: {
-      portalUrl: 'https://tenant-portal.example.com',
-      enabledFeatures: {
-        'rent-payment': true,
-        messaging: true,
-        maintenance: true,
-        documents: true
+      notificationPreferences: {
+        email: true,
+        sms: false,
+        inApp: true,
+        smsProvider: '',
+        emailTemplate: ''
       },
-      invitationExpirationDays: 30,
-      allowDocumentUploads: true
+      paymentSettings: {
+        enableAutopay: false,
+        autopayThreshold: 0,
+        acceptedMethods: [
+          { type: 'credit_card', enabled: true, processingFee: 2.9 },
+          { type: 'bank_transfer', enabled: true, processingFee: 0.5 }
+        ],
+        paymentProviders: []
+      },
+      documentAccess: {
+        allowUploads: true,
+        maxFileSize: 10485760,
+        allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+        requireApproval: false,
+        retentionDays: 365
+      },
+      maintenancePreferences: {
+        enableRequests: true,
+        requireTenantApproval: false,
+        estimatedResponseTime: 48,
+        allowEmergencyAfterHours: true,
+        priorityLevels: [
+          { name: 'Low', responseTime: 7 },
+          { name: 'Medium', responseTime: 72 },
+          { name: 'High', responseTime: 24 },
+          { name: 'Emergency', responseTime: 2 }
+        ]
+      },
+      featureToggles: {
+        paymentPortal: true,
+        maintenanceRequests: true,
+        documentAccess: true,
+        messages: true,
+        announcements: true,
+        leaseInfo: true
+      },
+      communicationPreferences: {
+        preferredContactMethod: 'email',
+        languages: ['en'],
+        timezone: 'UTC',
+        doNotDisturb: {
+          enabled: false,
+          startTime: '',
+          endTime: ''
+        }
+      },
+      securitySettings: {
+        allowPasswordChange: true,
+        autoLogoutInactivityMinutes: 30,
+        allowAccountDeletion: false,
+        requirePasswordReset: false,
+        passwordExpirationDays: 90
+      }
     },
     companyInfo: {
       name: 'Tenant Manager',
@@ -259,4 +509,108 @@ export function initializeSystemSettings(): SystemSettings {
     settings = createDefaultSystemSettings()
   }
   return settings
+}
+
+// Tenant Portal Settings Helpers
+export function getTenantPortalSettings(): TenantPortalSettings | null {
+  const settings = getSystemSettings()
+  return (settings?.tenantPortalSettings || null) as TenantPortalSettings | null
+}
+
+export function updateTenantPortalSettings(updates: Partial<TenantPortalSettings>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings) return null
+
+  const updated = {
+    tenantPortalSettings: {
+      ...settings.tenantPortalSettings,
+      ...updates
+    }
+  }
+
+  return updateSystemSettings(updated)
+}
+
+export function updateTenantPortalNotifications(updates: Partial<NotificationPreferences>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    notificationPreferences: {
+      ...settings.tenantPortalSettings.notificationPreferences,
+      ...updates
+    }
+  })
+}
+
+export function updatePaymentSettings(updates: Partial<PaymentSettings>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    paymentSettings: {
+      ...settings.tenantPortalSettings.paymentSettings,
+      ...updates
+    }
+  })
+}
+
+export function updateDocumentAccess(updates: Partial<DocumentAccess>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    documentAccess: {
+      ...settings.tenantPortalSettings.documentAccess,
+      ...updates
+    }
+  })
+}
+
+export function updateMaintenancePreferences(updates: Partial<MaintenancePreferences>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    maintenancePreferences: {
+      ...settings.tenantPortalSettings.maintenancePreferences,
+      ...updates
+    }
+  })
+}
+
+export function updateFeatureToggles(updates: Partial<FeatureToggles>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    featureToggles: {
+      ...settings.tenantPortalSettings.featureToggles,
+      ...updates
+    }
+  })
+}
+
+export function updateCommunicationPreferences(updates: Partial<CommunicationPreferences>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    communicationPreferences: {
+      ...settings.tenantPortalSettings.communicationPreferences,
+      ...updates
+    }
+  })
+}
+
+export function updateSecuritySettings(updates: Partial<SecuritySettings>): SystemSettings | null {
+  const settings = getSystemSettings()
+  if (!settings?.tenantPortalSettings) return null
+
+  return updateTenantPortalSettings({
+    securitySettings: {
+      ...settings.tenantPortalSettings.securitySettings,
+      ...updates
+    }
+  })
 }

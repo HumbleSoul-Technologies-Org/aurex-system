@@ -96,8 +96,8 @@ export default function PaymentsPage() {
           unit: tenant?.unit,
           amount,
           price_per_unit: property?.price_per_unit,
-          lease_start: tenant?.lease_start,
-          lease_type: tenant?.lease_type,
+          lease_start: tenant?.leaseStartDate,
+          lease_type: tenant?.leaseType,
           balance:
             (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
           method,

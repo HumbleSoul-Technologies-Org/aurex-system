@@ -32,6 +32,7 @@ interface InviteTenantFormData {
   password: string;
   confirmPassword: string;
   leaseStartDate: string;
+  leaseEndDate: string;
   leaseType: string;
   emergencyContact: string;
   notes: string;
@@ -50,6 +51,7 @@ export default function InviteTenantForm({
     password: "",
     confirmPassword: "",
     leaseStartDate: "",
+    leaseEndDate: "",
     leaseType: "monthly",
     emergencyContact: "",
     notes: "",
@@ -103,8 +105,9 @@ export default function InviteTenantForm({
         unit: invite.unitNumber || "",
         propertyId: invite.propertyId,
         rentAmount: 0, // Will be set by admin later
-        lease_type: formData.leaseType,
-        lease_start: formData.leaseStartDate,
+        leaseType: formData.leaseType,
+        leaseStartDate: formData.leaseStartDate,
+        leaseEndDate: formData.leaseEndDate,
         leaseTerms: "",
         preferredContactMethod: "email",
         applicationDate: new Date().toISOString().split("T")[0],
@@ -236,7 +239,7 @@ export default function InviteTenantForm({
           Lease Information
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label htmlFor="leaseStartDate" className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" />
@@ -247,6 +250,21 @@ export default function InviteTenantForm({
               type="date"
               name="leaseStartDate"
               value={formData.leaseStartDate}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="leaseEndDate" className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-primary" />
+              Lease End Date *
+            </Label>
+            <Input
+              id="leaseEndDate"
+              type="date"
+              name="leaseEndDate"
+              value={formData.leaseEndDate}
               onChange={handleChange}
               required
             />

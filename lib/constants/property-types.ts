@@ -160,3 +160,11 @@ export function getAllPropertyTypes() {
 export function getSpecificationsForType(propertyType: string) {
   return PROPERTY_SPECIFICATIONS[propertyType] ?? []
 }
+
+export function createSpecificationValues(propertyType: string): Record<string, string> {
+  const specs = getSpecificationsForType(propertyType)
+  return specs.reduce((acc, spec) => {
+    acc[spec.key] = ''
+    return acc
+  }, {} as Record<string, string>)
+}

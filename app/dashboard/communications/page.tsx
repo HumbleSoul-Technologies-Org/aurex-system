@@ -46,6 +46,7 @@ import {
   Eye,
   User,
   Trash2,
+  MessageCirclePlus,
 } from "lucide-react";
 
 interface Message {
@@ -606,14 +607,14 @@ export default function CommunicationsPage() {
                     className="pl-10"
                   />
                 </div>
-                <Button
+                {/* <Button
                   size="sm"
                   variant="destructive"
                   onClick={deleteAllInboxMessages}
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
                   Delete All
-                </Button>
+                </Button> */}
               </div>
 
               <div className="max-h-96 overflow-y-auto">
@@ -733,17 +734,20 @@ export default function CommunicationsPage() {
                     className="pl-10"
                   />
                 </div>
-                <Button
+                {/* <Button
                   size="sm"
                   variant="destructive"
                   onClick={deleteAllSentMessages}
                 >
                   <Trash2 className="w-4 h-4 mr-1" />
                   Delete All
-                </Button>
-                <Button size="sm" onClick={() => setIsSendDialogOpen(true)}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  New Message
+                </Button> */}
+                <Button
+                  className="rounded-full circle "
+                  size="sm"
+                  onClick={() => setIsSendDialogOpen(true)}
+                >
+                  <MessageCirclePlus className="w-4 h-4 " />
                 </Button>
               </div>
 
