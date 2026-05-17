@@ -171,6 +171,12 @@ export async function updateProperty(id: string, patch: Partial<PropertyRecord>)
 
 }
 
-export function deleteProperty(id: string): boolean {
-  return removeFromCollection('properties', id)
+export async function deleteProperty(id: string,adminPassword:string): Promise<boolean> {
+  // return removeFromCollection('properties', id)
+  const res = await apiRequest('DELETE', `/property/${id}/delete`, { password: adminPassword })
+  if (!res.ok) {
+      console.error('Failed to update property', await res.text());
+    return false;
+  }
+  return true
 }

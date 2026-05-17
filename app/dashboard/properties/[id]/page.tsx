@@ -54,6 +54,7 @@ import {
   getCategoryForType,
   createSpecificationValues,
 } from "@/lib/constants/property-types";
+import { deleteProperty } from "@/lib/services/properties";
 
 interface SpecificationRow {
   title: string;
@@ -206,28 +207,44 @@ export default function PropertyDetailPage({
 
   if (!property) {
     return (
-      <div className="space-y-6 min-h-screen flex-1 items-center justify-center">
-        <Card className="border flex items-center justify-center h-screen border-border p-12 text-center">
-          <span className="">
+      <div className="space-y-6">
+        <div className="flex pb-2 items-center justify-center gap-4">
+          <Button variant="outline" asChild>
+            <Link
+              href="/dashboard/properties"
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </Link>
+          </Button>
+        </div>
+        <Card className="border border-border p-12 text-center">
+          <div className="flex flex-col items-center justify-center">
             <img
               src="/no-property.png"
               alt="Property not found"
-              className="mx-auto mb-4 w-full h-full"
+              className="mx-auto mb-4 w-32 h-32"
             />
-            {/* <p className="text-muted-foreground mb-5">Property not founds</p> */}
-            <Button variant="default" asChild>
-              <Link
-                href="/dashboard/properties"
-                className="flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Properties
-              </Link>
-            </Button>
-          </span>
+            <p className="text-muted-foreground mb-5">Property not found</p>
+          </div>
         </Card>
       </div>
     );
+  }
+
+  const hundlePropertyDelete = async (id:any) =>{
+     setIsDeleting(true);
+                  setDeleteError("");
+    try {
+      await  deleteProperty(id,adminPassword);
+     } catch(error){
+      console.log(error)
+    }finally{
+      setIsDeleteOpen(false);
+                      window.location.href = "/dashboard/properties";
+                      setIsDeleting(false)
+    }
   }
 
   return (
@@ -266,61 +283,7 @@ export default function PropertyDetailPage({
               <Button
                 variant="destructive"
                 disabled={isDeleting || !adminPassword}
-                onClick={() => {
-                  setIsDeleting(true);
-                  setDeleteError("");
-                  (async () => {
-                    try {
-                      const { getCurrentUser, authenticate } =
-                        await import("@/lib/services/auth");
-                      const { deleteProperty } =
-                        await import("@/lib/services/properties");
-                      const currentUser = getCurrentUser();
-                      if (!currentUser || currentUser.role !== "admin") {
-                        setDeleteError("You must be logged in as admin.");
-                        setIsDeleting(false);
-                        return;
-                      }
-                      const user = await authenticate(
-                        currentUser.email,
-                        adminPassword,
-                      );
-                      if (!user || user.role !== "admin") {
-                        setDeleteError("Incorrect admin password.");
-                        setIsDeleting(false);
-                        return;
-                      }
-                      propertyTenants.forEach((tenant) => {
-                        // Delete tenant messages
-                        if (
-                          typeof deleteMessage === "function" &&
-                          tenant.messages
-                        ) {
-                          tenant.messages.forEach((msgId: string) => {
-                            deleteMessage(msgId);
-                          });
-                        }
-                        // Delete tenant announcements
-                        // Announcements are tracked as a boolean flag on tenant records,
-                        // so there are no individual announcement IDs to delete here.
-                        // If tenant announcements are managed elsewhere, handle cleanup there.
-                        // Delete tenant
-                        if (typeof deleteTenant === "function") {
-                          deleteTenant(tenant.id);
-                        }
-                      });
-                      // Fully remove property
-                      if (typeof deleteProperty === "function") {
-                        deleteProperty(property?.id);
-                      }
-                      setIsDeleteOpen(false);
-                      window.location.href = "/dashboard/properties";
-                    } catch (e) {
-                      setDeleteError("Delete failed or invalid credentials.");
-                    }
-                    setIsDeleting(false);
-                  })();
-                }}
+                onClick={() => hundlePropertyDelete(property.id)}
               >
                 {isDeleting ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -475,7 +438,7 @@ export default function PropertyDetailPage({
                 {/* Main Image */}
                 <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
                   <img
-                    src={images?.[0]?.url || "/placeholder.svg"}
+                    src={images?.[0] || "/placeholder.svg"}
                     alt={property?.name}
                     className="w-full h-full object-cover"
                   />
@@ -485,7 +448,7 @@ export default function PropertyDetailPage({
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {images &&
                     images.length > 0 &&
-                    images.map((image, index) => (
+                    images.map((image:any, index) => (
                       <div key={index} className="relative flex-shrink-0">
                         <button
                           onClick={() => setSelectedImageIndex(index)}
@@ -496,7 +459,7 @@ export default function PropertyDetailPage({
                           }`}
                         >
                           <img
-                            src={image?.url}
+                            src={image}
                             alt={`${property?.name} ${index + 1}`}
                             className="w-full h-full object-cover"
                           />

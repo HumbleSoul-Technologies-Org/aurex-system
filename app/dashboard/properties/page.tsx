@@ -200,84 +200,87 @@ export default function PropertiesPage() {
       {/* Grid View */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProperties.map((property) => (
-            <Link
-              key={property.id}
-              href={`/dashboard/properties/${property.id}`}
-            >
-              <Card className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
-                {/* Property Image */}
-                <div className="relative h-96 bg-secondary overflow-hidden">
-                  <img
-                    src={property.images?.[0]?.url || "/placeholder.svg"}
-                    alt={property.name}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    {property.occupancy ?? 0}
-                  </div>
-                  <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
-                    {property.type}
+          {filteredProperties.map((property) => {
+            const imageUrl = typeof property.images?.[0] === 'string'
+              ? property.images[0]
+              : property.images?.[0]?.url || "/placeholder.svg";
+            return (
+            <Card key={property.id} className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
+              {/* Property Image */}
+              <div className="relative h-96 bg-secondary overflow-hidden">
+                <img
+                  src={imageUrl}
+                  alt={property.name}
+                  className="w-full h-full object-cover hover:scale-105 transition-transform"
+                />
+                <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
+                  {property.occupancy ?? 0}
+                </div>
+                <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
+                  {property.type}
+                </div>
+              </div>
+
+              {/* Property Details */}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="font-bold text-foreground text-lg">
+                      {property.name}
+                    </h3>
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                      <MapPin className="w-4 h-4" />
+                      {property.city}, {property.country}
+                    </div>
                   </div>
                 </div>
 
-                {/* Property Details */}
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <h3 className="font-bold text-foreground text-lg">
-                        {property.name}
-                      </h3>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                        <MapPin className="w-4 h-4" />
-                        {property.city}, {property.country}
-                      </div>
-                    </div>
+                {/* Stats */}
+                <div className="space-y-2 text-sm mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Home className="w-4 h-4" />
+                      Available Units
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {property.units_available}
+                    </span>
                   </div>
-
-                  {/* Stats */}
-                  <div className="space-y-2 text-sm mb-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-2">
-                        <Home className="w-4 h-4" />
-                        Available Units
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {property.units_available}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-2">
-                        <DollarSign className="w-4 h-4" />
-                        Price per Unit
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        Tenants
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {property.tenants?.length ?? 0}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <DollarSign className="w-4 h-4" />
+                      Price per Unit
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    </span>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Tenants
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {property.tenants?.length ?? 0}
+                    </span>
+                  </div>
+                </div>
 
-                  {/* CTA */}
-                  <Button
-                    variant="outline"
-                    className="w-full border-border text-foreground group bg-transparent"
-                  >
+                {/* CTA */}
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full border-border text-foreground group bg-transparent"
+                >
+                  <Link href={`/dashboard/properties/${property.id}`}>
                     View Details
                     <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </Button>
-                </div>
-              </Card>
-            </Link>
-          ))}
+                  </Link>
+                </Button>
+              </div>
+            </Card>
+            );
+          })}
         </div>
       )}
 
