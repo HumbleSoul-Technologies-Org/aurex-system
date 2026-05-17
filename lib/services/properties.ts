@@ -3,6 +3,8 @@ import { notifyNewProperty } from '@/lib/services/notifications'
 import { listTenants } from '@/lib/services/tenants'
 import { getCategoryForType } from '@/lib/constants/property-types'
 import { apiRequest } from '../query-client'
+import { useAuth } from '../auth-context'
+import { use } from 'react'
 
 export interface PropertySpecification {
   title: string
@@ -98,7 +100,8 @@ export function getAvailablePropertiesWithUnits() {
   });
 }
 
-export async function createProperty(payload: Partial<PropertyRecord>, token: string){
+export async function createProperty(payload: Partial<PropertyRecord>, token?: any,user?: any): Promise<PropertyRecord> {
+  
   const id = generateId('prop')
   const units_available = payload.units_available ?? 1
   const name = payload.name ?? 'Property'
@@ -106,7 +109,7 @@ export async function createProperty(payload: Partial<PropertyRecord>, token: st
   const country = payload.country ?? ''
   const units = generateUnitNumbers(name, city, country, units_available)
 
-  const record= {
+  const payLoad= {
    
     name,
     address: payload.address ?? '',
@@ -120,7 +123,6 @@ export async function createProperty(payload: Partial<PropertyRecord>, token: st
     units_available,
     units,
     price_per_unit: payload.price_per_unit ?? 0,
-    type: payload.type ?? payload.propertyType ?? 'apartment',
     propertyType: payload.propertyType ?? (payload.type as PropertyRecord['propertyType']) ?? 'residential',
     geography: payload.geography,
     images: payload.images ?? [],
@@ -139,23 +141,34 @@ export async function createProperty(payload: Partial<PropertyRecord>, token: st
     capRate: payload.capRate,
   }
 
-  console.log('====================================');
-  console.log(record);
-  console.log('====================================');
+  const res = await apiRequest('POST', `/property/create/${user?._id}`, payLoad)
 
-  const res = await apiRequest('POST', '/property/create', record, token)
+  const data = await res.json()
 
+  const newProperty = {
+    ...data.property,
+    id: data.property._id
+  }
+  
+  
 
-  // insertIntoCollection('properties', record)
+  insertIntoCollection('properties', newProperty)
 
-  // // Notify about new property
-  // notifyNewProperty(record.name, record.id)
+  // Notify about new property
+  notifyNewProperty(newProperty.name, newProperty.id)
 
-  // return record
+  return newProperty
 }
 
-export function updateProperty(id: string, patch: Partial<PropertyRecord>): PropertyRecord | null {
+export async function updateProperty(id: string, patch: Partial<PropertyRecord>): Promise<PropertyRecord | null> {
+  const res = await apiRequest('PUT', `/property/${id}/update`, patch)
+  
+  if (!res.ok) {
+    console.error('Failed to update property', await res.text());
+    return null;
+  }
   return updateInCollection<PropertyRecord>('properties', id, patch)
+
 }
 
 export function deleteProperty(id: string): boolean {

@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
+import PropertyFormDialog from "@/components/forms/property-form-dialog";
 import {
   createTenant,
   deleteTenant,
@@ -97,26 +98,6 @@ export default function PropertyDetailPage({
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editName, setEditName] = useState(property?.name || "");
-  const [editAddress, setEditAddress] = useState(property?.address || "");
-  const [editCity, setEditCity] = useState(property?.city || "");
-  const [editCountry, setEditCountry] = useState(property?.country || "");
-  const [editPrice, setEditPrice] = useState<number>(
-    property?.price_per_unit || 0,
-  );
-  const [editUnits, setEditUnits] = useState<number>(
-    property?.units_available || 0,
-  );
-  const [editType, setEditType] = useState(property?.type || "");
-  const [editFeatures, setEditFeatures] = useState<string>(
-    (property?.features || []).join("\n"),
-  );
-  const [editLat, setEditLat] = useState<string>(
-    property?.location?.lat?.toString() || "",
-  );
-  const [editLng, setEditLng] = useState<string>(
-    property?.location?.lng?.toString() || "",
-  );
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
@@ -134,66 +115,7 @@ export default function PropertyDetailPage({
   const [adminPassword, setAdminPassword] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Additional edit form state variables to align with creation form
-  const [editCategory, setEditCategory] = useState(
-    property?.category || "residential",
-  );
-  const [editPropertyType, setEditPropertyType] = useState(initialPropertyType);
-  const [editGeography, setEditGeography] = useState(property?.geography || "");
-  const [editSpecificationValues, setEditSpecificationValues] = useState<
-    Record<string, string>
-  >(initialSpecificationValues);
-  const [editCustomSpecifications, setEditCustomSpecifications] = useState<
-    SpecificationRow[]
-  >(initialCustomSpecifications);
-  const [editZoning, setEditZoning] = useState(property?.zoning || "");
-  const [editPermittedUses, setEditPermittedUses] = useState(
-    Array.isArray(property?.permittedUses)
-      ? property?.permittedUses.join("\n")
-      : property?.permittedUses || "",
-  );
-  const [editAnnualPropertyTaxes, setEditAnnualPropertyTaxes] = useState(
-    property?.annualPropertyTaxes || "",
-  );
-  const [editAnnualInsurance, setEditAnnualInsurance] = useState(
-    property?.annualInsurance || "",
-  );
-  const [editAppraisedValue, setEditAppraisedValue] = useState(
-    property?.appraisedValue || "",
-  );
-  const [editLastAppraisalDate, setEditLastAppraisalDate] = useState(
-    property?.lastAppraisalDate || "",
-  );
-  const [editNoi, setEditNoi] = useState(property?.noi || "");
-  const [editCapRate, setEditCapRate] = useState(property?.capRate || "");
-  const [editDescription, setEditDescription] = useState(
-    property?.description || "",
-  );
-  const [editEstate, setEditEstate] = useState(property?.estate || "");
-  const [editImageUrl, setEditImageUrl] = useState(property?.images?.[0] || "");
-
-  useEffect(() => {
-    let url = uploadPreview;
-    return () => {
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
-    };
-  }, [uploadPreview]);
-
-  // Update specification values when property type changes
-  useEffect(() => {
-    setEditSpecificationValues(createSpecificationValues(editPropertyType));
-  }, [editPropertyType]);
-
-  const addCustomSpecification = () => {
-    setEditCustomSpecifications((prev) => [...prev, { title: "", value: "" }]);
-  };
-
-  const removeCustomSpecification = (index: number) => {
-    setEditCustomSpecifications((prev) => prev.filter((_, i) => i !== index));
-  };
+  const [isUpdatingProperty, setIsUpdatingProperty] = useState(false);
 
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -425,25 +347,7 @@ export default function PropertyDetailPage({
               </Link>
             </Button>
             <span className="flex-1 w-full"></span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                // populate edit fields then open dialog
-                setEditName(property?.name || "");
-                setEditAddress(property?.address || "");
-                setEditCity(property?.city || "");
-                setEditCountry(property?.country || "");
-                setEditEstate(property?.estate || "");
-                setEditPrice(property?.price_per_unit || 0);
-                setEditUnits(property?.units_available || 0);
-                setEditType(property?.type || "");
-                setEditFeatures((property?.features || []).join("\n"));
-                setEditLat(property?.location?.lat?.toString() || "");
-                setEditLng(property?.location?.lng?.toString() || "");
-                setIsEditOpen(true);
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
               <Edit className="w-4 h-4 mr-2" />
               Edit Property
             </Button>
@@ -456,599 +360,111 @@ export default function PropertyDetailPage({
               Delete Property
             </Button>
 
-            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Edit Property</DialogTitle>
-                  <DialogDescription>
-                    Update property details and save.
-                  </DialogDescription>
-                </DialogHeader>
+            <PropertyFormDialog
+              mode="edit"
+              isOpen={isEditOpen}
+              onClose={() => setIsEditOpen(false)}
+              initialData={property}
+              onSubmit={async (data: any) => {
+                try {
+                  setIsUpdatingProperty(true);
+                  const updated: any = {};
 
-                <div className="space-y-6 py-2 max-h-[70vh] overflow-y-auto">
-                  {/* Core Information */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Core Information
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Property Name
-                        </label>
-                        <Input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          placeholder="e.g., Sunset Apartments"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Address
-                        </label>
-                        <Input
-                          value={editAddress}
-                          onChange={(e) => setEditAddress(e.target.value)}
-                          placeholder="Street address"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            City
-                          </label>
-                          <Input
-                            value={editCity}
-                            onChange={(e) => setEditCity(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            Country
-                          </label>
-                          <Input
-                            value={editCountry}
-                            onChange={(e) => setEditCountry(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Estate
-                        </label>
-                        <Input
-                          value={editEstate}
-                          onChange={(e) => setEditEstate(e.target.value)}
-                          placeholder="Estate name (optional)"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  if (data.name !== "") updated.name = data.name;
+                  if (data.address !== "") updated.address = data.address;
+                  if (data.city !== "") updated.city = data.city;
+                  if (data.country !== "") updated.country = data.country;
+                  if (data.estate !== "") updated.estate = data.estate;
+                  updated.price_per_unit = data.pricePerUnit;
+                  updated.units_available = data.units;
+                  if (data.category !== "") updated.category = data.category;
+                  if (data.propertyType !== "")
+                    updated.propertyType = data.propertyType;
+                  if (data.geography !== "")
+                    updated.geography = data.geography;
 
-                  {/* Classification */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Classification
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Category
-                        </label>
-                        <select
-                          value={editCategory}
-                          onChange={(e) => {
-                            setEditCategory(e.target.value);
-                            // Reset property type when category changes
-                            setEditPropertyType("");
-                          }}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                        >
-                          <option value="residential">Residential</option>
-                          <option value="commercial">Commercial</option>
-                          <option value="industrial">Industrial</option>
-                          <option value="mixed_use">Mixed Use</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Property Type
-                        </label>
-                        <select
-                          value={editPropertyType}
-                          onChange={(e) => setEditPropertyType(e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                        >
-                          <option value="">Select property type</option>
-                          {editCategory === "residential" && (
-                            <>
-                              <option value="apartment">Apartment</option>
-                              <option value="house">House</option>
-                              <option value="condo">Condo</option>
-                              <option value="townhouse">Townhouse</option>
-                              <option value="duplex">Duplex</option>
-                            </>
-                          )}
-                          {editCategory === "commercial" && (
-                            <>
-                              <option value="office">Office</option>
-                              <option value="retail">Retail</option>
-                              <option value="warehouse">Warehouse</option>
-                              <option value="hotel">Hotel</option>
-                              <option value="restaurant">Restaurant</option>
-                              <option value="shopping-center">
-                                Shopping Center
-                              </option>
-                              <option value="medical">Medical</option>
-                              <option value="flex-space">Flex Space</option>
-                            </>
-                          )}
-                          {editCategory === "industrial" && (
-                            <>
-                              <option value="warehouse">Warehouse</option>
-                              <option value="manufacturing">
-                                Manufacturing
-                              </option>
-                              <option value="distribution">Distribution</option>
-                            </>
-                          )}
-                          {editCategory === "mixed_use" && (
-                            <>
-                              <option value="mixed-use">Mixed Use</option>
-                              <option value="live-work">Live/Work</option>
-                            </>
-                          )}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Geography
-                        </label>
-                        <select
-                          value={editGeography}
-                          onChange={(e) => setEditGeography(e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                        >
-                          <option value="">Select geography</option>
-                          <option value="urban">Urban</option>
-                          <option value="suburban">Suburban</option>
-                          <option value="rural">Rural</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
+                  const cleanedFeatures = data.features
+                    .split("\n")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean);
+                  if (cleanedFeatures.length > 0) {
+                    updated.features = cleanedFeatures;
+                  }
 
-                  {/* Pricing & Units */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Pricing & Units
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Units Available
-                        </label>
-                        <Input
-                          type="number"
-                          value={String(editUnits)}
-                          onChange={(e) =>
-                            setEditUnits(Number(e.target.value) || 0)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Price per Unit ($)
-                        </label>
-                        <Input
-                          type="number"
-                          value={String(editPrice)}
-                          onChange={(e) =>
-                            setEditPrice(Number(e.target.value) || 0)
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  if (data.location.lat !== "" && data.location.lng !== "") {
+                    updated.location = {
+                      lat: Number(data.location.lat),
+                      lng: Number(data.location.lng),
+                    };
+                  }
 
-                  {/* Specifications */}
-                  {editPropertyType && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground mb-4">
-                        Specifications
-                      </h3>
-                      <div className="space-y-4">
-                        {getSpecificationsForType(editPropertyType).map(
-                          (spec) => (
-                            <div key={spec.key}>
-                              <label className="block text-sm font-medium text-foreground mb-2">
-                                {spec.label}
-                              </label>
-                              <Input
-                                value={editSpecificationValues[spec.key] || ""}
-                                onChange={(e) =>
-                                  setEditSpecificationValues((prev) => ({
-                                    ...prev,
-                                    [spec.key]: e.target.value,
-                                  }))
-                                }
-                                placeholder={spec.placeholder}
-                              />
-                            </div>
-                          ),
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  const dynamicSpecifications = Object.entries(
+                    data.specificationValues || {},
+                  ).flatMap(([key, value]) => {
+                    const label = getSpecificationsForType(
+                      data.propertyType,
+                    ).find((spec) => spec.key === key)?.label;
+                    const trimmed = value?.toString().trim();
+                    return trimmed && label
+                      ? [{ title: label, value: trimmed }]
+                      : [];
+                  });
 
-                  {/* Custom Specifications */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        Custom Specifications
-                      </h3>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addCustomSpecification}
-                      >
-                        Add Specification
-                      </Button>
-                    </div>
-                    <div className="space-y-3">
-                      {editCustomSpecifications.map((spec, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            placeholder="Title"
-                            value={spec.title}
-                            onChange={(e) =>
-                              setEditCustomSpecifications((prev) =>
-                                prev.map((s, i) =>
-                                  i === index
-                                    ? { ...s, title: e.target.value }
-                                    : s,
-                                ),
-                              )
-                            }
-                          />
-                          <Input
-                            placeholder="Value"
-                            value={spec.value}
-                            onChange={(e) =>
-                              setEditCustomSpecifications((prev) =>
-                                prev.map((s, i) =>
-                                  i === index
-                                    ? { ...s, value: e.target.value }
-                                    : s,
-                                ),
-                              )
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeCustomSpecification(index)}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  const customSpecifications = (
+                    data.customSpecifications || []
+                  ).filter(
+                    (spec: any) =>
+                      spec.title?.trim() !== "" ||
+                      spec.value?.trim() !== "",
+                  );
 
-                  {/* Features & Description */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Features & Description
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Features (one per line)
-                        </label>
-                        <textarea
-                          value={editFeatures}
-                          onChange={(e) => setEditFeatures(e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm min-h-[80px]"
-                          placeholder="Parking&#10;Security&#10;Pool"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Description
-                        </label>
-                        <textarea
-                          value={editDescription}
-                          onChange={(e) => setEditDescription(e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm min-h-[80px]"
-                          placeholder="Detailed property description..."
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  const specifications = [
+                    ...dynamicSpecifications,
+                    ...customSpecifications,
+                  ];
 
-                  {/* Location */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Location
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Latitude
-                        </label>
-                        <Input
-                          type="number"
-                          step="any"
-                          value={editLat}
-                          onChange={(e) => setEditLat(e.target.value)}
-                          placeholder="e.g., 37.7749"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Longitude
-                        </label>
-                        <Input
-                          type="number"
-                          step="any"
-                          value={editLng}
-                          onChange={(e) => setEditLng(e.target.value)}
-                          placeholder="e.g., -122.4194"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  if (specifications.length > 0) {
+                    updated.specifications = specifications;
+                  }
 
-                  {/* Zoning & Regulations */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Zoning & Regulations
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Zoning
-                        </label>
-                        <Input
-                          value={editZoning}
-                          onChange={(e) => setEditZoning(e.target.value)}
-                          placeholder="e.g., R-1, C-2"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Permitted Uses (one per line)
-                        </label>
-                        <textarea
-                          value={editPermittedUses}
-                          onChange={(e) => setEditPermittedUses(e.target.value)}
-                          className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm min-h-[60px]"
-                          placeholder="Residential&#10;Commercial&#10;Mixed-use"
-                        />
-                      </div>
-                    </div>
-                  </div>
+                  if (data.zoning !== "") updated.zoning = data.zoning;
+                  if (data.permittedUses !== "") {
+                    const cleanedPermittedUses = data.permittedUses
+                      .split("\n")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean);
+                    if (cleanedPermittedUses.length > 0) {
+                      updated.permittedUses = cleanedPermittedUses;
+                    }
+                  }
+                  if (data.annualPropertyTaxes !== "")
+                    updated.annualPropertyTaxes = Number(
+                      data.annualPropertyTaxes,
+                    );
+                  if (data.annualInsurance !== "")
+                    updated.annualInsurance = Number(data.annualInsurance);
+                  if (data.appraisedValue !== "")
+                    updated.appraisedValue = Number(data.appraisedValue);
+                  if (data.lastAppraisalDate !== "")
+                    updated.lastAppraisalDate = data.lastAppraisalDate;
+                  if (data.noi !== "") updated.noi = Number(data.noi);
+                  if (data.capRate !== "")
+                    updated.capRate = Number(data.capRate);
+                  if (data.description !== "")
+                    updated.description = data.description;
+                  if (data.imageUrl !== "") updated.images = [data.imageUrl];
 
-                  {/* Financial Information */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Financial Information
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Annual Property Taxes ($)
-                        </label>
-                        <Input
-                          type="number"
-                          value={editAnnualPropertyTaxes}
-                          onChange={(e) =>
-                            setEditAnnualPropertyTaxes(e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Annual Insurance ($)
-                        </label>
-                        <Input
-                          type="number"
-                          value={editAnnualInsurance}
-                          onChange={(e) =>
-                            setEditAnnualInsurance(e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Appraised Value ($)
-                        </label>
-                        <Input
-                          type="number"
-                          value={editAppraisedValue}
-                          onChange={(e) =>
-                            setEditAppraisedValue(e.target.value)
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          NOI ($)
-                        </label>
-                        <Input
-                          type="number"
-                          value={editNoi}
-                          onChange={(e) => setEditNoi(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Cap Rate (%)
-                        </label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={editCapRate}
-                          onChange={(e) => setEditCapRate(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Last Appraisal Date
-                        </label>
-                        <Input
-                          type="date"
-                          value={editLastAppraisalDate}
-                          onChange={(e) =>
-                            setEditLastAppraisalDate(e.target.value)
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Image */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground mb-4">
-                      Image
-                    </h3>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Image URL
-                      </label>
-                      <Input
-                        value={editImageUrl}
-                        onChange={(e) => setEditImageUrl(e.target.value)}
-                        placeholder="https://example.com/image.jpg"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsEditOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={async () => {
-                        try {
-                          // build a patch only with fields provided in the form
-                          const updated: any = {};
-
-                          if (editName !== "") updated.name = editName;
-                          if (editAddress !== "") updated.address = editAddress;
-                          if (editCity !== "") updated.city = editCity;
-                          if (editCountry !== "") updated.country = editCountry;
-                          if (editEstate !== "") updated.estate = editEstate;
-                          // price and units are numbers, always include (0 is valid)
-                          updated.price_per_unit = editPrice;
-                          updated.units_available = editUnits;
-                          if (editType !== "") updated.type = editType;
-                          if (editCategory !== "")
-                            updated.category = editCategory;
-                          if (editPropertyType !== "")
-                            updated.propertyType = editPropertyType;
-                          if (editGeography !== "")
-                            updated.geography = editGeography;
-
-                          const cleanedFeatures = editFeatures
-                            .split("\n")
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          if (cleanedFeatures.length > 0) {
-                            updated.features = cleanedFeatures;
-                          }
-
-                          if (editLat !== "" && editLng !== "") {
-                            updated.location = {
-                              lat: Number(editLat),
-                              lng: Number(editLng),
-                            };
-                          }
-
-                          const dynamicSpecifications = Object.entries(
-                            editSpecificationValues || {},
-                          ).flatMap(([key, value]) => {
-                            const label = getSpecificationsForType(
-                              editPropertyType ||
-                                editType ||
-                                initialPropertyType,
-                            ).find((spec) => spec.key === key)?.label;
-                            const trimmed = value?.toString().trim();
-                            return trimmed && label
-                              ? [{ title: label, value: trimmed }]
-                              : [];
-                          });
-
-                          const customSpecifications = (
-                            editCustomSpecifications || []
-                          ).filter(
-                            (spec) =>
-                              spec.title?.trim() !== "" ||
-                              spec.value?.trim() !== "",
-                          );
-
-                          const specifications = [
-                            ...dynamicSpecifications,
-                            ...customSpecifications,
-                          ];
-
-                          if (specifications.length > 0) {
-                            updated.specifications = specifications;
-                          }
-
-                          if (editZoning !== "") updated.zoning = editZoning;
-                          if (editPermittedUses !== "") {
-                            const cleanedPermittedUses = editPermittedUses
-                              .split("\n")
-                              .map((s: string) => s.trim())
-                              .filter(Boolean);
-                            if (cleanedPermittedUses.length > 0) {
-                              updated.permittedUses = cleanedPermittedUses;
-                            }
-                          }
-                          if (editAnnualPropertyTaxes !== "")
-                            updated.annualPropertyTaxes = Number(
-                              editAnnualPropertyTaxes,
-                            );
-                          if (editAnnualInsurance !== "")
-                            updated.annualInsurance =
-                              Number(editAnnualInsurance);
-                          if (editAppraisedValue !== "")
-                            updated.appraisedValue = Number(editAppraisedValue);
-                          if (editLastAppraisalDate !== "")
-                            updated.lastAppraisalDate = editLastAppraisalDate;
-                          if (editNoi !== "") updated.noi = Number(editNoi);
-                          if (editCapRate !== "")
-                            updated.capRate = Number(editCapRate);
-                          if (editDescription !== "")
-                            updated.description = editDescription;
-                          if (editImageUrl !== "")
-                            updated.images = [editImageUrl];
-
-                          updateProperty(property?.id, updated);
-                          setIsEditOpen(false);
-                          // reload to reflect server-side sample-data changes
-                          window.location.reload();
-                        } catch (e) {
-                          console.error("Failed to update property", e);
-                          alert("Update failed");
-                        }
-                      }}
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  updateProperty(property?.id, updated);
+                  window.location.reload();
+                } catch (e) {
+                  console.error("Failed to update property", e);
+                  alert("Update failed");
+                } finally {
+                  setIsUpdatingProperty(false);
+                }
+              }}
+              isLoading={isUpdatingProperty}
+            />
           </div>
 
           {/* Property Hero */}
@@ -1059,7 +475,7 @@ export default function PropertyDetailPage({
                 {/* Main Image */}
                 <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
                   <img
-                    src={images?.[selectedImageIndex] || "/placeholder.svg"}
+                    src={images?.[0]?.url || "/placeholder.svg"}
                     alt={property?.name}
                     className="w-full h-full object-cover"
                   />
@@ -1080,7 +496,7 @@ export default function PropertyDetailPage({
                           }`}
                         >
                           <img
-                            src={image}
+                            src={image?.url}
                             alt={`${property?.name} ${index + 1}`}
                             className="w-full h-full object-cover"
                           />
@@ -1093,12 +509,13 @@ export default function PropertyDetailPage({
                             const next = images.filter((_, i) => i !== index);
                             setImages(next);
                             try {
-                              updateProperty(property?.id, { images: next });
+                              updateProperty(property?.id, {
+                                images: next.map((u: any) =>
+                                  typeof u === "string" ? { url: u, public_id: "" } : u,
+                                ),
+                              });
                             } catch (err) {
-                              console.error(
-                                "Failed to persist image deletion",
-                                err,
-                              );
+                              console.error("Failed to persist image deletion", err);
                             }
                             setSelectedImageIndex((prev) =>
                               Math.max(0, Math.min(prev, next.length - 1)),
@@ -1258,13 +675,12 @@ export default function PropertyDetailPage({
                                   setSelectedImageIndex(next.length - 1);
                                   try {
                                     updateProperty(property?.id, {
-                                      images: next,
+                                      images: next.map((u: any) =>
+                                        typeof u === "string" ? { url: u, public_id: "" } : u,
+                                      ),
                                     });
                                   } catch (e) {
-                                    console.error(
-                                      "Failed to persist property images",
-                                      e,
-                                    );
+                                    console.error("Failed to persist property images", e);
                                   }
                                   return next;
                                 });

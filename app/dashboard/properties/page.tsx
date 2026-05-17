@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AddPropertyForm from "@/components/forms/add-property-form";
+import PropertyFormDialog from "@/components/forms/property-form-dialog";
 import {
   listProperties,
   createProperty,
@@ -71,7 +71,6 @@ export default function PropertiesPage() {
         geography: data.geography,
         units_available: data.units,
         price_per_unit: data.pricePerUnit,
-        type: data.propertyType,
         propertyType: data.propertyType,
         features: data.features
           ? data.features
@@ -128,9 +127,9 @@ export default function PropertiesPage() {
 
       // Simulate 3-second delay for property creation
       await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      await createProperty(payload, token);
+      await createProperty(payload,token?token:null,user)
       setProperties(listProperties());
+      
     } catch (e) {
       console.error("Create property failed", e);
     } finally {
@@ -140,7 +139,8 @@ export default function PropertiesPage() {
 
   return (
     <div className="space-y-6">
-      <AddPropertyForm
+      <PropertyFormDialog
+        mode="create"
         isOpen={showAddForm}
         onClose={() => setShowAddForm(false)}
         onSubmit={handleAddProperty}
@@ -209,7 +209,7 @@ export default function PropertiesPage() {
                 {/* Property Image */}
                 <div className="relative h-96 bg-secondary overflow-hidden">
                   <img
-                    src={property.images?.[0] || "/placeholder.svg"}
+                    src={property.images?.[0]?.url || "/placeholder.svg"}
                     alt={property.name}
                     className="w-full h-full object-cover hover:scale-105 transition-transform"
                   />
@@ -252,7 +252,7 @@ export default function PropertiesPage() {
                         Price per Unit
                       </span>
                       <span className="font-semibold text-foreground">
-                        ${property.price_per_unit.toLocaleString()}
+                        ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -338,7 +338,7 @@ export default function PropertiesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
-                      ${property.price_per_unit.toLocaleString()}
+                      ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-semibold rounded-full">

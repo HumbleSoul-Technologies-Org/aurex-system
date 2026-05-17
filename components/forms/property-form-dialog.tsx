@@ -1,11 +1,11 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { X, MapPin, Home, DollarSign, Loader2 } from "lucide-react";
+import { X, MapPin, Home, DollarSign, Loader2, ChevronDown } from "lucide-react";
 import {
   PROPERTY_CATEGORIES,
   getSpecificationsForType,
@@ -15,13 +15,6 @@ import {
 interface SpecificationRow {
   title: string;
   value: string;
-}
-
-interface AddPropertyFormProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit?: (data: PropertyFormData, file?: File | null) => void;
-  isLoading?: boolean;
 }
 
 interface PropertyFormData {
@@ -54,6 +47,15 @@ interface PropertyFormData {
   estate: string;
 }
 
+interface PropertyFormDialogProps {
+  mode: "create" | "edit";
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit?: (data: PropertyFormData, file?: File | null) => void;
+  isLoading?: boolean;
+  initialData?: Partial<PropertyFormData>;
+}
+
 const defaultPropertyType =
   Object.keys(PROPERTY_CATEGORIES.residential.types)[0] || "apartment";
 
@@ -70,42 +72,96 @@ const createSpecificationValues = (
   );
 };
 
-export default function AddPropertyForm({
+const getDefaultFormData = (): PropertyFormData => ({
+  name: "",
+  address: "",
+  city: "",
+  country: "",
+  category: "residential",
+  propertyType: defaultPropertyType,
+  geography: "",
+  location: { lat: "", lng: "" },
+  units: 1,
+  pricePerUnit: 0,
+  features: "",
+  specificationValues: createSpecificationValues(defaultPropertyType),
+  customSpecifications: [],
+  zoning: "",
+  permittedUses: "",
+  annualPropertyTaxes: "",
+  annualInsurance: "",
+  appraisedValue: "",
+  lastAppraisalDate: "",
+  noi: "",
+  capRate: "",
+  imageUrl: "",
+  description: "",
+  estate: "",
+});
+
+export default function PropertyFormDialog({
+  mode,
   isOpen,
   onClose,
   onSubmit,
   isLoading = false,
-}: AddPropertyFormProps) {
-  const [formData, setFormData] = useState<PropertyFormData>({
-    name: "",
-    address: "",
-    city: "",
-    country: "",
-    category: "residential",
-    propertyType: defaultPropertyType,
-    geography: "",
-    location: { lat: "", lng: "" },
-    units: 1,
-    pricePerUnit: 0,
-    features: "",
-    specificationValues: createSpecificationValues(defaultPropertyType),
-    customSpecifications: [],
-    zoning: "",
-    permittedUses: "",
-    annualPropertyTaxes: "",
-    annualInsurance: "",
-    appraisedValue: "",
-    lastAppraisalDate: "",
-    noi: "",
-    capRate: "",
-    imageUrl: "",
-    description: "",
-    estate: "",
-  });
-
-  const [ selectedImage, setSelectedImage] = useState<File | null>(null);
+  initialData,
+}: PropertyFormDialogProps) {
+  const [formData, setFormData] = useState<PropertyFormData>(
+    getDefaultFormData(),
+  );
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showAdvancedSection, setShowAdvancedSection] = useState(false);
+
+  // Initialize form data based on mode and initialData
+  useEffect(() => {
+    if (mode === "create") {
+      setFormData(getDefaultFormData());
+      setSelectedImage(null);
+      setShowAdvancedSection(false);
+    } else if (mode === "edit" && initialData) {
+      const initialFormData: PropertyFormData = {
+        name: initialData.name ?? "",
+        address: initialData.address ?? "",
+        city: initialData.city ?? "",
+        country: initialData.country ?? "",
+        category: (initialData.category as PropertyCategory) ?? "residential",
+        propertyType: initialData.propertyType ?? defaultPropertyType,
+        geography: initialData.geography ?? "",
+        location: {
+          lat: initialData.location?.lat?.toString() ?? "",
+          lng: initialData.location?.lng?.toString() ?? "",
+        },
+        units: initialData.units ?? 1,
+        pricePerUnit: initialData.pricePerUnit ?? 0,
+        features: Array.isArray(initialData.features)
+          ? initialData.features.join("\n")
+          : initialData.features ?? "",
+        specificationValues: initialData.specificationValues ?? {},
+        customSpecifications: initialData.customSpecifications ?? [],
+        zoning: initialData.zoning ?? "",
+        permittedUses: Array.isArray(initialData.permittedUses)
+          ? initialData.permittedUses.join("\n")
+          : initialData.permittedUses ?? "",
+        annualPropertyTaxes:
+          initialData.annualPropertyTaxes?.toString() ?? "",
+        annualInsurance: initialData.annualInsurance?.toString() ?? "",
+        appraisedValue: initialData.appraisedValue?.toString() ?? "",
+        lastAppraisalDate: initialData.lastAppraisalDate ?? "",
+        noi: initialData.noi?.toString() ?? "",
+        capRate: initialData.capRate?.toString() ?? "",
+        imageUrl: Array.isArray(initialData.imageUrl)
+          ? (initialData.imageUrl as any)[0]?.url ?? ""
+          : initialData.imageUrl ?? "",
+        description: initialData.description ?? "",
+        estate: initialData.estate ?? "",
+      };
+      setFormData(initialFormData);
+      setSelectedImage(null);
+    }
+  }, [mode, isOpen, initialData]);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -234,46 +290,16 @@ export default function AddPropertyForm({
     fileInputRef.current?.click();
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      address: "",
-      city: "",
-      country: "",
-      category: "residential",
-      propertyType: defaultPropertyType,
-      geography: "",
-      location: { lat: "", lng: "" },
-      units: 1,
-      pricePerUnit: 0,
-      features: "",
-      specificationValues: createSpecificationValues(defaultPropertyType),
-      customSpecifications: [],
-      zoning: "",
-      permittedUses: "",
-      annualPropertyTaxes: "",
-      annualInsurance: "",
-      appraisedValue: "",
-      lastAppraisalDate: "",
-      noi: "",
-      capRate: "",
-      imageUrl: "",
-      description: "",
-      estate: "",
-    });
-    setSelectedImage(null);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit?.(formData, selectedImage);
-    // resetForm();
-    // onClose();
+    onSubmit?.(formData, mode === "create" ? selectedImage : undefined);
+    onClose();
   };
 
   if (!isOpen) return null;
 
   const typeSpecifications = getSpecificationsForType(formData.propertyType);
+  const isEditMode = mode === "edit";
 
   return (
     <>
@@ -283,10 +309,12 @@ export default function AddPropertyForm({
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
               <h2 className="text-2xl font-bold text-foreground">
-                Add New Property
+                {isEditMode ? "Edit Property" : "Add New Property"}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Create a new rental property
+                {isEditMode
+                  ? "Update property details and save"
+                  : "Create a new rental property"}
               </p>
             </div>
             <button
@@ -596,6 +624,125 @@ export default function AddPropertyForm({
               />
             </div>
 
+            <div className="border border-border rounded-lg bg-secondary">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedSection((prev) => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-semibold text-foreground hover:bg-border transition-colors"
+                aria-expanded={showAdvancedSection}
+              >
+                <span>Financial & Legal Details (Optional)</span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform duration-200 ${
+                    showAdvancedSection ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {showAdvancedSection && (
+                <div className="grid grid-cols-1 gap-4 p-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Zoning
+                    </label>
+                    <Input
+                      name="zoning"
+                      value={formData.zoning}
+                      onChange={handleChange}
+                      placeholder="e.g., residential, mixed-use"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Permitted Uses
+                    </label>
+                    <Input
+                      name="permittedUses"
+                      value={formData.permittedUses}
+                      onChange={handleChange}
+                      placeholder="e.g., retail, office, multifamily"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Annual Property Taxes
+                      </label>
+                      <Input
+                        type="number"
+                        name="annualPropertyTaxes"
+                        value={formData.annualPropertyTaxes}
+                        onChange={handleChange}
+                        placeholder="e.g., 18000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Annual Insurance
+                      </label>
+                      <Input
+                        type="number"
+                        name="annualInsurance"
+                        value={formData.annualInsurance}
+                        onChange={handleChange}
+                        placeholder="e.g., 12000"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Appraised Value
+                      </label>
+                      <Input
+                        type="number"
+                        name="appraisedValue"
+                        value={formData.appraisedValue}
+                        onChange={handleChange}
+                        placeholder="e.g., 2500000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Last Appraisal Date
+                      </label>
+                      <Input
+                        type="date"
+                        name="lastAppraisalDate"
+                        value={formData.lastAppraisalDate}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Net Operating Income (NOI)
+                      </label>
+                      <Input
+                        type="number"
+                        name="noi"
+                        value={formData.noi}
+                        onChange={handleChange}
+                        placeholder="e.g., 145000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Capitalization Rate (Cap Rate)
+                      </label>
+                      <Input
+                        type="number"
+                        name="capRate"
+                        value={formData.capRate}
+                        onChange={handleChange}
+                        placeholder="e.g., 5.5"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Image URL
@@ -607,54 +754,56 @@ export default function AddPropertyForm({
                 placeholder="https://example.com/image.jpg"
               />
 
-              <div className="mt-3">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Or upload from your computer
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={triggerFileSelect}
-                    className="px-3"
-                  >
-                    Upload Image
-                  </Button>
-                  <span className="text-sm text-foreground">
-                    {selectedImage ? selectedImage.name : "No file selected"}
-                  </span>
-                  {selectedImage && (
+              {!isEditMode && (
+                <div className="mt-3">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Or upload from your computer
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <Button
                       type="button"
-                      variant="ghost"
-                      onClick={() => setSelectedImage(null)}
-                      className="text-sm"
+                      variant="outline"
+                      onClick={triggerFileSelect}
+                      className="px-3"
                     >
-                      Remove
+                      Upload Image
                     </Button>
+                    <span className="text-sm text-foreground">
+                      {selectedImage ? selectedImage.name : "No file selected"}
+                    </span>
+                    {selectedImage && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setSelectedImage(null)}
+                        className="text-sm"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  {previewUrl && (
+                    <div className="mt-3">
+                      <p className="text-sm font-medium text-foreground mb-2">
+                        Preview
+                      </p>
+                      <img
+                        src={previewUrl}
+                        alt="Selected preview"
+                        className="max-h-40 w-auto rounded border"
+                      />
+                    </div>
                   )}
                 </div>
-
-                {previewUrl && (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium text-foreground mb-2">
-                      Preview
-                    </p>
-                    <img
-                      src={previewUrl}
-                      alt="Selected preview"
-                      className="max-h-40 w-auto rounded border"
-                    />
-                  </div>
-                )}
-              </div>
+              )}
             </div>
 
             <div>
@@ -687,8 +836,10 @@ export default function AddPropertyForm({
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding...
+                    {isEditMode ? "Updating..." : "Adding..."}
                   </>
+                ) : isEditMode ? (
+                  "Save Changes"
                 ) : (
                   "Add Property"
                 )}
