@@ -29,14 +29,14 @@ import {
   createPayment,
   PaymentRecord,
 } from "@/lib/services/payments";
-import { listProperties } from "@/lib/services/properties";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getProperty } from "@/lib/services/properties";
+import { useAppData } from "@/lib/data-context";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
+  const { properties } = useAppData();
 
   // Make Payment state
   const [step, setStep] = useState<
@@ -53,8 +53,11 @@ export default function PaymentsPage() {
     [user],
   );
   const property = useMemo(
-    () => (tenant?.propertyId ? getProperty(tenant.propertyId) : null),
-    [tenant],
+    () =>
+      tenant?.propertyId
+        ? properties.find((p) => p.id === tenant.propertyId)
+        : null,
+    [tenant, properties],
   );
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
@@ -66,7 +69,6 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     setPayments(listPayments());
-    setProperties(listProperties());
 
     const onPaymentsUpdated = () => setPayments(listPayments());
     if (typeof window !== "undefined")

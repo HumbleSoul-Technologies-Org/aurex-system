@@ -1,8 +1,9 @@
 import { getCollection, insertIntoCollection, updateInCollection, findInCollection, removeFromCollection, generateId } from '@/lib/local-store'
-import { getProperty, updateProperty } from '@/lib/services/properties'
-import { apiRequest } from '@/lib/query-client'
+import { getProperty, updateProperty, PropertyRecord } from '@/lib/services/properties'
+import { apiRequest, queryClient } from '@/lib/query-client'
 import { notifyNewTenant } from '@/lib/services/notifications'
 import { useAuth } from '../auth-context'
+import { getStoredUser } from '@/lib/token-manager'
 
 export interface NotificationChannelSettings {
   email: boolean
@@ -29,12 +30,13 @@ export interface TenantRecord {
   announcements: boolean
   messages: any
   id: string
+  _id?: string
   name: string
   email: string
   password?: string
   phone?: string
   tenantType?: 'residential' | 'commercial' | 'mixed'
-  unit?: string
+  unitNumber?: string
   propertyId?: string
   rentAmount?: number
   leaseType?: string
@@ -79,66 +81,6 @@ export function getTenant(id: string): TenantRecord | null {
   return listTenants().find((t) => t.id === id) ?? null
 }
 
-export function createTenant(payload: Partial<TenantRecord>): TenantRecord {
-  const tenant: TenantRecord = {
-    id: generateId('tenant'),
-    name: payload.name ?? 'New Tenant',
-    email: payload.email ?? '',
-    password: payload.password,
-    phone: payload.phone,
-    tenantType: payload.tenantType ?? 'residential',
-    unit: payload.unit,
-    propertyId: payload.propertyId,
-    rentAmount: payload.rentAmount ?? 0,
-    leaseType: payload.leaseType ?? 'month-to-month',
-    leaseStartDate: payload.leaseStartDate,
-    leaseEndDate: payload.leaseEndDate,
-    leaseTerms: payload.leaseTerms,
-    preferredContactMethod: payload.preferredContactMethod,
-    applicationDate: payload.applicationDate,
-    moveInDate: payload.moveInDate,
-    dateOfBirth: payload.dateOfBirth,
-    employmentInfo: payload.employmentInfo,
-    previousAddresses: payload.previousAddresses,
-    coSigner: payload.coSigner,
-    pets: payload.pets,
-    vehicles: payload.vehicles,
-    businessInfo: payload.businessInfo,
-    businessContacts: payload.businessContacts,
-    financialInfo: payload.financialInfo,
-    securityDeposit: payload.securityDeposit,
-    status: payload.status ?? 'due',
-    image: payload.image,
-    announcements: payload.announcements ?? true,
-    messages: payload.messages ?? [],
-    address: payload.address,
-    city: payload.city,
-    postalCode: payload.postalCode,
-    country: payload.country,
-    emergencyContactName: payload.emergencyContactName,
-    emergencyContactPhone: payload.emergencyContactPhone,
-    emergencyContactEmail: payload.emergencyContactEmail,
-    notificationPreferences: payload.notificationPreferences,
-    documentDelivery: payload.documentDelivery,
-    moveOutNotice: payload.moveOutNotice,
-  }
-  insertIntoCollection('tenants', tenant)
-
-  // also add tenant id to property's tenant list for easier lookup
-  if (tenant.propertyId) {
-    const prop = getProperty(tenant.propertyId)
-    if (prop) {
-      const updatedTenants = prop.tenants ? [...prop.tenants, tenant.id] : [tenant.id]
-      updateProperty(prop.id, { tenants: updatedTenants })
-
-      // Notify about new tenant
-      notifyNewTenant(tenant.name, prop.name, tenant.id)
-    }
-  }
-
-  return tenant
-}
-
 export function updateTenant(id: string, patch: Partial<TenantRecord>): TenantRecord | null {
   return updateInCollection<TenantRecord>('tenants', id, patch)
 }
@@ -147,10 +89,183 @@ export async function createTenantApi(
   payload: Partial<TenantRecord>,
   token?: string,
 ): Promise<TenantRecord> {
-   
   const res = await apiRequest('POST', '/tenants/create', payload, token)
-  const json = await res.json()
-  return json.data as TenantRecord
+  const data = await res.json()
+  // Backend returns { tenant: newTenant }, extract it and map _id to id
+  const tenantData = data.tenant || data.data.tenant || data.data
+  const tenant: TenantRecord = {
+    ...tenantData,
+    id: tenantData.id || tenantData._id,
+  } as TenantRecord
+
+  if (tenant?.id) {
+    const existing = findInCollection<TenantRecord>(
+      'tenants',
+      (t) => t.id === tenant.id,
+    )
+
+    if (existing) {
+      updateInCollection<TenantRecord>('tenants', tenant.id, tenant)
+    } else {
+      insertIntoCollection<TenantRecord>('tenants', tenant)
+    }
+
+    queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+      current ? current.map((item) => (item.id === tenant.id ? tenant : item)) : listTenants(),
+    )
+
+    // Also update properties cache: attach the new tenant object to the matching property's `tenants` array
+    try {
+      const storedUser = getStoredUser()
+      const adminId = storedUser?.id || storedUser?._id || null
+      if (tenant?.propertyId && adminId) {
+        queryClient.setQueryData<any>(["properties", adminId], (current: any) => {
+          if (!current) return current
+          return current.map((prop: any) => {
+            if (prop.id === tenant.propertyId) {
+              const existingTenants = Array.isArray(prop.tenants) ? prop.tenants : []
+              return { ...prop, tenants: [...existingTenants, tenant] }
+            }
+            return prop
+          })
+        })
+      }
+    } catch (e) {
+      // best-effort cache update; ignore errors
+      console.error('Failed to update properties cache after creating tenant', e)
+    }
+
+    if (tenant.propertyId) {
+      const prop = getProperty(tenant.propertyId)
+      if (prop) {
+          const existingIds = Array.isArray(prop.tenants)
+           ? prop.tenants.map((t: any) => (typeof t === 'string' ? t : t._id))
+           : []
+          const updatedTenants = [...existingIds, tenant._id]
+          await updateProperty(prop._id, { tenants: updatedTenants })
+      }
+    }
+  }
+
+  return tenant
+}
+
+export async function updateTenantApi(
+  id: string,
+  patch: Partial<TenantRecord>,
+  token?: string,
+): Promise<TenantRecord | null> {
+  try {
+    console.log('====================================');
+    console.log(id);
+    console.log('====================================');
+    const res = await apiRequest('PUT', `/tenants/${id}/update`, patch, token)
+    const data = await res.json()
+    // Backend returns { tenant: updatedTenant }, extract it and map _id to id
+    const tenantData = data.tenant || data.data.tenant || data.data
+    const tenant: TenantRecord = {
+      ...tenantData,
+      id: tenantData.id || tenantData._id,
+    } as TenantRecord
+
+    if (tenant?._id) {
+      const existing = findInCollection<TenantRecord>('tenants', (t) => t._id === tenant._id)
+      if (existing) {
+        updateInCollection<TenantRecord>('tenants', tenant._id, tenant)
+      } else {
+        insertIntoCollection<TenantRecord>('tenants', tenant)
+      }
+
+      queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+        current ? current.map((item) => (item._id === tenant._id ? tenant : item)) : listTenants(),
+      )
+
+      // Best-effort: update properties cache to reflect updated tenant object
+      try {
+        const storedUser = getStoredUser()
+        const adminId = storedUser?.id || storedUser?._id || null
+        if (tenant?.propertyId && adminId) {
+          queryClient.setQueryData<any>(["properties", adminId], (current: any) => {
+            if (!current) return current
+            return current.map((prop: any) => {
+              if (prop.id === tenant.propertyId) {
+                const tenantsArr = Array.isArray(prop.tenants) ? [...prop.tenants] : []
+                const idx = tenantsArr.findIndex((t: any) => (t?.id || t) === tenant._id)
+                if (idx !== -1) {
+                  tenantsArr[idx] = tenant
+                } else {
+                  tenantsArr.push(tenant)
+                }
+                return { ...prop, tenants: tenantsArr }
+              }
+              return prop
+            })
+          })
+        }
+      } catch (e) {
+        console.error('Failed to update properties cache after updating tenant', e)
+      }
+    }
+
+    return tenant
+  } catch (e) {
+    console.error('updateTenantApi failed', e)
+    throw e
+  }
+}
+
+export async function deleteTenantApi(id: string, token?: string): Promise<boolean> {
+  try {
+    const res = await apiRequest('DELETE', `/tenants/${id}/delete`, undefined, token)
+    const data = await res.json()
+    // Backend returns { message: 'Tenant deleted successfully' }, check if response was OK
+    const success = res.ok && (data?.message || data?.success)
+
+    if (success) {
+      // remove from local-store
+      const tenant = getTenant(id)
+      if (tenant?.propertyId) {
+        const prop = getProperty(tenant.propertyId)
+        if (prop) {
+          const updatedTenants = (prop.tenants || [])
+            .map((t: any) => (typeof t === 'string' ? t : t.id))
+            .filter((tid) => tid !== id)
+          // persist property change via updateProperty (server-side)
+          updateProperty(prop.id, { tenants: updatedTenants })
+        }
+      }
+
+      removeFromCollection('tenants', id)
+      queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+        current ? current.filter((tenant) => tenant.id !== id) : [],
+      )
+
+      // update properties cache to remove tenant object from any property's tenants
+      try {
+        const storedUser = getStoredUser()
+        const adminId = storedUser?.id || storedUser?._id || null
+        if (adminId) {
+          queryClient.setQueryData<any>(["properties", adminId], (current: any) => {
+            if (!current) return current
+            return current.map((prop: any) => {
+              if (!Array.isArray(prop.tenants)) return prop
+              const filtered = prop.tenants.filter((t: any) => (t?.id || t) !== id)
+              return { ...prop, tenants: filtered }
+            })
+          })
+        }
+      } catch (e) {
+        console.error('Failed to update properties cache after deleting tenant', e)
+      }
+
+      return true
+    }
+
+    return false
+  } catch (e) {
+    console.error('deleteTenantApi failed', e)
+    throw e
+  }
 }
 
 export function deleteTenant(id: string): boolean {
@@ -161,12 +276,37 @@ export function deleteTenant(id: string): boolean {
   if (tenant.propertyId) {
     const prop = getProperty(tenant.propertyId)
     if (prop) {
-      const updatedTenants = (prop.tenants || []).filter((tid) => tid !== id)
+        const updatedTenants = (prop.tenants || [])
+          .map((t: any) => (typeof t === 'string' ? t : t.id))
+          .filter((tid) => tid !== id)
       updateProperty(prop.id, { tenants: updatedTenants })
     }
   }
 
-  return removeFromCollection('tenants', id)
+  const removed = removeFromCollection('tenants', id)
+  if (removed) {
+    queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+      current ? current.filter((tenant) => tenant.id !== id) : [],
+    )
+    // Also update properties cache to remove tenant from any property's tenants array
+    try {
+      const storedUser = getStoredUser()
+      const adminId = storedUser?.id || storedUser?._id || null
+      if (adminId) {
+        queryClient.setQueryData<any>(["properties", adminId], (current: any) => {
+          if (!current) return current
+          return current.map((prop: any) => {
+            if (!Array.isArray(prop.tenants)) return prop
+            const filtered = prop.tenants.filter((t: any) => (t?.id || t) !== id)
+            return { ...prop, tenants: filtered }
+          })
+        })
+      }
+    } catch (e) {
+      console.error('Failed to update properties cache after deleting tenant', e)
+    }
+  }
+  return removed
 }
 export function findTenantByEmail(email: string): TenantRecord | null {
   return findInCollection<TenantRecord>('tenants', (t) => t.email === email)

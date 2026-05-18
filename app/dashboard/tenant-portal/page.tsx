@@ -36,8 +36,7 @@ import {
   Mail,
   User,
 } from "lucide-react";
-import { listTenants, TenantRecord } from "@/lib/services/tenants";
-import { listProperties } from "@/lib/services/properties";
+import { useAppData } from "@/lib/data-context";
 import { listPayments } from "@/lib/services/payments";
 import {
   getTenantPortalSettings,
@@ -84,8 +83,7 @@ export default function TenantPortalPage() {
     },
   ]);
 
-  const [tenants, setTenants] = useState<TenantRecord[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
+  const { tenants, properties } = useAppData();
   const [payments, setPayments] = useState<any[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
@@ -93,8 +91,6 @@ export default function TenantPortalPage() {
 
   // Load tenants, properties, and payments data on mount
   useEffect(() => {
-    setTenants(listTenants());
-    setProperties(listProperties());
     setPayments(listPayments());
     const onPaymentsUpdated = () => setPayments(listPayments());
     if (typeof window !== "undefined")

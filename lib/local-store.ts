@@ -280,6 +280,12 @@ export function removeFromCollection(name: CollectionName, id: string): boolean 
   return true
 }
 
+export function writeCollection<T = any>(name: CollectionName, items: T[]): void {
+  const db = readRaw()
+  ;(db as any)[name] = items
+  writeRaw(db)
+}
+
 export function generateId(prefix = ''): string {
   const t = Date.now().toString(36)
   const r = Math.random().toString(36).slice(2, 8)

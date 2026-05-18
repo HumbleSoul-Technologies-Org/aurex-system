@@ -19,8 +19,7 @@ import {
   deleteMaintenanceRequest,
   type MaintenanceRequest,
 } from "@/lib/services/maintenance";
-import { listTenants } from "@/lib/services/tenants";
-import { listProperties, getProperty } from "@/lib/services/properties";
+import { useAppData } from "@/lib/data-context";
 import { createTransaction } from "@/app/lib/transactions-client";
 import Link from "next/link";
 import {
@@ -59,8 +58,7 @@ interface MaintenanceRequestDisplay {
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const allTenants = useMemo(() => listTenants(), []);
-  const allProperties = useMemo(() => listProperties(), []);
+  const { tenants: allTenants, properties: allProperties } = useAppData();
 
   // Get real maintenance requests and enrich with tenant and property data (reactive)
   const rawRequests = useMemo(() => getMaintenanceRequests(), [refreshTrigger]);
@@ -70,7 +68,9 @@ export default function MaintenancePage() {
         const tenant = req.tenantId
           ? allTenants.find((t) => t.id === req.tenantId)
           : null;
-        const property = req.propertyId ? getProperty(req.propertyId) : null;
+        const property = req.propertyId
+          ? allProperties.find((p) => p.id === req.propertyId)
+          : null;
 
         return {
           id: req.id,

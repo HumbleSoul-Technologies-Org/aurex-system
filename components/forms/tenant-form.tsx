@@ -229,42 +229,42 @@ export default function TenantForm({
     e.preventDefault();
     onSubmit?.(formData);
     if (mode === "create") {
-      // setFormData({
-      //   name: "",
-      //   email: "",
-      //   phone: "",
-      //   tenantType: "residential",
-      //   propertyId: "",
-      //   unitNumber: "",
-      //   leaseStartDate: "",
-      //   leaseRenewDate: "",
-      //   leaseEndDate: "",
-      //   leaseType: "monthly",
-      //   leaseTerms: "",
-      //   preferredContactMethod: "email",
-      //   applicationDate: "",
-      //   moveInDate: "",
-      //   password: "",
-      //   monthlyRent: 0,
-      //   emergencyContact: "",
-      //   notes: "",
-      //   dateOfBirth: "",
-      //   employmentInfo: "",
-      //   previousAddresses: "",
-      //   coSigner: "",
-      //   pets: "",
-      //   vehicles: "",
-      //   businessInfo: "",
-      //   businessContacts: "",
-      //   financialInfo: "",
-      //   securityDeposit: "",
-      // });
-      // onClose();
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+        tenantType: "residential",
+        propertyId: "",
+        unitNumber: "",
+        leaseStartDate: "",
+        leaseRenewDate: "",
+        leaseEndDate: "",
+        leaseType: "monthly",
+        leaseTerms: "",
+        preferredContactMethod: "email",
+        applicationDate: "",
+        moveInDate: "",
+        password: "",
+        monthlyRent: 0,
+        emergencyContact: "",
+        notes: "",
+        dateOfBirth: "",
+        employmentInfo: "",
+        previousAddresses: "",
+        coSigner: "",
+        pets: "",
+        vehicles: "",
+        businessInfo: "",
+        businessContacts: "",
+        financialInfo: "",
+        securityDeposit: "",
+      });
+      onClose();
     }
   };
 
   const selectedProperty = availableProperties.find(
-    (p) => p.id === formData.propertyId,
+    (p) => p._id === formData.propertyId,
   );
 
   const unitOptions = selectedProperty?.availableUnits ?? [];
@@ -458,16 +458,16 @@ export default function TenantForm({
                       No properties found
                     </option>
                   )}
-                  {availableProperties.map((property) => (
+                  {availableProperties.map((property, index) => (
                     <option
-                      key={property.id}
-                      value={property.id}
-                      disabled={property.availableUnits.length === 0}
+                      key={property._id || index}
+                      value={property._id}
+                      disabled={(property.availableUnits?.length ?? 0) === 0}
                     >
                       {property.name} - {property.address}, {property.city} (
-                      {property.availableUnits.length === 0
+                      {(property.availableUnits?.length ?? 0) === 0
                         ? "No units available"
-                        : `${property.availableUnits.length} units available`}
+                        : `${property.availableUnits?.length ?? 0} units available`}
                       )
                     </option>
                   ))}

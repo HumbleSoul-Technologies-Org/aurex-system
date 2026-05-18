@@ -18,7 +18,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { currentTenant } from "@/app/lib/tenant-data";
-import { TenantRecord, updateTenant } from "@/lib/services/tenants";
+import { TenantRecord, updateTenantApi } from "@/lib/services/tenants";
 import { getTenantTypeConfig } from "@/lib/services/settings";
 
 const tabItems = [
@@ -140,21 +140,25 @@ export default function TenantSettingsPage() {
 
   const backFilledEmail = profile.email || tenant?.email || "";
 
-  const handleSave = (section: TabId, patch: Partial<TenantRecord>) => {
+  const handleSave = async (section: TabId, patch: Partial<TenantRecord>) => {
     if (!tenant) return;
     const fullPatch = {
       ...patch,
       preferredContactMethod: profile.preferredContactMethod,
     };
-    updateTenant(tenant.id, fullPatch);
-    setSaveStatus((prev) => ({ ...prev, [section]: true }));
-    window.setTimeout(
-      () => setSaveStatus((prev) => ({ ...prev, [section]: false })),
-      2000,
-    );
+    try {
+      await updateTenantApi(tenant.id, fullPatch);
+      setSaveStatus((prev) => ({ ...prev, [section]: true }));
+      window.setTimeout(
+        () => setSaveStatus((prev) => ({ ...prev, [section]: false })),
+        2000,
+      );
+    } catch (error) {
+      console.error("Failed to save tenant settings", error);
+    }
   };
 
-  const handlePasswordSave = () => {
+  const handlePasswordSave = async () => {
     if (!tenant) return;
     if (passwordState.currentPassword !== tenant.password) {
       setPasswordState((prev) => ({
@@ -178,18 +182,26 @@ export default function TenantSettingsPage() {
       return;
     }
 
-    updateTenant(tenant.id, { password: passwordState.newPassword });
-    setPasswordState({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-      error: "",
-    });
-    setSaveStatus((prev) => ({ ...prev, security: true }));
-    window.setTimeout(
-      () => setSaveStatus((prev) => ({ ...prev, security: false })),
-      2000,
-    );
+    try {
+      await updateTenantApi(tenant.id, { password: passwordState.newPassword });
+      setPasswordState({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+        error: "",
+      });
+      setSaveStatus((prev) => ({ ...prev, security: true }));
+      window.setTimeout(
+        () => setSaveStatus((prev) => ({ ...prev, security: false })),
+        2000,
+      );
+    } catch (error) {
+      console.error("Failed to update tenant password", error);
+      setPasswordState((prev) => ({
+        ...prev,
+        error: "Unable to update password. Please try again.",
+      }));
+    }
   };
 
   if (!tenant) {

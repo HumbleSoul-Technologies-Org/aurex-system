@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { X, DollarSign, Calendar, Tag } from "lucide-react";
 import { createTransaction } from "@/app/lib/transactions-client";
-import { listProperties } from "@/lib/services/properties";
+import { createExpenseApi } from "@/lib/services/expenses";
+import { useAppData } from "@/lib/data-context";
 
 interface AddExpenseFormProps {
   isOpen: boolean;
@@ -74,13 +75,8 @@ export default function AddExpenseForm({
     autoPay: false,
   });
 
-  const [properties, setProperties] = useState<any[]>([]);
+  const { properties } = useAppData();
   const [availableUnits, setAvailableUnits] = useState<string[] | null>(null);
-
-  // Load properties on mount
-  useEffect(() => {
-    setProperties(listProperties());
-  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -113,42 +109,64 @@ export default function AddExpenseForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // create transaction record
     try {
-      createTransaction({
+      const expense = await createExpenseApi({
         amount: parseFloat(formData.amount) || 0,
-        type: "expense",
+        category: formData.category,
         expenseType: formData.expenseType,
         description: formData.description,
         propertyId: formData.property || undefined,
-        status: "completed",
-        category: formData.category,
         date: formData.date,
         currency: formData.currency,
         receiptReference: formData.receiptReference || undefined,
-        unit: formData.unit || undefined,
+        unitNumber: formData.unit || undefined,
         paymentMethod: formData.paymentMethod || undefined,
-        paymentSource: formData.paymentSourceType
-          ? {
-              type: formData.paymentSourceType,
-              provider: formData.paymentSourceProvider || undefined,
-              last4: formData.paymentSourceLast4 || undefined,
-            }
-          : undefined,
+        paymentSourceType: formData.paymentSourceType || undefined,
+        paymentSourceProvider: formData.paymentSourceProvider || undefined,
+        paymentSourceLast4: formData.paymentSourceLast4 || undefined,
+        vendorId: formData.vendorId || undefined,
         vendorName: formData.vendorName || undefined,
         invoiceNumber: formData.invoiceNumber || undefined,
         dueDate: formData.dueDate || undefined,
         requiresApproval: formData.requiresApproval,
         approvedBy: formData.approvedBy || undefined,
         approvalDate: formData.approvalDate || undefined,
-        recurring: {
-          frequency: formData.recurringFrequency,
-          autoPay: formData.autoPay,
-        },
+        recurringFrequency: formData.recurringFrequency || undefined,
+        autoPay: formData.autoPay,
         notes: formData.notes || undefined,
+        status: "completed",
+      });
+
+      createTransaction({
+        amount: expense.amount,
+        type: "expense",
+        description: expense.description,
+        propertyId: expense.propertyId,
+        status: expense.status,
+        category: expense.category,
+        date: expense.date,
+        currency: expense.currency,
+        receiptReference: expense.receiptReference,
+        unit: formData.unit || undefined,
+        paymentMethod: expense.paymentMethod,
+        paymentSource: expense.paymentSourceType
+          ? {
+              type: expense.paymentSourceType,
+              provider: expense.paymentSourceProvider,
+              last4: expense.paymentSourceLast4,
+            }
+          : undefined,
+        vendorName: expense.vendorName,
+        invoiceNumber: expense.invoiceNumber,
+        dueDate: expense.dueDate,
+        requiresApproval: expense.requiresApproval,
+        approvedBy: expense.approvedBy,
+        approvalDate: expense.approvalDate,
+        notes: expense.notes,
+        metadata: { expenseId: expense.id },
       });
     } catch (err) {
-      // ignore
+      console.error("Failed to create expense", err);
     }
     onSubmit?.(formData);
     setFormData({

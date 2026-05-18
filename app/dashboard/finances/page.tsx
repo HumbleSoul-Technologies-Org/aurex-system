@@ -1,17 +1,29 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { chartData, expenseBreakdown } from '@/app/lib/sample-data'
-import { listTenants } from '@/lib/services/tenants'
-import { listProperties } from '@/lib/services/properties'
-import { listTransactions, createTransaction, deleteTransaction, updateTransaction } from '@/app/lib/transactions-client'    
-import { listPayments } from '@/lib/services/payments'
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { chartData, expenseBreakdown } from "@/app/lib/sample-data";
+import { useAppData } from "@/lib/data-context";
+import {
+  listTransactions,
+  createTransaction,
+  deleteTransaction,
+  updateTransaction,
+} from "@/app/lib/transactions-client";
+import { getAllExpenses } from "@/lib/services/expenses";
+import { listPayments } from "@/lib/services/payments";
 import {
   BarChart,
   Bar,
@@ -26,8 +38,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts'
-import Link from 'next/link'
+} from "recharts";
+import Link from "next/link";
 import {
   Plus,
   Filter,
@@ -43,110 +55,153 @@ import {
   MoreHorizontal,
   Printer,
   Share2,
-} from 'lucide-react'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { deletePayment } from '@/lib/services/payments'
-import AddExpenseForm from '@/components/forms/add-expense-form'
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { deletePayment } from "@/lib/services/payments";
+import AddExpenseForm from "@/components/forms/add-expense-form";
 
 export default function FinancesPage() {
-  const [activeTab, setActiveTab] = useState('rent-collection')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending'>('all')
-  const [allTenants, setAllTenants] = useState<any[]>([])
-  const [allProperties, setAllProperties] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState("rent-collection");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<"all" | "paid" | "pending">(
+    "all",
+  );
+  const { tenants: allTenants, properties: allProperties } = useAppData();
 
-
-  const [transactions, setTransactions] = useState<any[]>([])
-  const [payments, setPayments] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
 
   useEffect(() => {
-    setTransactions(listTransactions())
-    setPayments(listPayments())
-    setAllTenants(listTenants())
-    setAllProperties(listProperties())
-    const onTxUpdate = () => refreshTransactions()
-    const onPaymentsUpdated = () => setPayments(listPayments())
-    window.addEventListener('transactionsUpdated', onTxUpdate)
-    window.addEventListener('paymentsUpdated', onPaymentsUpdated)
+    // load server-backed expenses for display
+    (async () => {
+      try {
+        const serverExpenses = await getAllExpenses();
+        setTransactions(serverExpenses);
+      } catch (e) {
+        // fallback to empty list if API fails
+        setTransactions([]);
+      }
+    })();
+
+    setPayments(listPayments());
+    const onTxUpdate = () => refreshTransactions();
+    const onPaymentsUpdated = () => setPayments(listPayments());
+    window.addEventListener("transactionsUpdated", onTxUpdate);
+    window.addEventListener("paymentsUpdated", onPaymentsUpdated);
     return () => {
-      window.removeEventListener('transactionsUpdated', onTxUpdate)
-      window.removeEventListener('paymentsUpdated', onPaymentsUpdated)
-    }
-  }, [])
+      window.removeEventListener("transactionsUpdated", onTxUpdate);
+      window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    };
+  }, []);
 
   // Enrich transactions with tenant and property data from real lists
   const enrichedTransactions = (transactions || []).map((transaction) => {
-    const tenant = allTenants.find((t) => t.id === transaction.tenantId)
-    const property = allProperties.find((p) => p.id === transaction.propertyId)
+    const tenant = allTenants.find((t) => t.id === transaction.tenantId);
+    const property = allProperties.find((p) => p.id === transaction.propertyId);
     return {
       ...transaction,
-      tenantName: tenant?.name || 'Unknown Tenant',
-      propertyName: property?.name || 'Unknown Property',
-    }
-  })
+      tenantName: tenant?.name || "Unknown Tenant",
+      propertyName: property?.name || "Unknown Property",
+    };
+  });
 
   // Calculate financial metrics from persisted payments
   const enrichedPayments = (payments || []).map((p) => {
-    const tenant = allTenants.find((t) => t.id === p.tenantId)
-    const property = allProperties.find((pr) => pr.id === p.propertyId)
+    const tenant = allTenants.find((t) => t.id === p.tenantId);
+    const property = allProperties.find((pr) => pr.id === p.propertyId);
     return {
       ...p,
-      tenantName: tenant?.name || 'Unknown Tenant',
-      propertyName: property?.name || 'Unknown Property',
-    }
-  })
+      tenantName: tenant?.name || "Unknown Tenant",
+      propertyName: property?.name || "Unknown Property",
+    };
+  });
 
-  const rentPayments = enrichedPayments
-  const completedPayments = rentPayments.filter((t) => t.status === 'completed' || t.status === 'paid')
+  const rentPayments = enrichedPayments;
+  const completedPayments = rentPayments.filter(
+    (t) => t.status === "completed" || t.status === "paid",
+  );
   // only count pending payments for tenants whose status is 'due'
-  const dueTenantIds = allTenants.filter((t) => t.status === 'due').map((t) => t.id)
+  const dueTenantIds = allTenants
+    .filter((t) => t.status === "due")
+    .map((t) => t.id);
   const pendingPayments = rentPayments.filter(
-    (t) => (t.status === 'pending' || t.status === undefined) && t.tenantId && dueTenantIds.includes(t.tenantId)
-  )
+    (t) =>
+      (t.status === "pending" || t.status === undefined) &&
+      t.tenantId &&
+      dueTenantIds.includes(t.tenantId),
+  );
 
-  const totalRevenue = completedPayments.reduce((sum, t) => sum + (t.amount || 0), 0)
+  const totalRevenue = completedPayments.reduce(
+    (sum, t) => sum + (t.amount || 0),
+    0,
+  );
   const totalExpenses = enrichedTransactions
-    .filter((t) => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0)
-  const totalPending = pendingPayments.reduce((sum, t) => sum + (t.amount || 0), 0)
+    .filter((t) => t.type === "expense")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const totalPending = pendingPayments.reduce(
+    (sum, t) => sum + (t.amount || 0),
+    0,
+  );
 
   // Filter payments by status
   const filteredPayments = rentPayments.filter((payment) => {
-    const matchesStatus = filterStatus === 'all' || payment.status === filterStatus
-    const matchesSearch = !searchQuery || 
-      (payment.tenantName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (payment.propertyName || '').toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesStatus && matchesSearch
-  })
+    const matchesStatus =
+      filterStatus === "all" || payment.status === filterStatus;
+    const matchesSearch =
+      !searchQuery ||
+      (payment.tenantName || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      (payment.propertyName || "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
 
   const expenseTransactions = enrichedTransactions
-    .filter((t) => t.type === 'expense')
-    .filter((expense) => !searchQuery || expense.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((t) => t.type === "expense")
+    .filter(
+      (expense) =>
+        !searchQuery ||
+        expense.description.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
 
   const handleRowClick = (tx: any) => {
-    setSelectedTx(tx)
-    setIsEditingTx(false)
+    setSelectedTx(tx);
+    setIsEditingTx(false);
     setTxFormData({
       ...tx,
       amount: tx.amount.toString(),
-    })
-    setIsTxDialogOpen(true)
-  }
+    });
+    setIsTxDialogOpen(true);
+  };
 
   const refreshTransactions = () => {
-    setTransactions(listTransactions())
-  }
+    (async () => {
+      try {
+        const serverExpenses = await getAllExpenses();
+        setTransactions(serverExpenses);
+      } catch (e) {
+        setTransactions([]);
+      }
+    })();
+  };
   const refreshPayments = () => {
-    setPayments(listPayments())
-  }
+    setPayments(listPayments());
+  };
 
-  const [showAddExpense, setShowAddExpense] = useState(false)
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   // dialog for viewing/editing a transaction
-  const [selectedTx, setSelectedTx] = useState<any | null>(null)
-  const [isTxDialogOpen, setIsTxDialogOpen] = useState(false)
-  const [isEditingTx, setIsEditingTx] = useState(false)
-  const [txFormData, setTxFormData] = useState<any>({})
+  const [selectedTx, setSelectedTx] = useState<any | null>(null);
+  const [isTxDialogOpen, setIsTxDialogOpen] = useState(false);
+  const [isEditingTx, setIsEditingTx] = useState(false);
+  const [txFormData, setTxFormData] = useState<any>({});
 
   return (
     <div className="space-y-6">
@@ -154,7 +209,9 @@ export default function FinancesPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-1">Finances</h1>
-          <p className="text-muted-foreground">Manage rent collection, expenses, and financial reports</p>
+          <p className="text-muted-foreground">
+            Manage rent collection, expenses, and financial reports
+          </p>
         </div>
         {/* <Button className="bg-primary hover:bg-primary/90 text-white">
           <Download className="w-4 h-4 mr-2" />
@@ -165,7 +222,9 @@ export default function FinancesPage() {
       {/* Key Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border border-border p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total Revenue</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Total Revenue
+          </p>
           <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
             ${totalRevenue.toLocaleString()}
           </p>
@@ -173,7 +232,9 @@ export default function FinancesPage() {
         </Card>
 
         <Card className="border border-border p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total Expenses</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Total Expenses
+          </p>
           <p className="text-2xl sm:text-3xl font-bold text-foreground mb-1 whitespace-nowrap truncate">
             ${totalExpenses.toLocaleString()}
           </p>
@@ -181,19 +242,29 @@ export default function FinancesPage() {
         </Card>
 
         <Card className="border border-border p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Net Profit</p>
-          <p className={`text-2xl sm:text-3xl font-bold mb-1 ${totalRevenue - totalExpenses > 0 ? 'text-green-600' : 'text-red-600'} whitespace-nowrap truncate`}>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Net Profit
+          </p>
+          <p
+            className={`text-2xl sm:text-3xl font-bold mb-1 ${totalRevenue - totalExpenses > 0 ? "text-green-600" : "text-red-600"} whitespace-nowrap truncate`}
+          >
             ${(totalRevenue - totalExpenses).toLocaleString()}
           </p>
-          <p className="text-xs text-muted-foreground">Revenue minus expenses</p>
+          <p className="text-xs text-muted-foreground">
+            Revenue minus expenses
+          </p>
         </Card>
 
         <Card className="border border-border p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Pending Payments</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Pending Payments
+          </p>
           <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
             ${totalPending.toLocaleString()}
           </p>
-          <p className="text-xs text-muted-foreground">{pendingPayments.length} payments</p>
+          <p className="text-xs text-muted-foreground">
+            {pendingPayments.length} payments
+          </p>
         </Card>
       </div>
 
@@ -203,32 +274,66 @@ export default function FinancesPage() {
       <Dialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{isEditingTx ? 'Edit Transaction' : 'Transaction Details'}</DialogTitle>
+            <DialogTitle>
+              {isEditingTx ? "Edit Transaction" : "Transaction Details"}
+            </DialogTitle>
             <DialogDescription>
-              {selectedTx ? selectedTx.id : ''}
+              {selectedTx ? selectedTx.id : ""}
             </DialogDescription>
           </DialogHeader>
 
           {selectedTx && !isEditingTx && (
             <div className="space-y-2">
-              {selectedTx.transID && <p><strong>Trans ID:</strong> {selectedTx.transID}</p>}
-              <p><strong>Type:</strong> {selectedTx.type}</p>
-              <p><strong>Amount:</strong> ${selectedTx.amount.toLocaleString()}</p>
-              <p><strong>Status:</strong> {selectedTx.status}</p>
-              <p><strong>Date:</strong> {new Date(selectedTx.date).toLocaleString()}</p>
-              <p><strong>Property:</strong> {selectedTx.propertyName || 'N/A'}</p>
-              <p><strong>Tenant:</strong> {selectedTx.tenantName || 'N/A'}</p>
-              <p><strong>Description:</strong> {selectedTx.description || '—'}</p>
-              {selectedTx.receiptReference && <p><strong>Receipt/Invoice Reference:</strong> {selectedTx.receiptReference}</p>}
-              {selectedTx.category && <p><strong>Category:</strong> {selectedTx.category}</p>}
-              {selectedTx.paymentMethod && <p><strong>Payment Method:</strong> {selectedTx.paymentMethod}</p>}
+              {selectedTx.transID && (
+                <p>
+                  <strong>Trans ID:</strong> {selectedTx.transID}
+                </p>
+              )}
+              <p>
+                <strong>Type:</strong> {selectedTx.type}
+              </p>
+              <p>
+                <strong>Amount:</strong> ${selectedTx.amount.toLocaleString()}
+              </p>
+              <p>
+                <strong>Status:</strong> {selectedTx.status}
+              </p>
+              <p>
+                <strong>Date:</strong>{" "}
+                {new Date(selectedTx.date).toLocaleString()}
+              </p>
+              <p>
+                <strong>Property:</strong> {selectedTx.propertyName || "N/A"}
+              </p>
+              <p>
+                <strong>Tenant:</strong> {selectedTx.tenantName || "N/A"}
+              </p>
+              <p>
+                <strong>Description:</strong> {selectedTx.description || "—"}
+              </p>
+              {selectedTx.receiptReference && (
+                <p>
+                  <strong>Receipt/Invoice Reference:</strong>{" "}
+                  {selectedTx.receiptReference}
+                </p>
+              )}
+              {selectedTx.category && (
+                <p>
+                  <strong>Category:</strong> {selectedTx.category}
+                </p>
+              )}
+              {selectedTx.paymentMethod && (
+                <p>
+                  <strong>Payment Method:</strong> {selectedTx.paymentMethod}
+                </p>
+              )}
             </div>
           )}
 
           {selectedTx && isEditingTx && (
             <form
               onSubmit={(e) => {
-                e.preventDefault()
+                e.preventDefault();
                 updateTransaction(selectedTx.id, {
                   amount: Number(txFormData.amount),
                   status: txFormData.status,
@@ -239,17 +344,21 @@ export default function FinancesPage() {
                   type: txFormData.type,
                   category: txFormData.category,
                   paymentMethod: txFormData.paymentMethod,
-                })
-                refreshTransactions()
-                setIsTxDialogOpen(false)
+                });
+                refreshTransactions();
+                setIsTxDialogOpen(false);
               }}
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Type</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Type
+                </label>
                 <select
                   value={txFormData.type}
-                  onChange={(e) => setTxFormData({ ...txFormData, type: e.target.value })}
+                  onChange={(e) =>
+                    setTxFormData({ ...txFormData, type: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-input rounded-md"
                 >
                   <option value="rent">Rent</option>
@@ -257,23 +366,34 @@ export default function FinancesPage() {
                 </select>
               </div>
 
-              {txFormData.type === 'expense' && (
+              {txFormData.type === "expense" && (
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1">Category</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Category
+                  </label>
                   <Input
                     type="text"
-                    value={txFormData.category || ''}
-                    onChange={(e) => setTxFormData({ ...txFormData, category: e.target.value })}
+                    value={txFormData.category || ""}
+                    onChange={(e) =>
+                      setTxFormData({ ...txFormData, category: e.target.value })
+                    }
                     placeholder="e.g., maintenance, utilities, repairs"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Payment Method</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Payment Method
+                </label>
                 <select
-                  value={txFormData.paymentMethod || ''}
-                  onChange={(e) => setTxFormData({ ...txFormData, paymentMethod: e.target.value })}
+                  value={txFormData.paymentMethod || ""}
+                  onChange={(e) =>
+                    setTxFormData({
+                      ...txFormData,
+                      paymentMethod: e.target.value,
+                    })
+                  }
                   className="w-full px-3 py-2 border border-input rounded-md"
                 >
                   <option value="">Select Method</option>
@@ -285,20 +405,28 @@ export default function FinancesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Amount</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Amount
+                </label>
                 <Input
                   type="text"
                   value={txFormData.amount}
-                  onChange={(e) => setTxFormData({ ...txFormData, amount: e.target.value })}
+                  onChange={(e) =>
+                    setTxFormData({ ...txFormData, amount: e.target.value })
+                  }
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Status</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Status
+                </label>
                 <select
                   value={txFormData.status}
-                  onChange={(e) => setTxFormData({ ...txFormData, status: e.target.value })}
+                  onChange={(e) =>
+                    setTxFormData({ ...txFormData, status: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-input rounded-md"
                 >
                   <option value="completed">Completed</option>
@@ -308,29 +436,47 @@ export default function FinancesPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Date</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Date
+                </label>
                 <Input
                   type="datetime-local"
                   value={txFormData.date}
-                  onChange={(e) => setTxFormData({ ...txFormData, date: e.target.value })}
+                  onChange={(e) =>
+                    setTxFormData({ ...txFormData, date: e.target.value })
+                  }
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Description
+                </label>
                 <Textarea
                   value={txFormData.description}
-                  onChange={(e) => setTxFormData({ ...txFormData, description: e.target.value })}
+                  onChange={(e) =>
+                    setTxFormData({
+                      ...txFormData,
+                      description: e.target.value,
+                    })
+                  }
                   className="h-20"
                 />
               </div>
 
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditingTx(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditingTx(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-white">
+                <Button
+                  type="submit"
+                  className="bg-primary hover:bg-primary/90 text-white"
+                >
                   Save
                 </Button>
               </div>
@@ -343,10 +489,10 @@ export default function FinancesPage() {
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    if (!selectedTx) return
-                    deleteTransaction(selectedTx.id)
-                    refreshTransactions()
-                    setIsTxDialogOpen(false)
+                    if (!selectedTx) return;
+                    deleteTransaction(selectedTx.id);
+                    refreshTransactions();
+                    setIsTxDialogOpen(false);
                   }}
                 >
                   Delete
@@ -357,13 +503,23 @@ export default function FinancesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
         <div className="flex items-center justify-between">
           <TabsList className="border-b border-border bg-transparent h-auto p-0 rounded-none">
-            <TabsTrigger value="rent-collection" className="data-[state=active]:border-b-2 data-[state=active]:border-primary">
+            <TabsTrigger
+              value="rent-collection"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary"
+            >
               Rent Collection
             </TabsTrigger>
-            <TabsTrigger value="expenses" className="data-[state=active]:border-b-2 data-[state=active]:border-primary">
+            <TabsTrigger
+              value="expenses"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-primary"
+            >
               Expenses
             </TabsTrigger>
             {/* <TabsTrigger
@@ -384,13 +540,13 @@ export default function FinancesPage() {
         <TabsContent value="rent-collection" className="p-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1 relative">
-              <Input 
-                placeholder="Filter by tenant or property..." 
+              <Input
+                placeholder="Filter by tenant or property..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <select 
+            <select
               className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
@@ -427,28 +583,40 @@ export default function FinancesPage() {
                     onClick={() => handleRowClick(payment)}
                   >
                     <div>
-                      {payment.status === 'completed' ? (
+                      {payment.status === "completed" ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
                       ) : (
                         <Clock className="w-6 h-6 text-orange-600" />
                       )}
                     </div>
                     <div>
-                      <p className="font-semibold text-foreground">{payment.tenantName}</p>
-                      <p className="text-sm text-muted-foreground">{payment.propertyName}</p>
+                      <p className="font-semibold text-foreground">
+                        {payment.tenantName}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {payment.propertyName}
+                      </p>
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <p className="font-bold text-foreground">${payment.amount.toLocaleString()}</p>
-                    <p className={`text-xs font-semibold ${payment.status === 'completed' ? 'text-green-600' : 'text-orange-600'}`}>
-                      {payment.status === 'completed' ? 'Paid' : 'Pending'}
+                    <p className="font-bold text-foreground">
+                      ${payment.amount.toLocaleString()}
+                    </p>
+                    <p
+                      className={`text-xs font-semibold ${payment.status === "completed" ? "text-green-600" : "text-orange-600"}`}
+                    >
+                      {payment.status === "completed" ? "Paid" : "Pending"}
                     </p>
                   </div>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 ml-4"
+                      >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -457,44 +625,59 @@ export default function FinancesPage() {
                         <Eye className="mr-2 h-4 w-4" />
                         View details
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        try {
-                          deletePayment(payment.id)
-                          refreshPayments()
-                          if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('paymentsUpdated'))
-                        } catch (e) {
-                          console.error('Failed to delete payment', e)
-                        }
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          try {
+                            deletePayment(payment.id);
+                            refreshPayments();
+                            if (typeof window !== "undefined")
+                              window.dispatchEvent(
+                                new CustomEvent("paymentsUpdated"),
+                              );
+                          } catch (e) {
+                            console.error("Failed to delete payment", e);
+                          }
+                        }}
+                      >
                         <FileText className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        if (typeof window === 'undefined') return
-                        const w = window.open('', '_blank')
-                        if (!w) return
-                        w.document.write(`<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`)
-                        w.document.close()
-                        w.print()
-                      }}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (typeof window === "undefined") return;
+                          const w = window.open("", "_blank");
+                          if (!w) return;
+                          w.document.write(
+                            `<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`,
+                          );
+                          w.document.close();
+                          w.print();
+                        }}
+                      >
                         <Printer className="mr-2 h-4 w-4" />
                         Print
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={async () => {
-                        try {
-                          const text = `Payment ${payment.transId || payment.id}: $${(payment.amount||0).toFixed(2)}`
-                          if (navigator.share) {
-                            await navigator.share({ title: 'Payment', text, url: window.location.href })
-                          } else if (navigator.clipboard) {
-                            await navigator.clipboard.writeText(text)
-                            alert('Payment details copied to clipboard')
-                          } else {
-                            alert(text)
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          try {
+                            const text = `Payment ${payment.transId || payment.id}: $${(payment.amount || 0).toFixed(2)}`;
+                            if (navigator.share) {
+                              await navigator.share({
+                                title: "Payment",
+                                text,
+                                url: window.location.href,
+                              });
+                            } else if (navigator.clipboard) {
+                              await navigator.clipboard.writeText(text);
+                              alert("Payment details copied to clipboard");
+                            } else {
+                              alert(text);
+                            }
+                          } catch (e) {
+                            console.error("Share failed", e);
                           }
-                        } catch (e) {
-                          console.error('Share failed', e)
-                        }
-                      }}>
+                        }}
+                      >
                         <Share2 className="mr-2 h-4 w-4" />
                         Share
                       </DropdownMenuItem>
@@ -514,8 +697,8 @@ export default function FinancesPage() {
         <TabsContent value="expenses" className="p-6 space-y-4">
           <div className="flex gap-4 mb-6">
             <div className="flex-1 relative">
-              <Input 
-                placeholder="Filter by description..." 
+              <Input
+                placeholder="Filter by description..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -526,7 +709,14 @@ export default function FinancesPage() {
             </Button>
           </div>
 
-          <AddExpenseForm isOpen={showAddExpense} onClose={() => setShowAddExpense(false)} onSubmit={() => { setShowAddExpense(false); refreshTransactions() }} />
+          <AddExpenseForm
+            isOpen={showAddExpense}
+            onClose={() => setShowAddExpense(false)}
+            onSubmit={() => {
+              setShowAddExpense(false);
+              refreshTransactions();
+            }}
+          />
 
           <div>
             {expenseTransactions.length > 0 ? (
@@ -540,26 +730,48 @@ export default function FinancesPage() {
                     <div className="flex flex-col h-full">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-semibold text-foreground leading-5">{expense.category || 'Expense'}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{expense.propertyName}{expense.unit ? ` • ${expense.unit}` : ''}</p>
+                          <p className="text-sm font-semibold text-foreground leading-5">
+                            {expense.category || "Expense"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {expense.propertyName}
+                            {expense.unit ? ` • ${expense.unit}` : ""}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-lg font-bold text-red-600 dark:text-red-400">-${expense.amount.toLocaleString()}</p>
-                          <p className={`text-xs font-semibold ${expense.status === 'completed' ? 'text-green-600' : expense.status === 'pending' ? 'text-orange-600' : 'text-red-600'}`}>{expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}</p>
+                          <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                            -${expense.amount.toLocaleString()}
+                          </p>
+                          <p
+                            className={`text-xs font-semibold ${expense.status === "completed" ? "text-green-600" : expense.status === "pending" ? "text-orange-600" : "text-red-600"}`}
+                          >
+                            {expense.status.charAt(0).toUpperCase() +
+                              expense.status.slice(1)}
+                          </p>
                         </div>
                       </div>
 
                       <div className="mt-3 flex-1">
-                        <p className="text-sm text-foreground leading-5 line-clamp-3">{expense.description}</p>
+                        <p className="text-sm text-foreground leading-5 line-clamp-3">
+                          {expense.description}
+                        </p>
                       </div>
 
                       <div className="mt-3 text-xs text-muted-foreground flex items-center justify-between">
                         <div className="truncate">
-                          {expense.transID && <span className="mr-2">ID: {expense.transID}</span>}
-                          {expense.receiptReference && <span>Receipt: {expense.receiptReference}</span>}
+                          {expense.transID && (
+                            <span className="mr-2">ID: {expense.transID}</span>
+                          )}
+                          {expense.receiptReference && (
+                            <span>Receipt: {expense.receiptReference}</span>
+                          )}
                         </div>
                         <div className="text-right">
-                          {expense.paymentMethod && <span className="inline-block bg-muted px-2 py-1 rounded-md text-[11px]">{expense.paymentMethod}</span>}
+                          {expense.paymentMethod && (
+                            <span className="inline-block bg-muted px-2 py-1 rounded-md text-[11px]">
+                              {expense.paymentMethod}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -579,14 +791,20 @@ export default function FinancesPage() {
           <div className="space-y-6">
             {/* Header */}
             <div className="space-y-4">
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">Reports & Analytics</h1>
-              <p className="text-muted-foreground">Generate and download detailed reports for your properties</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                Reports & Analytics
+              </h1>
+              <p className="text-muted-foreground">
+                Generate and download detailed reports for your properties
+              </p>
             </div>
 
             {/* Filters */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground block mb-2">Report Type</label>
+                <label className="text-sm font-medium text-foreground block mb-2">
+                  Report Type
+                </label>
                 <select
                   value={undefined as any}
                   onChange={() => {}}
@@ -599,7 +817,9 @@ export default function FinancesPage() {
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground block mb-2">Time Period</label>
+                <label className="text-sm font-medium text-foreground block mb-2">
+                  Time Period
+                </label>
                 <select
                   defaultValue="month"
                   className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
@@ -615,7 +835,10 @@ export default function FinancesPage() {
                   <Filter className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Apply</span>
                 </Button>
-                <Button variant="outline" className="flex-1 border-border bg-transparent">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-border bg-transparent"
+                >
                   <Download className="w-4 h-4 mr-2" />
                   <span className="hidden sm:inline">Export</span>
                 </Button>
@@ -625,14 +848,16 @@ export default function FinancesPage() {
             {/* Report Type Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
               {[
-                { id: 'income', label: 'Income Report', icon: '📊' },
-                { id: 'expense', label: 'Expense Report', icon: '📉' },
-                { id: 'tax', label: 'Tax Preparation', icon: '📋' },
-                { id: 'occupancy', label: 'Occupancy Report', icon: '📈' },
+                { id: "income", label: "Income Report", icon: "📊" },
+                { id: "expense", label: "Expense Report", icon: "📉" },
+                { id: "tax", label: "Tax Preparation", icon: "📋" },
+                { id: "occupancy", label: "Occupancy Report", icon: "📈" },
               ].map((type) => (
                 <Card key={type.id} className="p-4">
                   <div className="text-2xl mb-2">{type.icon}</div>
-                  <p className="text-sm font-medium text-foreground text-center">{type.label}</p>
+                  <p className="text-sm font-medium text-foreground text-center">
+                    {type.label}
+                  </p>
                 </Card>
               ))}
             </div>
@@ -640,11 +865,16 @@ export default function FinancesPage() {
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border border-border p-6">
-                <h3 className="text-lg font-bold text-foreground mb-4">Revenue Trends</h3>
+                <h3 className="text-lg font-bold text-foreground mb-4">
+                  Revenue Trends
+                </h3>
                 <div className="w-full h-64 sm:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        stroke="var(--border)"
+                      />
                       <XAxis stroke="var(--muted-foreground)" />
                       <YAxis stroke="var(--muted-foreground)" />
                       <Tooltip />
@@ -654,7 +884,7 @@ export default function FinancesPage() {
                         dataKey="revenue"
                         stroke="var(--primary)"
                         strokeWidth={2}
-                        dot={{ fill: 'var(--primary)', r: 4 }}
+                        dot={{ fill: "var(--primary)", r: 4 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -662,7 +892,9 @@ export default function FinancesPage() {
               </Card>
 
               <Card className="border border-border p-6">
-                <h3 className="text-lg font-bold text-foreground mb-4">Expense Breakdown</h3>
+                <h3 className="text-lg font-bold text-foreground mb-4">
+                  Expense Breakdown
+                </h3>
                 <div className="w-full h-64 sm:h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -690,14 +922,18 @@ export default function FinancesPage() {
             {/* Summary Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: 'Total Revenue', value: '$127,500', change: '+12.5%' },
-                { label: 'Total Expenses', value: '$42,300', change: '-3.2%' },
-                { label: 'Net Income', value: '$85,200', change: '+18.7%' },
-                { label: 'Occupancy Rate', value: '94%', change: '+2.1%' },
+                { label: "Total Revenue", value: "$127,500", change: "+12.5%" },
+                { label: "Total Expenses", value: "$42,300", change: "-3.2%" },
+                { label: "Net Income", value: "$85,200", change: "+18.7%" },
+                { label: "Occupancy Rate", value: "94%", change: "+2.1%" },
               ].map((stat) => (
                 <Card key={stat.label} className="border border-border p-4">
-                  <p className="text-sm text-muted-foreground mb-2">{stat.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    {stat.label}
+                  </p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {stat.value}
+                  </p>
                   <p className="text-xs text-primary mt-2 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
                     {stat.change}
@@ -708,33 +944,70 @@ export default function FinancesPage() {
 
             {/* Recent Reports */}
             <Card className="border border-border p-6">
-              <h3 className="text-lg font-bold text-foreground mb-4">Recent Reports</h3>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Recent Reports
+              </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-2 text-muted-foreground font-medium">Report Name</th>
-                      <th className="text-left py-3 px-2 text-muted-foreground font-medium hidden sm:table-cell">Period</th>
-                      <th className="text-left py-3 px-2 text-muted-foreground font-medium hidden md:table-cell">Generated</th>
-                      <th className="text-right py-3 px-2 text-muted-foreground font-medium">Action</th>
+                      <th className="text-left py-3 px-2 text-muted-foreground font-medium">
+                        Report Name
+                      </th>
+                      <th className="text-left py-3 px-2 text-muted-foreground font-medium hidden sm:table-cell">
+                        Period
+                      </th>
+                      <th className="text-left py-3 px-2 text-muted-foreground font-medium hidden md:table-cell">
+                        Generated
+                      </th>
+                      <th className="text-right py-3 px-2 text-muted-foreground font-medium">
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { name: 'Monthly Income Report', period: 'January 2024', generated: '2024-02-01' },
-                      { name: 'Tax Preparation Report', period: 'Q4 2023', generated: '2024-01-15' },
-                      { name: 'Occupancy Analysis', period: 'December 2023', generated: '2024-01-05' },
-                      { name: 'Expense Summary', period: 'November 2023', generated: '2023-12-20' },
+                      {
+                        name: "Monthly Income Report",
+                        period: "January 2024",
+                        generated: "2024-02-01",
+                      },
+                      {
+                        name: "Tax Preparation Report",
+                        period: "Q4 2023",
+                        generated: "2024-01-15",
+                      },
+                      {
+                        name: "Occupancy Analysis",
+                        period: "December 2023",
+                        generated: "2024-01-05",
+                      },
+                      {
+                        name: "Expense Summary",
+                        period: "November 2023",
+                        generated: "2023-12-20",
+                      },
                     ].map((report, idx) => (
-                      <tr key={idx} className="border-b border-border hover:bg-secondary">
+                      <tr
+                        key={idx}
+                        className="border-b border-border hover:bg-secondary"
+                      >
                         <td className="py-3 px-2 text-foreground flex items-center gap-2">
                           <FileText className="w-4 h-4 text-primary" />
                           <span className="truncate">{report.name}</span>
                         </td>
-                        <td className="py-3 px-2 text-muted-foreground hidden sm:table-cell">{report.period}</td>
-                        <td className="py-3 px-2 text-muted-foreground hidden md:table-cell">{report.generated}</td>
+                        <td className="py-3 px-2 text-muted-foreground hidden sm:table-cell">
+                          {report.period}
+                        </td>
+                        <td className="py-3 px-2 text-muted-foreground hidden md:table-cell">
+                          {report.generated}
+                        </td>
                         <td className="py-3 px-2 text-right">
-                          <Button variant="ghost" size="sm" className="text-primary hover:text-primary/80">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-primary hover:text-primary/80"
+                          >
                             <Download className="w-4 h-4" />
                           </Button>
                         </td>
@@ -748,5 +1021,5 @@ export default function FinancesPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

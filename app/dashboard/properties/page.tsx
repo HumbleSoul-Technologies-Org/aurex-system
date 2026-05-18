@@ -6,13 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PropertyFormDialog from "@/components/forms/property-form-dialog";
-import {
-  listProperties,
-  createProperty,
-  PropertyRecord,
-} from "@/lib/services/properties";
+import { createProperty, PropertyRecord } from "@/lib/services/properties";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { getSpecificationsForType } from "@/lib/constants/property-types";
+import { useAppData } from "@/lib/data-context";
+import { queryClient } from "@/lib/query-client";
 import {
   Plus,
   Search,
@@ -32,10 +30,7 @@ export default function PropertiesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
   const { user, token } = useAuth();
-
-  const [properties, setProperties] = useState<PropertyRecord[]>(() =>
-    listProperties(),
-  );
+  const { properties } = useAppData();
 
   const filteredProperties = properties.filter((prop) => {
     const matchesSearch =
@@ -127,9 +122,11 @@ export default function PropertiesPage() {
 
       // Simulate 3-second delay for property creation
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      await createProperty(payload,token?token:null,user)
-      setProperties(listProperties());
-      
+
+      await createProperty(payload, token ? token : null, user);
+      queryClient.invalidateQueries({
+        queryKey: ["properties"] as const,
+      });
     } catch (e) {
       console.error("Create property failed", e);
     } finally {
@@ -156,13 +153,15 @@ export default function PropertiesPage() {
             Manage and organize all your rental properties
           </p>
         </div>
-        <Button
-          onClick={() => setShowAddForm(true)}
-          className="bg-primary hover:bg-primary/90 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Property
-        </Button>
+        {properties && properties.length > 0 && (
+          <Button
+            onClick={() => setShowAddForm(true)}
+            className="bg-primary hover:bg-primary/90 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Property
+          </Button>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -201,84 +200,97 @@ export default function PropertiesPage() {
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProperties.map((property) => {
-            const imageUrl = typeof property.images?.[0] === 'string'
-              ? property.images[0]
-              : property.images?.[0]?.url || "/placeholder.svg";
+            const imageUrl =
+              typeof property.images?.[0] === "string"
+                ? property.images[0]
+                : property.images?.[0]?.url || "/placeholder.svg";
             return (
-            <Card key={property.id} className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full">
-              {/* Property Image */}
-              <div className="relative h-96 bg-secondary overflow-hidden">
-                <img
-                  src={imageUrl}
-                  alt={property.name}
-                  className="w-full h-full object-cover hover:scale-105 transition-transform"
-                />
-                <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                  {property.occupancy ?? 0}
+              <Card
+                key={property.id}
+                className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full"
+              >
+                {/* Property Image */}
+                <div className="relative h-96 bg-secondary overflow-hidden">
+                  <img
+                    src={imageUrl}
+                    alt={property.name}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
+                    {property.occupancy ?? 0}
+                  </div>
+                  <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
+                    {property.type}
+                  </div>
                 </div>
-                <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
-                  {property.type}
-                </div>
-              </div>
 
-              {/* Property Details */}
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-3">
-                  <div>
-                    <h3 className="font-bold text-foreground text-lg">
-                      {property.name}
-                    </h3>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                      <MapPin className="w-4 h-4" />
-                      {property.city}, {property.country}
+                {/* Property Details */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div>
+                      <h3 className="font-bold text-foreground text-lg">
+                        {property.name}
+                      </h3>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                        <MapPin className="w-4 h-4" />
+                        {property.city}, {property.country}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Stats */}
-                <div className="space-y-2 text-sm mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-2">
-                      <Home className="w-4 h-4" />
-                      Available Units
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {property.units_available}
-                    </span>
+                  {/* Stats */}
+                  <div className="space-y-2 text-sm mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <Home className="w-4 h-4" />
+                        Available Units
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {Math.max(
+                          0,
+                          (property.units?.length ?? 0) -
+                            (property.tenants?.length ?? 0),
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <DollarSign className="w-4 h-4" />
+                        Price per Unit
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        $
+                        {property.price_per_unit
+                          .toString()
+                          .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-2">
+                        <Users className="w-4 h-4" />
+                        Tenants
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {property.tenants?.length ?? 0}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-2">
-                      <DollarSign className="w-4 h-4" />
-                      Price per Unit
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground flex items-center gap-2">
-                      <Users className="w-4 h-4" />
-                      Tenants
-                    </span>
-                    <span className="font-semibold text-foreground">
-                      {property.tenants?.length ?? 0}
-                    </span>
-                  </div>
-                </div>
 
-                {/* CTA */}
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full border-border text-foreground group bg-transparent"
-                >
-                  <Link href={`/dashboard/properties/${property.id}`}>
-                    View Details
-                    <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </Link>
-                </Button>
-              </div>
-            </Card>
+                  {/* CTA */}
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full border-border text-foreground group bg-transparent"
+                  >
+                    <Link
+                      href={`/dashboard/properties/${property.id || property._id}`}
+                    >
+                      View Details
+                      <ArrowRight className="w-4 h-4 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </Link>
+                  </Button>
+                </div>
+              </Card>
             );
           })}
         </div>
@@ -333,7 +345,11 @@ export default function PropertiesPage() {
                       {property.type}
                     </td>
                     <td className="px-6 py-4 text-foreground">
-                      {property.units_available}
+                      {Math.max(
+                        0,
+                        (property.units?.length ?? 0) -
+                          (property.tenants?.length ?? 0),
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-semibold rounded-full">
@@ -341,7 +357,10 @@ export default function PropertiesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
-                      ${property.price_per_unit.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      $
+                      {property.price_per_unit
+                        .toString()
+                        .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-semibold rounded-full">

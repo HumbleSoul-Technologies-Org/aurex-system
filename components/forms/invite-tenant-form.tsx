@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createTenant } from "@/lib/services/tenants";
+import { createTenantApi } from "@/lib/services/tenants";
 import { acceptTenantInvite } from "@/lib/services/tenant-invites";
 import { useAuth } from "@/lib/auth-context";
 import { Calendar, Mail, Phone, User, Lock, AlertCircle } from "lucide-react";
@@ -95,14 +95,14 @@ export default function InviteTenantForm({
     setIsSubmitting(true);
 
     try {
-      // Create the tenant
-      const tenant = createTenant({
+      // Create the tenant via API so the server provides the canonical id
+      const tenant = await createTenantApi({
         name: formData.name,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
         tenantType: "residential", // Default for invite, can be changed later
-        unit: invite.unitNumber || "",
+        unitNumber: invite.unitNumber || "",
         propertyId: invite.propertyId,
         rentAmount: 0, // Will be set by admin later
         leaseType: formData.leaseType,

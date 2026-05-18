@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InviteTenantForm from "@/components/forms/invite-tenant-form";
 import { validateTenantInvite } from "@/lib/services/tenant-invites";
-import { getProperty } from "@/lib/services/properties";
+import { useAppData } from "@/lib/data-context";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function InvitePage() {
@@ -19,6 +19,7 @@ export default function InvitePage() {
   const [isValid, setIsValid] = useState(false);
   const [invite, setInvite] = useState<any>(null);
   const [property, setProperty] = useState<any>(null);
+  const { properties } = useAppData();
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -39,7 +40,9 @@ export default function InvitePage() {
     }
 
     setInvite(validation.invite);
-    const prop = getProperty(validation.invite!.propertyId);
+    const prop = properties.find(
+      (item) => item.id === validation.invite!.propertyId,
+    );
     setProperty(prop);
     setIsValid(true);
     setIsValidating(false);

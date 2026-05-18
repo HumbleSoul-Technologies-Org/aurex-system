@@ -18,22 +18,21 @@ import SendAnnouncementForm, {
   AnnouncementFormData,
 } from "@/components/forms/send-announcement-form";
 import {
-  listMessages,
-  createMessage,
-  deleteMessage,
-  createReply,
-  listReplies,
-  markMessageSeen,
+  createMessageApi,
+  getMessagesByTenant,
+  deleteMessageApi,
+  createReplyApi,
+  getRepliesForMessage,
+  updateMessageApi,
   MessageRecord,
 } from "@/lib/services/messages";
 import {
-  listAnnouncements,
-  createAnnouncement,
-  deleteAnnouncement,
+  createAnnouncementApi,
+  getAnnouncementsByProperty,
+  deleteAnnouncementApi,
   AnnouncementRecord,
 } from "@/lib/services/announcements";
-import { listProperties } from "@/lib/services/properties";
-import { listTenants } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 import {
   MessageSquare,
   Plus,
@@ -87,9 +86,8 @@ export default function CommunicationsPage() {
   const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
   const [announcementTemplate, setAnnouncementTemplate] =
     useState<Partial<AnnouncementFormData> | null>(null);
-  const [messagesData, setMessagesData] = useState<MessageRecord[]>(() =>
-    listMessages(),
-  );
+  const { properties, tenants } = useAppData();
+  const [messagesData, setMessagesData] = useState<MessageRecord[]>([]);
   const [announcementsData, setAnnouncementsData] = useState<
     AnnouncementRecord[]
   >([]);
@@ -208,8 +206,24 @@ export default function CommunicationsPage() {
   ];
 
   useEffect(() => {
-    setAnnouncementsData(listAnnouncements());
-  }, []);
+    async function loadAnnouncements() {
+      const all: AnnouncementRecord[] = [];
+      for (const p of properties) {
+        try {
+          const anns = await getAnnouncementsByProperty(p.id);
+          all.push(...anns);
+        } catch (e) {
+          // ignore
+        }
+      }
+      setAnnouncementsData(
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        ),
+      );
+    }
+    loadAnnouncements();
+  }, [properties]);
 
   // new message dialog state
   const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
@@ -218,14 +232,30 @@ export default function CommunicationsPage() {
   const [sendMessageText, setSendMessageText] = useState("");
   const [isSendingNew, setIsSendingNew] = useState(false);
 
-  const properties = useMemo(() => listProperties(), []);
   const tenantsForSelected = useMemo(
     () =>
       sendPropertyId
-        ? listTenants().filter((t) => t.propertyId === sendPropertyId)
+        ? tenants.filter((t) => t.propertyId === sendPropertyId)
         : [],
-    [sendPropertyId],
+    [sendPropertyId, tenants],
   );
+
+  useEffect(() => {
+    async function loadMessages() {
+      const all: MessageRecord[] = [];
+      for (const t of tenants) {
+        try {
+          const msgs = await getMessagesByTenant(t.id);
+          all.push(...msgs);
+        } catch (e) {
+          // ignore per-tenant failures
+        }
+      }
+      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setMessagesData(all);
+    }
+    loadMessages();
+  }, [tenants]);
 
   const formatDateTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -289,13 +319,13 @@ export default function CommunicationsPage() {
         sender: msg.from,
         senderType: msg.from === "management" ? "manager" : "tenant",
         content: msg.message,
-        timestamp: msg.createdAt,
+        timestamp: msg.createdAt || "",
         isRead: !!msg.seen,
         sent: msg.from === "management",
         replied: !!msg.replyId,
       });
       conv.lastMessage = msg.message;
-      conv.timestamp = msg.createdAt;
+      conv.timestamp = msg.createdAt || "";
       if (!msg.seen && msg.to === "You") {
         conv.unreadCount += 1;
       }
@@ -319,13 +349,30 @@ export default function CommunicationsPage() {
         key={conversation.id}
         onClick={() => {
           // mark all unread tenant messages in this conversation as seen
-          conversation.messages.forEach((msg) => {
+          // mark unseen tenant messages as seen via API
+          conversation.messages.forEach(async (msg) => {
             if (!msg.isRead && msg.senderType === "tenant") {
-              markMessageSeen(msg.id);
+              try {
+                await updateMessageApi(msg.id, { seen: true });
+              } catch (e) {
+                // ignore
+              }
             }
           });
           // refresh data to update counts/icons
-          setMessagesData(listMessages());
+          (async () => {
+            const all: MessageRecord[] = [];
+            for (const t of tenants) {
+              try {
+                const msgs = await getMessagesByTenant(t.id);
+                all.push(...msgs);
+              } catch (e) {}
+            }
+            all.sort((a, b) =>
+              (b.createdAt || "").localeCompare(a.createdAt || ""),
+            );
+            setMessagesData(all);
+          })();
           setSelectedConversation(conversation);
         }}
         className={`w-full flex gap-3 text-left p-4 border-b border-border hover:bg-secondary transition-colors ${
@@ -359,9 +406,21 @@ export default function CommunicationsPage() {
   };
 
   const deleteMsg = (id: string) => {
-    // remove from database then refresh local state
-    deleteMessage(id);
-    setMessagesData(listMessages());
+    // remove via API then refresh
+    (async () => {
+      try {
+        await deleteMessageApi(id);
+      } catch (e) {}
+      const all: MessageRecord[] = [];
+      for (const t of tenants) {
+        try {
+          const msgs = await getMessagesByTenant(t.id);
+          all.push(...msgs);
+        } catch (e) {}
+      }
+      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setMessagesData(all);
+    })();
     setSelectedConversation((prev) =>
       prev
         ? { ...prev, messages: prev.messages.filter((m) => m.id !== id) }
@@ -370,74 +429,159 @@ export default function CommunicationsPage() {
   };
 
   const deleteAnnouncement = (id: string) => {
-    // remove from database then refresh local state
-    deleteAnnouncement(id);
-    setAnnouncementsData(listAnnouncements());
+    (async () => {
+      try {
+        await deleteAnnouncementApi(id);
+      } catch (e) {}
+      const all: AnnouncementRecord[] = [];
+      for (const p of properties) {
+        try {
+          const anns = await getAnnouncementsByProperty(p.id);
+          all.push(...anns);
+        } catch (e) {}
+      }
+      setAnnouncementsData(
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        ),
+      );
+    })();
   };
 
   const deleteAllInboxMessages = () => {
-    const inboxMessages = messagesData.filter(
-      (msg) => msg.to === "You" && msg.from !== "management",
-    );
-    inboxMessages.forEach((msg) => deleteMessage(msg.id));
-    setMessagesData(listMessages());
-    setSelectedConversation(null);
+    (async () => {
+      const inboxMessages = messagesData.filter(
+        (msg) => msg.to === "You" && msg.from !== "management",
+      );
+      for (const msg of inboxMessages) {
+        try {
+          await deleteMessageApi(msg.id);
+        } catch (e) {}
+      }
+      const all: MessageRecord[] = [];
+      for (const t of tenants) {
+        try {
+          const msgs = await getMessagesByTenant(t.id);
+          all.push(...msgs);
+        } catch (e) {}
+      }
+      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setMessagesData(all);
+      setSelectedConversation(null);
+    })();
   };
 
   const deleteAllSentMessages = () => {
-    const sentMessages = messagesData.filter(
-      (msg) => msg.from === "management",
-    );
-    sentMessages.forEach((msg) => deleteMessage(msg.id));
-    setMessagesData(listMessages());
-    setSelectedConversation(null);
+    (async () => {
+      const sentMessages = messagesData.filter(
+        (msg) => msg.from === "management",
+      );
+      for (const msg of sentMessages) {
+        try {
+          await deleteMessageApi(msg.id);
+        } catch (e) {}
+      }
+      const all: MessageRecord[] = [];
+      for (const t of tenants) {
+        try {
+          const msgs = await getMessagesByTenant(t.id);
+          all.push(...msgs);
+        } catch (e) {}
+      }
+      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      setMessagesData(all);
+      setSelectedConversation(null);
+    })();
   };
 
   const handleSendMessage = () => {
     if (messageText.trim() && selectedConversation) {
-      const newMsg = createMessage({
-        from: "management",
-        to: selectedConversation.participant, // should be tenant email under universal scheme
-        message: messageText,
-      });
-      // optionally create a reply to last message
-      const last =
-        selectedConversation.messages[selectedConversation.messages.length - 1];
-      if (last) {
-        createReply({ reply: messageText, msgId: last.id });
-      }
-      setMessagesData(listMessages());
-      setMessageText("");
+      (async () => {
+        try {
+          await createMessageApi({
+            to: selectedConversation.participant,
+            message: messageText,
+            createdBy: undefined,
+          });
+        } catch (e) {}
+        // optionally create a reply to last message
+        const last =
+          selectedConversation.messages[
+            selectedConversation.messages.length - 1
+          ];
+        if (last) {
+          try {
+            await createReplyApi(last.id, { reply: messageText });
+          } catch (e) {}
+        }
+        // reload messages
+        const all: MessageRecord[] = [];
+        for (const t of tenants) {
+          try {
+            const msgs = await getMessagesByTenant(t.id);
+            all.push(...msgs);
+          } catch (e) {}
+        }
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        );
+        setMessagesData(all);
+        setMessageText("");
+      })();
     }
   };
 
   const handleSendAnnouncement = (data: any) => {
     setIsSendingAnnouncement(true);
-    // Simulate sending delay
-    setTimeout(() => {
-      createAnnouncement(data);
-      setAnnouncementsData(listAnnouncements());
+    (async () => {
+      try {
+        await createAnnouncementApi(data);
+      } catch (e) {}
+      const all: AnnouncementRecord[] = [];
+      for (const p of properties) {
+        try {
+          const anns = await getAnnouncementsByProperty(p.id);
+          all.push(...anns);
+        } catch (e) {}
+      }
+      setAnnouncementsData(
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        ),
+      );
       setIsSendingAnnouncement(false);
-    }, 2000);
+      setShowAnnouncementForm(false);
+    })();
   };
 
   const handleCreateNewMessage = () => {
     if (sendPropertyId && sendTenantId && sendMessageText.trim()) {
       setIsSendingNew(true);
-      setTimeout(() => {
-        const tenant = listTenants().find((t) => t.id === sendTenantId);
-        createMessage({
-          from: "management",
-          to: tenant?.email || tenant?.name || "",
-          message: sendMessageText,
-        });
-        setMessagesData(listMessages());
+      (async () => {
+        const tenant = tenants.find((t) => t.id === sendTenantId);
+        try {
+          await createMessageApi({
+            to: tenant?.email || tenant?.name || "",
+            message: sendMessageText,
+          });
+        } catch (e) {}
+        const all: MessageRecord[] = [];
+        for (const t of tenants) {
+          try {
+            const msgs = await getMessagesByTenant(t.id);
+            all.push(...msgs);
+          } catch (e) {}
+        }
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        );
+        setMessagesData(all);
         setIsSendingNew(false);
         setIsSendDialogOpen(false);
         setSendPropertyId("");
         setSendTenantId("");
         setSendMessageText("");
-      }, 4000);
+      })();
     }
   };
 
@@ -999,7 +1143,7 @@ export default function CommunicationsPage() {
                     </Card>
                   ) : (
                     announcementsData.map((announcement) => {
-                      const readTenants = listTenants().filter((t) =>
+                      const readTenants = tenants.filter((t) =>
                         announcement.readBy.includes(t.id),
                       );
                       return (
@@ -1037,7 +1181,9 @@ export default function CommunicationsPage() {
                               </button>
                               <p className="text-xs text-muted-foreground">
                                 {formatDateTime(
-                                  announcement.sentAt || announcement.createdAt,
+                                  announcement.sentAt ||
+                                    announcement.createdAt ||
+                                    "",
                                 )}
                               </p>
                             </div>
@@ -1057,7 +1203,7 @@ export default function CommunicationsPage() {
                               ) : (
                                 <div className="space-y-1">
                                   {readTenants.map((tenant) => {
-                                    const property = listProperties().find(
+                                    const property = properties.find(
                                       (p) => p.id === tenant.propertyId,
                                     );
                                     return (

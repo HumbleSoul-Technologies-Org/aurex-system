@@ -1,3 +1,50 @@
+import { apiRequest } from '@/lib/query-client'
+
+export interface AnnouncementRecord {
+  id: string
+  title: string
+  message: string
+  recipients?: string
+  propertyId?: string
+  tenantIds?: string[]
+  priority?: string
+  scheduledDate?: string
+  createdBy?: string
+  createdAt?: string
+}
+
+export async function createAnnouncementApi(payload: Partial<AnnouncementRecord>, token?: string) {
+  const res = await apiRequest('POST', '/announcements/create', payload, token)
+  const json = await res.json()
+  const a = json.announcement || json
+  return { ...a, id: a.id || a._id } as AnnouncementRecord
+}
+
+export async function getAnnouncementsByProperty(propertyId: string, token?: string) {
+  const res = await apiRequest('GET', `/announcements/property/${propertyId}/all`, undefined, token)
+  const json = await res.json()
+  return (json || []).map((a: any) => ({ ...a, id: a.id || a._id })) as AnnouncementRecord[]
+}
+
+export async function getAnnouncementById(id: string, token?: string) {
+  const res = await apiRequest('GET', `/announcements/${id}`, undefined, token)
+  const json = await res.json()
+  const a = json.announcement || json
+  return { ...a, id: a.id || a._id } as AnnouncementRecord
+}
+
+export async function deleteAnnouncementApi(id: string, token?: string) {
+  const res = await apiRequest('DELETE', `/announcements/${id}/delete`, undefined, token)
+  const json = await res.json()
+  return res.ok && (json?.message || json?.success)
+}
+
+export async function markAnnouncementRead(id: string, tenantId: string, token?: string) {
+  const res = await apiRequest('POST', `/announcements/${id}/read`, { tenantId }, token)
+  const json = await res.json()
+  const a = json.announcement || json
+  return { ...a, id: a.id || a._id } as AnnouncementRecord
+}
 import { insertIntoCollection, getCollection, generateId, updateInCollection } from '@/lib/local-store'
 
 export interface AnnouncementRecord {
@@ -41,14 +88,6 @@ export function createAnnouncement(payload: Partial<AnnouncementRecord>): Announ
   }
   insertIntoCollection('announcements', announcement)
   return announcement
-}
-
-export function markAnnouncementRead(announcementId: string, tenantId: string): void {
-  const announcement = getAnnouncement(announcementId)
-  if (announcement && !announcement.readBy.includes(tenantId)) {
-    announcement.readBy.push(tenantId)
-    updateInCollection('announcements', announcementId, { readBy: announcement.readBy })
-  }
 }
 
 export function updateAnnouncement(id: string, updates: Partial<AnnouncementRecord>): AnnouncementRecord | null {

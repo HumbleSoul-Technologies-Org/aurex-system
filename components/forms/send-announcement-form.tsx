@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Bell, Users, Calendar } from "lucide-react";
-import { listProperties } from "@/lib/services/properties";
-import { listTenants } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 
 interface SendAnnouncementFormProps {
   isOpen: boolean;
@@ -66,13 +65,13 @@ export default function SendAnnouncementForm({
     } as AnnouncementFormData);
   }, [initialData]);
 
-  const properties = useMemo(() => listProperties(), []);
+  const { properties, tenants } = useAppData();
   const tenantsForSelectedProperty = useMemo(
     () =>
       formData.propertyId
-        ? listTenants().filter((t) => t.propertyId === formData.propertyId)
+        ? tenants.filter((t) => t.propertyId === formData.propertyId)
         : [],
-    [formData.propertyId],
+    [formData.propertyId, tenants],
   );
   const tenantsWithDueDate = useMemo(
     () =>

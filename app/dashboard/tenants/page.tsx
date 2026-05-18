@@ -6,9 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
-import { listTenants } from "@/lib/services/tenants";
-import { listProperties } from "@/lib/services/properties";
-import { createTenantApi } from "@/lib/services/tenants";
+import { createTenantApi, TenantRecord } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
+import { queryClient } from "@/lib/query-client";
 import {
   Plus,
   Search,
@@ -30,12 +30,15 @@ export default function TenantsPage() {
     "all" | "paid" | "due" | "moving-out"
   >("all");
   const [showAddForm, setShowAddForm] = useState(false);
-  const [tenants, setTenants] = useState(() => listTenants());
 
+  const { tenants, properties } = useAppData();
   const { token } = useAuth();
 
   const enrichedTenants = tenants.map((tenant) => {
-    const property = listProperties().find((p) => p.id === tenant.propertyId);
+    const property =
+      properties.find(
+        (p) => p.id === tenant.propertyId || p._id === tenant.propertyId,
+      ) || null;
     return {
       ...tenant,
       property,
@@ -100,7 +103,7 @@ export default function TenantsPage() {
         password: data.password,
         phone: data.phone,
         tenantType: data.tenantType,
-        unit: data.unitNumber,
+        unitNumber: data.unitNumber,
         propertyId: data.propertyId,
         rentAmount: data.monthlyRent,
         leaseType: data.leaseType,
@@ -128,7 +131,9 @@ export default function TenantsPage() {
         status: "due",
       };
       const tenant = await createTenantApi(payload, token || undefined);
-      setTenants((prev) => [tenant, ...prev]);
+      queryClient.invalidateQueries({
+        queryKey: ["tenants"] as const,
+      });
       console.log("New tenant created:", tenant);
     } catch (error) {
       console.error("Failed to create tenant:", error);
@@ -233,9 +238,9 @@ export default function TenantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTenants.map((tenant) => (
+              {filteredTenants.map((tenant, index) => (
                 <tr
-                  key={tenant.id}
+                  key={tenant.id || index}
                   className="border-b border-border hover:bg-secondary transition-colors"
                 >
                   <td className="px-6 py-4 font-semibold text-foreground">
@@ -245,7 +250,7 @@ export default function TenantsPage() {
                     {tenant.property?.name || "Unknown"}
                   </td>
                   <td className="px-6 py-4 text-muted-foreground text-sm">
-                    {tenant.unit}
+                    {tenant.unitNumber || "--"}
                   </td>
                   <td className="px-6 py-4 text-sm">
                     <a
@@ -292,7 +297,9 @@ export default function TenantsPage() {
                         : "--"}
                   </td>
                   <td className="px-6 py-4">
-                    <Link href={`/dashboard/tenants/${tenant.id}`}>
+                    <Link
+                      href={`/dashboard/tenants/${tenant.id || tenant._id}`}
+                    >
                       <Button
                         size="sm"
                         variant="outline"

@@ -7,8 +7,8 @@ import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { paymentHistory } from "@/app/lib/tenant-data";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
-import { getProperty } from "@/lib/services/properties";
 import { createPayment, PaymentRecord } from "@/lib/services/payments";
+import { useAppData } from "@/lib/data-context";
 
 export default function MakePaymentPage() {
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">(
@@ -20,9 +20,13 @@ export default function MakePaymentPage() {
     () => (user?.role === "tenant" ? getTenant(user.id) : null),
     [user],
   );
+  const { properties } = useAppData();
   const property = useMemo(
-    () => (tenant?.propertyId ? getProperty(tenant.propertyId) : null),
-    [tenant],
+    () =>
+      tenant?.propertyId
+        ? properties.find((p) => p.id === tenant.propertyId)
+        : null,
+    [tenant, properties],
   );
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;

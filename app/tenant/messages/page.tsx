@@ -1,17 +1,17 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useAppData } from "@/lib/data-context";
 import {
-  listMessages,
-  createMessage,
-  markMessageSeen,
+  getMessagesByTenant,
+  createMessageApi,
+  updateMessageApi,
   MessageRecord,
 } from "@/lib/services/messages";
 import {
-  listAnnouncements,
+  getAnnouncementsByProperty,
   markAnnouncementRead,
 } from "@/lib/services/announcements";
-import { listTenants } from "@/lib/services/tenants";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   User,
@@ -47,6 +47,7 @@ interface Message {
 
 export default function TenantMessagesPage() {
   const { user } = useAuth();
+  const { tenants } = useAppData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<
@@ -128,56 +129,67 @@ export default function TenantMessagesPage() {
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      // Get messages from database scoped to this user
-      // only keep messages where the current user is either sender or recipient
-      const dbMessages = listMessages().filter(
-        (msg) => msg.from === user?.email || msg.to === user?.email,
-      );
-
-      // Get tenant record for announcements
-      const tenant = listTenants().find((t) => t.email === user?.email);
+      // load messages from server for this tenant
+      const tenant = tenants.find((t) => t.email === user?.email);
       const tenantId = tenant?.id;
+      const tenantMessages: Message[] = [];
+      if (tenantId) {
+        try {
+          const msgs = await getMessagesByTenant(tenantId);
+          msgs.forEach((msg) =>
+            tenantMessages.push({
+              id: msg.id,
+              sender: msg.fromUserId || msg.createdBy || "tenant",
+              senderType: msg.fromUserId ? "tenant" : "tenant",
+              content: msg.message,
+              timestamp: msg.createdAt || "",
+              isRead: !!msg.seen,
+              sent: msg.createdBy === user?.id || msg.fromUserId === user?.id,
+              replied: !!msg.replyId,
+              subject: msg.subject || undefined,
+              isStarred: false,
+              isArchived: false,
+              type: "message",
+            }),
+          );
+        } catch (e) {
+          console.error("Failed to load messages for tenant", e);
+        }
+      }
 
-      // Get announcements for this tenant
-      const tenantAnnouncements = listAnnouncements()
-        .filter((ann) => {
-          if (ann.recipients === "all") return true;
-          return tenantId && ann.tenantIds.includes(tenantId);
-        })
-        .map((ann) => ({
-          id: ann.id,
-          sender: "management",
-          senderType: "manager" as const,
-          content: ann.message,
-          timestamp: ann.sentAt || ann.createdAt,
-          isRead: tenantId ? ann.readBy.includes(tenantId) : false,
-          sent: false,
-          replied: false,
-          subject: ann.title,
-          isStarred: false,
-          isArchived: false,
-          type: "announcement" as const,
-        }));
+      // Get announcements for this tenant by fetching per-property and filtering
+      const tenantAnnouncements: Message[] = [];
+      for (const p of properties) {
+        try {
+          const anns = await getAnnouncementsByProperty(p.id);
+          anns.forEach((ann) => {
+            const included =
+              ann.recipients === "all" ||
+              (tenantId && ann.tenantIds && ann.tenantIds.includes(tenantId));
+            if (included) {
+              tenantAnnouncements.push({
+                id: ann.id,
+                sender: "management",
+                senderType: "manager",
+                content: ann.message,
+                timestamp: ann.sentAt || ann.createdAt || "",
+                isRead: tenantId
+                  ? (ann.readBy || []).includes(tenantId)
+                  : false,
+                sent: false,
+                replied: false,
+                subject: ann.title,
+                isStarred: false,
+                isArchived: false,
+                type: "announcement",
+              });
+            }
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
 
-      // Map to local Message type using shared schema
-      const tenantMessages = dbMessages.map(
-        (msg): Message => ({
-          id: msg.id,
-          sender: msg.from,
-          senderType: msg.from === "management" ? "manager" : "tenant",
-          content: msg.message,
-          timestamp: msg.createdAt,
-          isRead: !!msg.seen,
-          sent: msg.from === user?.email,
-          replied: !!msg.replyId,
-          subject: msg.subject || undefined,
-          isStarred: false,
-          isArchived: false,
-          type: "message",
-        }),
-      );
-
-      // Combine messages and announcements
       const allItems = [...tenantMessages, ...tenantAnnouncements];
 
       // Sort by date
@@ -213,16 +225,21 @@ export default function TenantMessagesPage() {
     try {
       // all metadata hard-coded; only `message` is dynamic
       // `from` uses current user's email for tracking
-      const newMsg = createMessage({
-        from: user?.name || "tenant",
-        to: "You", // manager's inbox uses 'You'
-        message: messageText.trim(),
-        seen: false,
-      });
-
-      setMessageText("");
-      await fetchMessages();
-      setSelectedId(newMsg.id);
+      const tenant = tenants.find((t) => t.email === user?.email);
+      const tenantId = tenant?.id;
+      try {
+        const created = await createMessageApi({
+          fromUserId: tenantId,
+          to: "You",
+          message: messageText.trim(),
+          createdBy: user?.id,
+        });
+        setMessageText("");
+        await fetchMessages();
+        setSelectedId(created.id);
+      } catch (err) {
+        console.error("Failed to create message", err);
+      }
     } catch (err) {
       console.error("Failed to send message:", err);
     } finally {
@@ -358,7 +375,7 @@ export default function TenantMessagesPage() {
                 onClick={() => {
                   if (m.senderType === "manager" && !m.isRead) {
                     if (m.type === "announcement") {
-                      const tenant = listTenants().find(
+                      const tenant = tenants.find(
                         (t) => t.email === user?.email,
                       );
                       if (tenant) markAnnouncementRead(m.id, tenant.id);

@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
 import PropertyFormDialog from "@/components/forms/property-form-dialog";
 import {
-  createTenant,
+  createTenantApi,
   deleteTenant,
   TenantRecord,
 } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 import { updateProperty } from "@/lib/services/properties";
 import {
   Dialog,
@@ -26,8 +27,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getProperty } from "@/lib/services/properties";
-import { listTenants } from "@/lib/services/tenants";
 import {
   ArrowLeft,
   MapPin,
@@ -55,6 +54,8 @@ import {
   createSpecificationValues,
 } from "@/lib/constants/property-types";
 import { deleteProperty } from "@/lib/services/properties";
+import { apiRequest } from "@/lib/query-client";
+import { url } from "inspector";
 
 interface SpecificationRow {
   title: string;
@@ -71,8 +72,22 @@ export default function PropertyDetailPage({
   params,
 }: PropertyDetailPageProps) {
   const { id } = use(params);
-  const property: any = getProperty(id);
-  const propertyTenants = listTenants().filter((t) => t.propertyId === id);
+  const { properties, tenants } = useAppData();
+  const [property, setProperty] = useState<any>(() =>
+    properties.find((item) => item.id === id),
+  );
+  const refreshProperty = () => {
+    const updated = properties.find((item) => item.id === id);
+    setProperty(updated);
+    setImages(updated?.images || []);
+    return updated;
+  };
+
+  useEffect(() => {
+    refreshProperty();
+  }, [id, properties]);
+
+  const propertyTenants = tenants.filter((t) => t.propertyId === id);
   const initialPropertyType =
     property?.propertyType || property?.type || "apartment";
   const initialSpecificationValues = getSpecificationsForType(
@@ -95,7 +110,7 @@ export default function PropertyDetailPage({
   );
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [images, setImages] = useState<string[]>(property?.images || []);
+  const [images, setImages] = useState<any[]>(property?.images || []);
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -233,19 +248,19 @@ export default function PropertyDetailPage({
     );
   }
 
-  const hundlePropertyDelete = async (id:any) =>{
-     setIsDeleting(true);
-                  setDeleteError("");
+  const hundlePropertyDelete = async (id: any) => {
+    setIsDeleting(true);
+    setDeleteError("");
     try {
-      await  deleteProperty(id,adminPassword);
-     } catch(error){
-      console.log(error)
-    }finally{
+      await deleteProperty(id, adminPassword);
+    } catch (error) {
+      console.log(error);
+    } finally {
       setIsDeleteOpen(false);
-                      window.location.href = "/dashboard/properties";
-                      setIsDeleting(false)
+      window.location.href = "/dashboard/properties";
+      setIsDeleting(false);
     }
-  }
+  };
 
   return (
     <div className="space-y-6">
@@ -310,7 +325,11 @@ export default function PropertyDetailPage({
               </Link>
             </Button>
             <span className="flex-1 w-full"></span>
-            <Button variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditOpen(true)}
+            >
               <Edit className="w-4 h-4 mr-2" />
               Edit Property
             </Button>
@@ -343,8 +362,7 @@ export default function PropertyDetailPage({
                   if (data.category !== "") updated.category = data.category;
                   if (data.propertyType !== "")
                     updated.propertyType = data.propertyType;
-                  if (data.geography !== "")
-                    updated.geography = data.geography;
+                  if (data.geography !== "") updated.geography = data.geography;
 
                   const cleanedFeatures = data.features
                     .split("\n")
@@ -377,8 +395,7 @@ export default function PropertyDetailPage({
                     data.customSpecifications || []
                   ).filter(
                     (spec: any) =>
-                      spec.title?.trim() !== "" ||
-                      spec.value?.trim() !== "",
+                      spec.title?.trim() !== "" || spec.value?.trim() !== "",
                   );
 
                   const specifications = [
@@ -417,8 +434,8 @@ export default function PropertyDetailPage({
                     updated.description = data.description;
                   if (data.imageUrl !== "") updated.images = [data.imageUrl];
 
-                  updateProperty(property?.id, updated);
-                  window.location.reload();
+                  await updateProperty(property?.id, updated);
+                  refreshProperty();
                 } catch (e) {
                   console.error("Failed to update property", e);
                   alert("Update failed");
@@ -438,7 +455,7 @@ export default function PropertyDetailPage({
                 {/* Main Image */}
                 <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
                   <img
-                    src={images?.[0] || "/placeholder.svg"}
+                    src={images?.[0]?.url || "/placeholder.svg"}
                     alt={property?.name}
                     className="w-full h-full object-cover"
                   />
@@ -448,7 +465,7 @@ export default function PropertyDetailPage({
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {images &&
                     images.length > 0 &&
-                    images.map((image:any, index) => (
+                    images.map((image: any, index) => (
                       <div key={index} className="relative flex-shrink-0">
                         <button
                           onClick={() => setSelectedImageIndex(index)}
@@ -459,7 +476,7 @@ export default function PropertyDetailPage({
                           }`}
                         >
                           <img
-                            src={image}
+                            src={image?.url}
                             alt={`${property?.name} ${index + 1}`}
                             className="w-full h-full object-cover"
                           />
@@ -467,18 +484,36 @@ export default function PropertyDetailPage({
                         <button
                           type="button"
                           aria-label={`Delete image ${index + 1}`}
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
                             const next = images.filter((_, i) => i !== index);
                             setImages(next);
                             try {
-                              updateProperty(property?.id, {
+                              const res = await apiRequest(
+                                "POST",
+                                `/property/${property?.id}/delete-image`,
+                                { public_id: image.public_id },
+                              );
+
+                              if (!res.ok) {
+                                throw new Error(
+                                  `Failed to delete image: ${await res.text()}`,
+                                );
+                                return;
+                              }
+                              await updateProperty(property?.id, {
                                 images: next.map((u: any) =>
-                                  typeof u === "string" ? { url: u, public_id: "" } : u,
+                                  typeof u === "string"
+                                    ? { url: u, public_id: "" }
+                                    : u,
                                 ),
                               });
+                              refreshProperty();
                             } catch (err) {
-                              console.error("Failed to persist image deletion", err);
+                              console.error(
+                                "Failed to persist image deletion",
+                                err,
+                              );
                             }
                             setSelectedImageIndex((prev) =>
                               Math.max(0, Math.min(prev, next.length - 1)),
@@ -632,21 +667,47 @@ export default function PropertyDetailPage({
                               if (uploadFile) {
                                 const res =
                                   await uploadToCloudinary(uploadFile);
-                                // add to local state and persist to sample store
-                                setImages((prev) => {
-                                  const next = [...prev, res.secure_url];
-                                  setSelectedImageIndex(next.length - 1);
-                                  try {
-                                    updateProperty(property?.id, {
-                                      images: next.map((u: any) =>
-                                        typeof u === "string" ? { url: u, public_id: "" } : u,
-                                      ),
-                                    });
-                                  } catch (e) {
-                                    console.error("Failed to persist property images", e);
+                                const next = [
+                                  ...images,
+                                  {
+                                    url: res.secure_url,
+                                    public_id: res.public_id,
+                                  },
+                                ];
+                                setImages(next);
+                                setSelectedImageIndex(next.length - 1);
+
+                                try {
+                                  const resp = await apiRequest(
+                                    "POST",
+                                    `/property/${property?.id}/add-image`,
+                                    {
+                                      url: res.secure_url,
+                                      public_id: res.public_id,
+                                    },
+                                  );
+
+                                  if (!resp.ok) {
+                                    console.error(
+                                      "Failed to persist property image",
+                                      await resp.text(),
+                                    );
+                                    return;
                                   }
-                                  return next;
-                                });
+                                  await updateProperty(property?.id, {
+                                    images: next.map((u: any) =>
+                                      typeof u === "string"
+                                        ? { url: u, public_id: "" }
+                                        : u,
+                                    ),
+                                  });
+                                  refreshProperty();
+                                } catch (e) {
+                                  console.error(
+                                    "Failed to persist property images",
+                                    e,
+                                  );
+                                }
 
                                 console.log("Cloudinary upload result", res);
                               } else if (uploadPreview) {
@@ -737,7 +798,7 @@ export default function PropertyDetailPage({
                       Available Units
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      {property?.units_available}
+                      {property?.units.length - property?.tenants.length || 0}
                     </p>
                   </div>
                   <div>
@@ -846,9 +907,10 @@ export default function PropertyDetailPage({
                         Available Units
                       </p>
                       <p className="font-semibold text-foreground">
-                        {property?.units_available !== undefined &&
-                        property?.units_available !== null ? (
-                          property?.units_available
+                        {property?.units !== undefined &&
+                        property?.units.length > 0 &&
+                        property?.tenants !== undefined ? (
+                          property?.units.length - property?.tenants.length || 0
                         ) : (
                           <span className="text-muted-foreground">
                             No details found
@@ -1036,11 +1098,11 @@ export default function PropertyDetailPage({
                       onClose={() => setShowAddTenant(false)}
                       onSubmit={async (data: any) => {
                         try {
-                          const tenant = createTenant({
+                          const payload: Partial<TenantRecord> = {
                             name: data.name,
                             email: data.email,
                             tenantType: data.tenantType,
-                            unit: data.unitNumber,
+                            unitNumber: data.unitNumber,
                             propertyId: property?.id,
                             rentAmount: data.monthlyRent,
                             leaseType: data.leaseType,
@@ -1065,12 +1127,10 @@ export default function PropertyDetailPage({
                             financialInfo: data.financialInfo,
                             securityDeposit: data.securityDeposit,
                             status: "due",
-                          }) as TenantRecord;
-                          // add tenant id to property
-                          const updated = updateProperty(property?.id, {
-                            tenants: [...(property?.tenants || []), tenant.id],
-                          });
-                          // optimistic: no state sync here since this page uses sample data; in a full integration you would reload property
+                          };
+
+                          await createTenantApi(payload);
+                          refreshProperty();
                           setShowAddTenant(false);
                         } catch (e) {
                           console.error("Add tenant failed", e);
@@ -1186,7 +1246,7 @@ export default function PropertyDetailPage({
                               className="border-b border-border hover:bg-secondary"
                             >
                               <td className="px-4 py-3 font-semibold text-foreground">
-                                {tenant.unit}
+                                {tenant.unitNumber}
                               </td>
                               <td className="px-4 py-3">
                                 <Image
@@ -1362,7 +1422,7 @@ export default function PropertyDetailPage({
                               className="border-b border-border hover:bg-secondary"
                             >
                               <td className="px-4 py-3 font-semibold text-foreground">
-                                {tenant.unit}
+                                {tenant.unitNumber}
                               </td>
                               <td className="px-4 py-3 text-foreground">
                                 {tenant.name}

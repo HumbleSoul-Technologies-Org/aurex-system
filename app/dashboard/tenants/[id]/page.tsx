@@ -8,8 +8,12 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getTenant, deleteTenant, updateTenant } from "@/lib/services/tenants";
-import { getProperty } from "@/lib/services/properties";
+import {
+  getTenant,
+  deleteTenantApi,
+  updateTenantApi,
+} from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 import {
   listTransactions,
   createTransaction,
@@ -69,6 +73,7 @@ interface TenantDetailPageProps {
 
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const { id } = use(params);
+  const { properties, tenants } = useAppData();
   const [tenant, setTenant] = useState<any | null>(null);
   const [property, setProperty] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -109,11 +114,14 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   };
 
   useEffect(() => {
-    const t = getTenant(id);
+    const t = tenants.find((item) => item.id === id || item._id === id);
     if (t) {
+      console.log("====================================");
+      console.log(t);
+      console.log("====================================");
       setTenant(t);
       if (t.propertyId) {
-        const p = getProperty(t.propertyId);
+        const p = properties.find((item) => item.id === t.propertyId);
         setProperty(p);
       }
       // show existing tenant password if present
@@ -156,17 +164,19 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     };
   }, [tenant?.id]);
 
-  const generatePassword = (length = 8) => {
+  const generatePassword = async (length = 8) => {
     const chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let pw = "";
     for (let i = 0; i < length; i++)
-      pw += chars.charAt(Math.floor(Math.random() * chars.length));
+      pw += chars.charAt(
+        Math.floor(Math.random() * Math.random() * chars.length),
+      );
     setGeneratedPassword(pw);
 
     // persist to tenant record if loaded
     if (tenant) {
-      const updated = updateTenant(tenant.id, { password: pw });
+      const updated = await updateTenantApi(tenant.id, { password: pw });
       if (updated) setTenant(updated);
     }
 
@@ -271,8 +281,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 "Are you sure you want to delete this tenant and all related data?",
               );
               if (!ok) return;
-              deleteTenant(tenant.id);
-              // could also clear transactions via API if needed
+              await deleteTenantApi(tenant.id);
               router.push("/dashboard/tenants");
             }}
           >
@@ -288,7 +297,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           <div className="flex items-start gap-4">
             <Image
               src={
-                tenant.image ||
+                tenant.avatar?.url ||
                 "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQf1fiSQO7JfDw0uv1Ae_Ye-Bo9nhGNg27dwg&s"
               }
               alt={tenant.name || "Tenant"}
@@ -354,9 +363,9 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                       <button
                         className="ml-4 text-xs text-primary hover:underline"
                         onClick={async () => {
-                          const newPw = generatePassword(8);
+                          const newPw = await generatePassword(8);
                           if (tenant) {
-                            const updated = updateTenant(tenant.id, {
+                            const updated = await updateTenantApi(tenant.id, {
                               password: newPw,
                             });
                             if (updated) setTenant(updated);
@@ -507,9 +516,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     <button
                       className="text-xs text-primary hover:underline ml-2"
                       onClick={async () => {
-                        const newPw = generatePassword(8);
+                        const newPw = await generatePassword(8);
+
                         if (tenant) {
-                          const updated = updateTenant(tenant.id, {
+                          const updated = await updateTenantApi(tenant._id, {
                             ...tenant,
                             password: newPw,
                           });
@@ -544,7 +554,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Unit</p>
                   <p className="text-lg font-semibold text-foreground">
-                    {tenant.unit}
+                    {tenant.unitNumber || "_ _"}
                   </p>
                 </div>
                 <div>
@@ -1182,7 +1192,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           phone: tenant.phone,
           tenantType: tenant.tenantType || "residential",
           propertyId: tenant.propertyId || "",
-          unitNumber: tenant.unit || "",
+          unitNumber: tenant.unitNumber || "",
           leaseStartDate: tenant.leaseStartDate || "",
           leaseRenewDate: tenant.leaseRenewDate || latestRentPaymentDate || "",
           leaseType: tenant.leaseType || "monthly",
@@ -1191,7 +1201,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           applicationDate: tenant.applicationDate || "",
           moveInDate: tenant.moveInDate || "",
           password: tenant.password || "",
-          monthlyRent: tenant.rentAmount || 0,
           emergencyContact: tenant.emergencyContact || "",
           notes: tenant.notes || "",
           dateOfBirth: tenant.dateOfBirth || "",
@@ -1217,7 +1226,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               phone: formData.phone,
               tenantType: formData.tenantType,
               propertyId: formData.propertyId,
-              unit: formData.unitNumber,
+              unitNumber: formData.unitNumber,
               leaseStartDate: formData.leaseStartDate,
               leaseRenewDate: formData.leaseRenewDate,
               leaseEndDate: formData.leaseEndDate,
@@ -1227,7 +1236,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               applicationDate: formData.applicationDate,
               moveInDate: formData.moveInDate,
               password: formData.password,
-              rentAmount: formData.monthlyRent,
               emergencyContact: formData.emergencyContact,
               notes: formData.notes,
               dateOfBirth: formData.dateOfBirth,
@@ -1241,8 +1249,11 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               financialInfo: formData.financialInfo,
               securityDeposit: formData.securityDeposit,
             };
-            updateTenant(updatedTenant.id, updatedTenant);
-            setTenant(updatedTenant);
+            const savedTenant = await updateTenantApi(
+              updatedTenant.id || updatedTenant._id || "",
+              updatedTenant,
+            );
+            if (savedTenant) setTenant(savedTenant);
             setIsEditOpen(false);
             // Show success message
             alert("Tenant updated successfully!");

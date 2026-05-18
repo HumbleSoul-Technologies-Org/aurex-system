@@ -1,8 +1,8 @@
 import { getCollection, insertIntoCollection, updateInCollection, removeFromCollection, generateId } from '@/lib/local-store'
 import { notifyNewProperty } from '@/lib/services/notifications'
-import { listTenants } from '@/lib/services/tenants'
+import { listTenants, TenantRecord } from '@/lib/services/tenants'
 import { getCategoryForType } from '@/lib/constants/property-types'
-import { apiRequest } from '../query-client'
+import { apiRequest, queryClient } from '../query-client'
 import { useAuth } from '../auth-context'
 import { use } from 'react'
 
@@ -28,7 +28,7 @@ export interface PropertyRecord {
   features?: string[]
   specifications?: PropertySpecification[]
   description?: string
-  tenants?: string[] // tenant ids
+  tenants?: string[] | TenantRecord[] // tenant ids or populated tenant objects
   occupancy?: number
   monthlyRevenue?: number
   location?: {
@@ -74,20 +74,23 @@ export function getAvailablePropertiesWithUnits() {
   const properties = listProperties();
   const tenants = listTenants();
 
-  return properties.map(property => {
-    const units = Array.isArray(property.units)
+  return properties.map((property) => {
+    const units = Array.isArray(property.units) && property.units.length > 0
       ? property.units
       : generateUnitNumbers(
           property.name ?? '',
           property.city ?? '',
           property.country ?? '',
-          property.units_available ?? 1,
+          (property as any).units_available ?? (property as any).unitsAvailable ?? (property.units?.length ?? 1),
         );
 
     // Find tenants assigned to this property
-    const propertyTenants = tenants.filter(tenant => tenant.propertyId === property.id);
-    // Get occupied units
-    const occupiedUnits = propertyTenants.map((tenant) => tenant.unit).filter(Boolean);
+    const propertyTenants = tenants.filter((tenant) => tenant.propertyId === property._id);
+    // Get occupied units (be defensive about tenant unit field names)
+    const occupiedUnits = propertyTenants
+      .map((tenant) => (tenant as any).unit ?? (tenant as any).unitNumber ?? (tenant as any).unit_no)
+      .filter(Boolean);
+
     // Get available units
     const availableUnits = units.filter((unit) => !occupiedUnits.includes(unit));
 
@@ -141,7 +144,7 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
     capRate: payload.capRate,
   }
 
-  const res = await apiRequest('POST', `/property/create/${user?._id}`, payLoad)
+  const res = await apiRequest('POST', `/property/create/${user?._id || user?.id}`, payLoad)
 
   const data = await res.json()
 
@@ -153,6 +156,9 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
   
 
   insertIntoCollection('properties', newProperty)
+  queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
+    current ? [newProperty, ...current] : listProperties(),
+  )
 
   // Notify about new property
   notifyNewProperty(newProperty.name, newProperty.id)
@@ -162,12 +168,23 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
 
 export async function updateProperty(id: string, patch: Partial<PropertyRecord>): Promise<PropertyRecord | null> {
   const res = await apiRequest('PUT', `/property/${id}/update`, patch)
-  
   if (!res.ok) {
-    console.error('Failed to update property', await res.text());
-    return null;
+    console.error('Failed to update property', await res.text())
+    return null
   }
-  return updateInCollection<PropertyRecord>('properties', id, patch)
+
+  const updated = updateInCollection<PropertyRecord>('properties', id, patch)
+  if (updated) {
+    queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
+      current
+        ? current.map((property) =>
+            property.id === updated.id ? { ...property, ...updated } : property,
+          )
+        : [updated],
+    )
+  }
+
+  return updated
 
 }
 
@@ -178,5 +195,10 @@ export async function deleteProperty(id: string,adminPassword:string): Promise<b
       console.error('Failed to update property', await res.text());
     return false;
   }
+
+  removeFromCollection('properties', id)
+  queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
+    current ? current.filter((property) => property.id !== id) : [],
+  )
   return true
 }

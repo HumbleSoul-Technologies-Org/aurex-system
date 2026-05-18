@@ -14,22 +14,21 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { listTenants, getTenant } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 import { listTransactions } from "@/app/lib/transactions-client";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
-import { getProperty } from "@/lib/services/properties";
 
 export default function TenantDashboard() {
   const { user } = useAuth();
 
+  const { tenants, properties } = useAppData();
+
   // Find the tenant record for the current user
-  const tenant = user
-    ? listTenants().find((t) => t.email === user.email)
-    : null;
+  const tenant = user ? tenants.find((t) => t.email === user.email) : null;
 
   // Get property info
   const propertyInfo = tenant?.propertyId
-    ? getProperty(tenant.propertyId)
+    ? properties.find((p) => p.id === tenant.propertyId)
     : null;
 
   // Get payment history (transactions)

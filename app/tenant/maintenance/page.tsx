@@ -35,13 +35,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { listTenants } from "@/lib/services/tenants";
+import { useAppData } from "@/lib/data-context";
 import {
   getMaintenanceRequests,
   createMaintenanceRequest,
   deleteMaintenanceRequest,
 } from "@/lib/services/maintenance";
-import { getProperty } from "@/lib/services/properties";
 
 export default function MaintenancePage() {
   const { user } = useAuth();
@@ -49,12 +48,12 @@ export default function MaintenancePage() {
   const [filter, setFilter] = useState("all");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  const { tenants, properties } = useAppData();
+
   // Find the tenant record for the current user
-  const tenant = user
-    ? listTenants().find((t) => t.email === user.email)
-    : null;
+  const tenant = user ? tenants.find((t) => t.email === user.email) : null;
   const propertyInfo = tenant?.propertyId
-    ? getProperty(tenant.propertyId)
+    ? properties.find((p) => p.id === tenant.propertyId)
     : null;
 
   // Get maintenance requests for this tenant (reactive to refreshTrigger)

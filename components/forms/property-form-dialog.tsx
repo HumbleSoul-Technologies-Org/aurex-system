@@ -5,7 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { X, MapPin, Home, DollarSign, Loader2, ChevronDown } from "lucide-react";
+import {
+  X,
+  MapPin,
+  Home,
+  DollarSign,
+  Loader2,
+  ChevronDown,
+} from "lucide-react";
 import {
   PROPERTY_CATEGORIES,
   getSpecificationsForType,
@@ -107,9 +114,8 @@ export default function PropertyFormDialog({
   isLoading = false,
   initialData,
 }: PropertyFormDialogProps) {
-  const [formData, setFormData] = useState<PropertyFormData>(
-    getDefaultFormData(),
-  );
+  const [formData, setFormData] =
+    useState<PropertyFormData>(getDefaultFormData());
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -138,23 +144,22 @@ export default function PropertyFormDialog({
         pricePerUnit: initialData.pricePerUnit ?? 0,
         features: Array.isArray(initialData.features)
           ? initialData.features.join("\n")
-          : initialData.features ?? "",
+          : (initialData.features ?? ""),
         specificationValues: initialData.specificationValues ?? {},
         customSpecifications: initialData.customSpecifications ?? [],
         zoning: initialData.zoning ?? "",
         permittedUses: Array.isArray(initialData.permittedUses)
           ? initialData.permittedUses.join("\n")
-          : initialData.permittedUses ?? "",
-        annualPropertyTaxes:
-          initialData.annualPropertyTaxes?.toString() ?? "",
+          : (initialData.permittedUses ?? ""),
+        annualPropertyTaxes: initialData.annualPropertyTaxes?.toString() ?? "",
         annualInsurance: initialData.annualInsurance?.toString() ?? "",
         appraisedValue: initialData.appraisedValue?.toString() ?? "",
         lastAppraisalDate: initialData.lastAppraisalDate ?? "",
         noi: initialData.noi?.toString() ?? "",
         capRate: initialData.capRate?.toString() ?? "",
         imageUrl: Array.isArray(initialData.imageUrl)
-          ? (initialData.imageUrl as any)[0]?.url ?? ""
-          : initialData.imageUrl ?? "",
+          ? ((initialData.imageUrl as any)[0]?.url ?? "")
+          : (initialData.imageUrl ?? ""),
         description: initialData.description ?? "",
         estate: initialData.estate ?? "",
       };
@@ -293,7 +298,7 @@ export default function PropertyFormDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit?.(formData, mode === "create" ? selectedImage : undefined);
-    onClose();
+    // onClose();
   };
 
   if (!isOpen) return null;
