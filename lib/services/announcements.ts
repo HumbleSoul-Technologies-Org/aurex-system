@@ -11,26 +11,29 @@ export interface AnnouncementRecord {
   scheduledDate?: string
   createdBy?: string
   createdAt?: string
+  sentAt?: string
+  tenantSelectionMode?: string
+  readBy?: string[]
 }
 
 export async function createAnnouncementApi(payload: Partial<AnnouncementRecord>, token?: string) {
   const res = await apiRequest('POST', '/announcements/create', payload, token)
   const json = await res.json()
   const a = json.announcement || json
-  return { ...a, id: a.id || a._id } as AnnouncementRecord
+  return { ...a, id: a.id || a._id, readBy: a.readBy || [] } as AnnouncementRecord
 }
 
 export async function getAnnouncementsByProperty(propertyId: string, token?: string) {
   const res = await apiRequest('GET', `/announcements/property/${propertyId}/all`, undefined, token)
   const json = await res.json()
-  return (json || []).map((a: any) => ({ ...a, id: a.id || a._id })) as AnnouncementRecord[]
+  return (json || []).map((a: any) => ({ ...a, id: a.id || a._id, readBy: a.readBy || [] })) as AnnouncementRecord[]
 }
 
 export async function getAnnouncementById(id: string, token?: string) {
   const res = await apiRequest('GET', `/announcements/${id}`, undefined, token)
   const json = await res.json()
   const a = json.announcement || json
-  return { ...a, id: a.id || a._id } as AnnouncementRecord
+  return { ...a, id: a.id || a._id, readBy: a.readBy || [] } as AnnouncementRecord
 }
 
 export async function deleteAnnouncementApi(id: string, token?: string) {
@@ -43,24 +46,9 @@ export async function markAnnouncementRead(id: string, tenantId: string, token?:
   const res = await apiRequest('POST', `/announcements/${id}/read`, { tenantId }, token)
   const json = await res.json()
   const a = json.announcement || json
-  return { ...a, id: a.id || a._id } as AnnouncementRecord
+  return { ...a, id: a.id || a._id, readBy: a.readBy || [] } as AnnouncementRecord
 }
 import { insertIntoCollection, getCollection, generateId, updateInCollection } from '@/lib/local-store'
-
-export interface AnnouncementRecord {
-  id: string
-  title: string
-  message: string
-  recipients: string
-  priority: string
-  scheduledDate?: string
-  propertyId?: string
-  tenantSelectionMode?: string
-  tenantIds: string[]
-  createdAt: string
-  sentAt?: string
-  readBy: string[] // array of tenantIds who have read the announcement
-}
 
 // announcements
 export function listAnnouncements(): AnnouncementRecord[] {

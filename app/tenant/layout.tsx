@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   CreditCard,
@@ -34,8 +34,9 @@ interface NavItem {
 function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
 
-  const { user: authUser, isAuthenticated, isLoading } = useAuth();
+  const { user: authUser, isAuthenticated, isLoading, logout } = useAuth();
 
   React.useEffect(() => {
     // Don't redirect while loading
@@ -52,6 +53,15 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isLoading, authUser]);
 
   const unreadNotifications = notifications.filter((n) => !n.read).length;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error("Tenant logout failed:", error);
+    }
+    router.push("/auth/login");
+  };
 
   // Desktop sidebar items (all navigation options)
   const desktopNavItems: NavItem[] = [
@@ -148,6 +158,21 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Dark Mode Toggle */}
             <ThemeToggle />
 
+            <button
+              onClick={handleLogout}
+              className="hidden sm:inline-flex items-center gap-2 px-3 py-2 hover:bg-secondary rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm">Logout</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="sm:hidden p-2 hover:bg-secondary rounded-lg transition-colors"
+              aria-label="Logout"
+            >
+              <LogOut className="w-5 h-5 text-foreground" />
+            </button>
+
             {/* Profile Menu */}
             <button className="flex items-center gap-2 px-2 py-1 hover:bg-secondary rounded-lg transition-colors">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
@@ -158,7 +183,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                   {currentTenant?.name || "Tenant"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Unit {currentTenant?.unit || "N/A"}
+                  Unit {currentTenant?.unitNumber || "_ _"}
                 </p>
               </div>
             </button>
@@ -200,6 +225,14 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* Sidebar Footer */}
           <div className="p-4 border-t border-border space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2 border-border text-foreground bg-transparent"
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
             <Button
               variant="outline"
               className="w-full justify-start gap-2 border-border text-foreground bg-transparent"

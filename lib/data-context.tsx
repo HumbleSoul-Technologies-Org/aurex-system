@@ -27,7 +27,18 @@ async function fetchProperties(): Promise<PropertyRecord[]> {
   const adminId = getAdminId();
   const endpoint = adminId ? `/property/${adminId}/all` : "/property/all";
   const res = await apiRequest("GET", endpoint);
-  return res.json();
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  return data.map((property: any) => ({
+    ...property,
+    id: property.id || property._id || "",
+    tenants: Array.isArray(property.tenants)
+      ? property.tenants.map((tenant: any) => ({
+          ...tenant,
+          id: tenant.id || tenant._id || "",
+        }))
+      : property.tenants || [],
+  }));
 }
 
 // Tenant data is now derived from populated `property.tenants` returned by the properties API.
@@ -48,7 +59,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const propertiesData = propertiesQuery.data ?? listProperties();
   const tenantsDerived: TenantRecord[] = (propertiesData as any[])
     .flatMap((p) => (Array.isArray(p.tenants) ? p.tenants : []))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((tenant: any) => ({
+      ...tenant,
+      id: tenant.id || tenant._id || "",
+    }));
 
   const value: DataContextValue = {
     properties: propertiesQuery.data ?? listProperties(),

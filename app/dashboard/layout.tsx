@@ -40,7 +40,6 @@ import {
   deleteNotification,
 } from "@/lib/services/notifications";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
-import { listMessages } from "@/lib/services/messages";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -91,11 +90,8 @@ export default function DashboardLayout({
     ).length;
     setPendingMaintenanceCount(pendingCount);
 
-    const messages = listMessages();
-    const unreadCount = messages.filter(
-      (msg) => !msg.seen && msg.from !== "management",
-    ).length;
-    setUnreadMessagesCount(unreadCount);
+    // Messages are now fetched from API; unread count loaded dynamically in Communications page
+    setUnreadMessagesCount(0);
   }, []);
 
   const refreshNotifications = () => {

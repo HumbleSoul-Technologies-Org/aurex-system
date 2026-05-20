@@ -102,7 +102,7 @@ export default function InviteTenantForm({
         phone: formData.phone,
         password: formData.password,
         tenantType: "residential", // Default for invite, can be changed later
-        unitNumber: invite.unitNumber || "",
+        unitNumber: invite.unitNumber || undefined,
         propertyId: invite.propertyId,
         rentAmount: 0, // Will be set by admin later
         leaseType: formData.leaseType,
@@ -118,8 +118,11 @@ export default function InviteTenantForm({
         status: "pending",
       });
 
-      // Accept the invite
-      acceptTenantInvite(invite.token);
+      // Accept the invite before redirecting
+      const accepted = acceptTenantInvite(invite.token);
+      if (!accepted) {
+        throw new Error("Unable to accept invite. Please contact support.");
+      }
 
       // Log the tenant in
       const loginResult = await login(formData.email, formData.password);
@@ -201,7 +204,13 @@ export default function InviteTenantForm({
               onChange={handleChange}
               placeholder="john@example.com"
               required
+              disabled={Boolean(invite.email)}
             />
+            {invite.email && (
+              <p className="text-xs text-muted-foreground mt-1">
+                This invite is linked to {invite.email}. Please use that email.
+              </p>
+            )}
           </div>
 
           <div>

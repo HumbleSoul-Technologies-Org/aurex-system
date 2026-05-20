@@ -39,9 +39,16 @@ export type TransactionCreate = {
     frequency?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
     autoPay?: boolean
   }
+  metadata?: Record<string, any>
 }
 
-export type Transaction = TransactionCreate & { id: string; date: string; transID: string; receiptReference?: string }
+export type Transaction = TransactionCreate & {
+  id: string
+  date: string
+  transID: string
+  receiptReference?: string
+  metadata?: Record<string, any>
+}
 
 export function listTransactions(tenantId?: string, type?: string): Transaction[] {
   let transactions = getCollection<Transaction>('transactions') || []
@@ -89,6 +96,7 @@ export function createTransaction(payload: TransactionCreate): Transaction {
     approvedBy: payload.approvedBy,
     approvalDate: payload.approvalDate,
     recurring: payload.recurring,
+    metadata: payload.metadata,
   }
   insertIntoCollection('transactions', tx)
   return tx

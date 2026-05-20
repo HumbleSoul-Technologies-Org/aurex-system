@@ -91,6 +91,18 @@ export default function TenantForm({
     getAvailablePropertiesWithUnits(),
   );
 
+  // Helper function to format dates from ISO to YYYY-MM-DD for HTML date inputs
+  const formatDateForInput = (dateString: string | undefined): string => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "";
+      return date.toISOString().split("T")[0];
+    } catch {
+      return "";
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setAvailableProperties(getAvailablePropertiesWithUnits());
@@ -102,19 +114,19 @@ export default function TenantForm({
           tenantType: initialData.tenantType || "residential",
           propertyId: initialData.propertyId || "",
           unitNumber: initialData.unitNumber || "",
-          leaseStartDate: initialData.leaseStartDate || "",
-          leaseRenewDate: initialData.leaseRenewDate || "",
-          leaseEndDate: initialData.leaseEndDate || "",
+          leaseStartDate: formatDateForInput(initialData.leaseStartDate),
+          leaseRenewDate: formatDateForInput(initialData.leaseRenewDate),
+          leaseEndDate: formatDateForInput(initialData.leaseEndDate),
           leaseType: initialData.leaseType || "monthly",
           leaseTerms: initialData.leaseTerms || "",
           preferredContactMethod: initialData.preferredContactMethod || "email",
-          applicationDate: initialData.applicationDate || "",
-          moveInDate: initialData.moveInDate || "",
+          applicationDate: formatDateForInput(initialData.applicationDate),
+          moveInDate: formatDateForInput(initialData.moveInDate),
           password: initialData.password || "",
           monthlyRent: initialData.monthlyRent || 0,
           emergencyContact: initialData.emergencyContact || "",
           notes: initialData.notes || "",
-          dateOfBirth: initialData.dateOfBirth || "",
+          dateOfBirth: formatDateForInput(initialData.dateOfBirth),
           employmentInfo: initialData.employmentInfo || "",
           previousAddresses: initialData.previousAddresses || "",
           coSigner: initialData.coSigner || "",

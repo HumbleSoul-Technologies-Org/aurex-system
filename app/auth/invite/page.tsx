@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function InvitePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
@@ -23,8 +24,7 @@ export default function InvitePage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
+    const token = searchParams?.get("token");
 
     if (!token) {
       setError("No invite token provided");
@@ -39,14 +39,19 @@ export default function InvitePage() {
       return;
     }
 
-    setInvite(validation.invite);
-    const prop = properties.find(
-      (item) => item.id === validation.invite!.propertyId,
-    );
+    const inviteData = validation.invite;
+    const prop = properties.find((item) => item.id === inviteData.propertyId);
+    if (!prop) {
+      setError("The invited property is not available.");
+      setIsValidating(false);
+      return;
+    }
+
+    setInvite(inviteData);
     setProperty(prop);
     setIsValid(true);
     setIsValidating(false);
-  }, []);
+  }, [properties]);
 
   if (isValidating) {
     return (
@@ -97,6 +102,11 @@ export default function InvitePage() {
           <p className="text-muted-foreground">
             Complete your tenant registration to get started
           </p>
+          {invite.email && (
+            <p className="text-sm text-primary mt-2">
+              Invited email: {invite.email}
+            </p>
+          )}
           {invite.unitNumber && (
             <p className="text-sm text-primary mt-2">
               Unit: {invite.unitNumber}

@@ -21,6 +21,7 @@ import {
   MapPin,
   Users,
   DollarSign,
+  User,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 
@@ -199,14 +200,14 @@ export default function PropertiesPage() {
       {/* Grid View */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProperties.map((property) => {
+          {filteredProperties.map((property, index) => {
             const imageUrl =
               typeof property.images?.[0] === "string"
                 ? property.images[0]
                 : property.images?.[0]?.url || "/placeholder.svg";
             return (
               <Card
-                key={property.id}
+                key={index}
                 className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full"
               >
                 {/* Property Image */}
@@ -217,10 +218,20 @@ export default function PropertiesPage() {
                     className="w-full h-full object-cover hover:scale-105 transition-transform"
                   />
                   <div className="absolute top-3 right-3 bg-primary text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    {property.occupancy ?? 0}
+                    {(property.tenants?.length ?? 0) !== 1 ? (
+                      <span className="flex items-center justify-center gap-2">
+                        {property?.tenants?.length || 0}{" "}
+                        <Users className="w-4 h-4" />
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        {property?.tenants?.length || 0}{" "}
+                        <User className="w-4 h-4" />
+                      </span>
+                    )}{" "}
                   </div>
                   <div className="absolute top-3 left-3 bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold capitalize">
-                    {property.type}
+                    {property.propertyType}
                   </div>
                 </div>
 

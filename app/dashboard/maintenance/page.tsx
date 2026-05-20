@@ -1,26 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  getMaintenanceRequests,
-  updateMaintenanceRequest,
-  deleteMaintenanceRequest,
+  fetchAllMaintenanceRequests,
+  updateMaintenanceRequestById,
+  deleteMaintenanceRequestById,
   type MaintenanceRequest,
 } from "@/lib/services/maintenance";
 import { useAppData } from "@/lib/data-context";
-import { createTransaction } from "@/app/lib/transactions-client";
+import AddExpenseForm from "@/components/forms/add-expense-form";
 import Link from "next/link";
 import {
   Plus,
@@ -34,6 +24,14 @@ import {
   ChevronRight,
   Trash2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface MaintenanceRequestDisplay {
   id: string;
@@ -58,10 +56,27 @@ interface MaintenanceRequestDisplay {
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [rawRequests, setRawRequests] = useState<MaintenanceRequest[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const { tenants: allTenants, properties: allProperties } = useAppData();
 
-  // Get real maintenance requests and enrich with tenant and property data (reactive)
-  const rawRequests = useMemo(() => getMaintenanceRequests(), [refreshTrigger]);
+  const loadMaintenanceRequests = useCallback(async () => {
+    setIsLoadingRequests(true);
+    try {
+      const requests = await fetchAllMaintenanceRequests();
+      setRawRequests(requests);
+    } catch (error) {
+      console.error("Failed to load maintenance requests:", error);
+      setRawRequests([]);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMaintenanceRequests();
+  }, [loadMaintenanceRequests, refreshTrigger]);
+
   const enrichedRequests: MaintenanceRequestDisplay[] = useMemo(
     () =>
       rawRequests.map((req) => {
@@ -100,149 +115,30 @@ export default function MaintenancePage() {
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
     null,
   );
-  const [isSavingExpense, setIsSavingExpense] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [expenseForm, setExpenseForm] = useState({
-    maintenanceId: "",
-    expense: "",
-    expenseType: "",
-    description: "",
-    tenantId: "",
-    price: "",
-    paymentMethod: "",
-    companyAssigned: "",
-    propertyId: "",
-    unit: "",
-    date: "",
-    receiptReference: "",
-  });
-
-  // Get the selected property for conditional unit display
-  const selectedProperty = useMemo(() => {
-    return expenseForm.propertyId
-      ? allProperties.find((p) => p.id === expenseForm.propertyId)
-      : null;
-  }, [expenseForm.propertyId, allProperties]);
 
   const openExpenseDialog = (requestId: string) => {
-    const req = enrichedRequests.find((r) => r.id === requestId);
     setSelectedRequestId(requestId);
-    setExpenseForm({
-      maintenanceId: req?.id || requestId,
-      expense: req?.category || "",
-      expenseType: "",
-      description: `Maintenance: ${req?.description || ""}`,
-      tenantId: req?.tenantId || "",
-      price:
-        req?.cost !== null && req?.cost !== undefined ? String(req.cost) : "",
-      paymentMethod: "",
-      companyAssigned: req?.assignedTo || "",
-      propertyId: req?.propertyId || "",
-      unit: req?.unit || "",
-      date: new Date().toISOString().split("T")[0],
-      receiptReference: "",
-    });
     setExpenseDialogOpen(true);
   };
 
-  const handleExpenseChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
-  ) => {
-    const { name, value } = e.target;
-
-    if (name === "propertyId") {
-      const property = allProperties.find((p) => p.id === value);
-      if (property && property.units.length === 1) {
-        // Auto-populate unit if property has only one unit
-        setExpenseForm((prev) => ({
-          ...prev,
-          propertyId: value,
-          unit: property.units[0],
-        }));
-      } else {
-        // Clear unit if property has multiple units or none
-        setExpenseForm((prev) => ({ ...prev, propertyId: value, unit: "" }));
-      }
-    } else {
-      setExpenseForm((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleExpenseSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleExpenseSubmit = async (formData: any) => {
     if (!selectedRequestId) return;
 
-    setIsSavingExpense(true);
-    const price = parseFloat(expenseForm.price || "0") || 0;
-
     try {
-      // Update the maintenance request in the database
-      const updates: Partial<MaintenanceRequest> = {
-        cost: price,
-        assignedTo: expenseForm.companyAssigned || undefined,
+      // Update maintenance request to "assigned" status with the expense transaction ID
+      await updateMaintenanceRequestById(selectedRequestId, {
         status: "assigned",
-      };
-      updateMaintenanceRequest(selectedRequestId, updates);
-
-      // Trigger a refresh so enrichedRequests re-calculates from the service
-      setRefreshTrigger((prev) => prev + 1);
-
-      // Record as a transaction with expense details
-      const tx = await createTransaction({
-        tenantId: expenseForm.tenantId || undefined,
-        propertyId: expenseForm.propertyId || undefined,
-        amount: price,
-        type: "expense",
-        description: expenseForm.description || "Maintenance expense",
-        status: "completed",
-        category: expenseForm.expenseType || "maintenance",
-        paymentMethod: expenseForm.paymentMethod || undefined,
-        date: expenseForm.date || undefined,
-        receiptReference: expenseForm.receiptReference || undefined,
-        unit: expenseForm.unit || undefined,
+        transactionId: formData.transactionId, // This will be set by AddExpenseForm
       });
 
-      // Update the maintenance request with the transaction ID (store the internal id)
-      const finalUpdates: Partial<MaintenanceRequest> = {
-        ...updates,
-        transactionId: tx.id,
-      };
-      updateMaintenanceRequest(selectedRequestId, finalUpdates);
-
-      // Trigger a refresh so enrichedRequests re-calculates from the service
-      setRefreshTrigger((prev) => prev + 1);
-
-      // Notify other parts of the app that transactions changed
-      try {
-        window.dispatchEvent(new CustomEvent("transactionsUpdated"));
-      } catch (e) {
-        // ignore in non-browser contexts
-      }
-
-      setExpenseForm({
-        maintenanceId: "",
-        expense: "",
-        expenseType: "",
-        description: "",
-        tenantId: "",
-        price: "",
-        paymentMethod: "",
-        companyAssigned: "",
-        propertyId: "",
-        unit: "",
-        date: "",
-        receiptReference: "",
-      });
-      setSelectedRequestId(null);
+      // Close dialog and refresh
       setExpenseDialogOpen(false);
-    } catch (error) {
-      console.error("Error saving expense:", error);
-    } finally {
-      setIsSavingExpense(false);
+      setRefreshTrigger((t) => t + 1);
+    } catch (err) {
+      console.error("Failed to approve maintenance", err);
     }
   };
 
@@ -251,9 +147,9 @@ export default function MaintenancePage() {
     setDeleteDialogOpen(true);
   };
 
-  const handleCompleteRequest = (requestId: string) => {
+  const handleCompleteRequest = async (requestId: string) => {
     try {
-      updateMaintenanceRequest(requestId, {
+      await updateMaintenanceRequestById(requestId, {
         status: "completed",
         completedDate: new Date(),
       });
@@ -265,19 +161,13 @@ export default function MaintenancePage() {
     }
   };
 
-  const confirmDeleteRequest = () => {
+  const confirmDeleteRequest = async () => {
     if (!requestToDelete) return;
 
     setDeletingId(requestToDelete);
     try {
-      // Delete from localStorage database
-      const success = deleteMaintenanceRequest(requestToDelete);
-      if (success) {
-        // Trigger a re-render to update the UI
-        setRefreshTrigger((prev) => prev + 1);
-      } else {
-        alert("Failed to delete maintenance request. Please try again.");
-      }
+      await deleteMaintenanceRequestById(requestToDelete);
+      setRefreshTrigger((prev) => prev + 1);
     } catch (error) {
       console.error("Error deleting maintenance request:", error);
       alert("Failed to delete maintenance request. Please try again.");
@@ -668,255 +558,25 @@ export default function MaintenancePage() {
         </Card>
       )}
 
-      {/* Expense Dialog */}
-      <Dialog
-        open={expenseDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
+      {/* Expense Dialog - Using standardized AddExpenseForm component */}
+      {selectedRequestId && (
+        <AddExpenseForm
+          isOpen={expenseDialogOpen}
+          onClose={() => {
+            setExpenseDialogOpen(false);
             setSelectedRequestId(null);
-            setExpenseForm({
-              maintenanceId: "",
-              expense: "",
-              expenseType: "",
-              description: "",
-              tenantId: "",
-              price: "",
-              paymentMethod: "",
-              companyAssigned: "",
-              propertyId: "",
-              unit: "",
-              date: "",
-              receiptReference: "",
-            });
+          }}
+          mode="simple"
+          maintenanceRequestId={selectedRequestId}
+          initialTenantId={
+            enrichedRequests.find((r) => r.id === selectedRequestId)?.tenantId
           }
-          setExpenseDialogOpen(open);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record Expense</DialogTitle>
-            <DialogDescription>
-              Approve maintenance and record expense details.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form
-            onSubmit={(e) => {
-              handleExpenseSubmit(e);
-            }}
-            className="p-2"
-          >
-            <div className="space-y-4 py-2">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Expense Category
-                </label>
-                <select
-                  name="expenseType"
-                  value={expenseForm.expenseType}
-                  onChange={handleExpenseChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                  disabled={isSavingExpense}
-                >
-                  <option value="">Select Category</option>
-                  <option value="maintenance">Maintenance & Repairs</option>
-                  <option value="utilities">Utilities</option>
-                  <option value="insurance">Insurance</option>
-                  <option value="property-tax">Property Tax</option>
-                  <option value="cleaning">Cleaning & Services</option>
-                  <option value="legal">Legal & Compliance</option>
-                  <option value="management">Management Fees</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Description
-                </label>
-                <Textarea
-                  name="description"
-                  value={expenseForm.description}
-                  onChange={handleExpenseChange}
-                  placeholder="Details about the expense"
-                  className="h-24"
-                  disabled={isSavingExpense}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    name="date"
-                    value={expenseForm.date}
-                    onChange={handleExpenseChange}
-                    disabled={isSavingExpense}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Receipt/Invoice Reference
-                  </label>
-                  <Input
-                    name="receiptReference"
-                    value={expenseForm.receiptReference}
-                    onChange={handleExpenseChange}
-                    placeholder="Reference number"
-                    disabled={isSavingExpense}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Tenant
-                </label>
-                <select
-                  name="tenantId"
-                  value={expenseForm.tenantId}
-                  onChange={handleExpenseChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                  disabled={isSavingExpense}
-                >
-                  <option value="">Select Tenant</option>
-                  {allTenants.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Property
-                  </label>
-                  <select
-                    name="propertyId"
-                    value={expenseForm.propertyId}
-                    onChange={handleExpenseChange}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                    disabled={isSavingExpense}
-                  >
-                    <option value="">Select Property</option>
-                    {allProperties.map((property) => (
-                      <option key={property.id} value={property.id}>
-                        {property.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {selectedProperty && selectedProperty.units.length > 1 && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Unit
-                    </label>
-                    <select
-                      name="unit"
-                      value={expenseForm.unit}
-                      onChange={handleExpenseChange}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                      disabled={isSavingExpense}
-                    >
-                      <option value="">Select Unit</option>
-                      {selectedProperty.units.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Price
-                  </label>
-                  <Input
-                    type="text"
-                    name="price"
-                    value={expenseForm.price}
-                    onChange={handleExpenseChange}
-                    placeholder="0"
-                    disabled={isSavingExpense}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Company Assigned
-                  </label>
-                  <Input
-                    name="companyAssigned"
-                    value={expenseForm.companyAssigned}
-                    onChange={handleExpenseChange}
-                    placeholder="Company name"
-                    disabled={isSavingExpense}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Payment Method
-                </label>
-                <select
-                  name="paymentMethod"
-                  value={expenseForm.paymentMethod}
-                  onChange={handleExpenseChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                  disabled={isSavingExpense}
-                >
-                  <option value="">Select Method</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="check">Check</option>
-                </select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setExpenseDialogOpen(false);
-                    setSelectedRequestId(null);
-                    setExpenseForm({
-                      maintenanceId: "",
-                      expense: "",
-                      expenseType: "",
-                      description: "",
-                      tenantId: "",
-                      price: "",
-                      paymentMethod: "",
-                      companyAssigned: "",
-                      propertyId: "",
-                      unit: "",
-                      date: "",
-                      receiptReference: "",
-                    });
-                  }}
-                  disabled={isSavingExpense}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSavingExpense}>
-                  {isSavingExpense ? "Saving..." : "Approve"}
-                </Button>
-              </div>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          initialPropertyId={
+            enrichedRequests.find((r) => r.id === selectedRequestId)?.propertyId
+          }
+          onSubmit={handleExpenseSubmit}
+        />
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

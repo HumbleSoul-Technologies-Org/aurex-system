@@ -33,6 +33,7 @@ import {
   AnnouncementRecord,
 } from "@/lib/services/announcements";
 import { useAppData } from "@/lib/data-context";
+import { useAuth } from "@/lib/auth-context";
 import {
   MessageSquare,
   Plus,
@@ -76,6 +77,7 @@ interface AnnouncementTemplate {
 }
 
 export default function CommunicationsPage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("inbox");
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
@@ -268,17 +270,23 @@ export default function CommunicationsPage() {
     });
   };
 
+  const getTenantName = (id?: string) => {
+    if (!id) return "Unknown Tenant";
+    return tenants.find((t) => t.id === id)?.name || id;
+  };
+
   // derive counts for each tab to display total items
   const inboxCount = useMemo(
     () =>
       messagesData.filter(
-        (msg) => msg.to === "You" && msg.from !== "management",
+        // inbox: messages from tenants (fromUserId != admin, or recipient is admin)
+        (msg) => msg.fromUserId !== user?.id,
       ).length,
-    [messagesData],
+    [messagesData, user?.id],
   );
   const sentCount = useMemo(
-    () => messagesData.filter((msg) => msg.from === "management").length,
-    [messagesData],
+    () => messagesData.filter((msg) => msg.fromUserId === user?.id).length,
+    [messagesData, user?.id],
   );
   const repliedCount = useMemo(
     () => messagesData.filter((msg) => msg.replyId).length,
@@ -288,45 +296,51 @@ export default function CommunicationsPage() {
   const conversations: Conversation[] = useMemo(() => {
     let filteredMessages = messagesData;
     if (activeTab === "inbox") {
+      // inbox: messages from tenants (received by admin)
       filteredMessages = messagesData.filter(
-        (msg) => msg.to === "You" && msg.from !== "management",
+        (msg) => msg.fromUserId !== user?.id,
       );
     } else if (activeTab === "sent") {
+      // sent: messages from admin to tenants
       filteredMessages = messagesData.filter(
-        (msg) => msg.from === "management",
+        (msg) => msg.fromUserId === user?.id,
       );
     } else if (activeTab === "replied") {
+      // replied: messages with replies
       filteredMessages = messagesData.filter((msg) => msg.replyId);
     }
     const map = new Map<string, Conversation>();
     filteredMessages.forEach((msg) => {
-      const other = msg.from === "management" ? msg.to : msg.from;
-      if (!other) return;
-      let conv = map.get(other);
+      // Determine other party (sender if message is from tenant, recipient if from admin)
+      const otherId =
+        msg.fromUserId === user?.id ? msg.toUserId : msg.fromUserId;
+      if (!otherId) return;
+      const participant = getTenantName(otherId);
+      let conv = map.get(otherId);
       if (!conv) {
         conv = {
-          id: other,
-          participant: other,
+          id: otherId,
+          participant,
           lastMessage: "",
           timestamp: "",
           unreadCount: 0,
           messages: [],
         };
-        map.set(other, conv);
+        map.set(otherId, conv);
       }
       conv.messages.push({
         id: msg.id,
-        sender: msg.from,
-        senderType: msg.from === "management" ? "manager" : "tenant",
+        sender: msg.fromUserId || "",
+        senderType: msg.fromUserId === user?.id ? "manager" : "tenant",
         content: msg.message,
         timestamp: msg.createdAt || "",
         isRead: !!msg.seen,
-        sent: msg.from === "management",
+        sent: msg.fromUserId === user?.id,
         replied: !!msg.replyId,
       });
       conv.lastMessage = msg.message;
       conv.timestamp = msg.createdAt || "";
-      if (!msg.seen && msg.to === "You") {
+      if (!msg.seen && msg.fromUserId !== user?.id) {
         conv.unreadCount += 1;
       }
     });
@@ -451,7 +465,7 @@ export default function CommunicationsPage() {
   const deleteAllInboxMessages = () => {
     (async () => {
       const inboxMessages = messagesData.filter(
-        (msg) => msg.to === "You" && msg.from !== "management",
+        (msg) => msg.fromUserId !== user?.id,
       );
       for (const msg of inboxMessages) {
         try {
@@ -474,7 +488,7 @@ export default function CommunicationsPage() {
   const deleteAllSentMessages = () => {
     (async () => {
       const sentMessages = messagesData.filter(
-        (msg) => msg.from === "management",
+        (msg) => msg.fromUserId === user?.id,
       );
       for (const msg of sentMessages) {
         try {
@@ -495,23 +509,28 @@ export default function CommunicationsPage() {
   };
 
   const handleSendMessage = () => {
-    if (messageText.trim() && selectedConversation) {
+    if (messageText.trim() && selectedConversation && user?.id) {
       (async () => {
         try {
           await createMessageApi({
-            to: selectedConversation.participant,
+            fromUserId: user.id,
+            toUserId: selectedConversation.id,
+            tenantId: selectedConversation.id,
             message: messageText,
-            createdBy: undefined,
+            createdBy: user.id,
           });
         } catch (e) {}
-        // optionally create a reply to last message
+        // create a reply to the last message if it exists
         const last =
           selectedConversation.messages[
             selectedConversation.messages.length - 1
           ];
         if (last) {
           try {
-            await createReplyApi(last.id, { reply: messageText });
+            await createReplyApi(last.id, {
+              reply: messageText,
+              createdBy: user.id,
+            });
           } catch (e) {}
         }
         // reload messages
@@ -555,14 +574,18 @@ export default function CommunicationsPage() {
   };
 
   const handleCreateNewMessage = () => {
-    if (sendPropertyId && sendTenantId && sendMessageText.trim()) {
+    if (sendPropertyId && sendTenantId && sendMessageText.trim() && user?.id) {
       setIsSendingNew(true);
       (async () => {
         const tenant = tenants.find((t) => t.id === sendTenantId);
         try {
           await createMessageApi({
-            to: tenant?.email || tenant?.name || "",
+            fromUserId: user.id,
+            toUserId: sendTenantId,
+            tenantId: sendTenantId,
+            propertyId: sendPropertyId,
             message: sendMessageText,
+            createdBy: user.id,
           });
         } catch (e) {}
         const all: MessageRecord[] = [];
@@ -1144,7 +1167,7 @@ export default function CommunicationsPage() {
                   ) : (
                     announcementsData.map((announcement) => {
                       const readTenants = tenants.filter((t) =>
-                        announcement.readBy.includes(t.id),
+                        (announcement.readBy || []).includes(t.id),
                       );
                       return (
                         <Card
@@ -1168,7 +1191,7 @@ export default function CommunicationsPage() {
                                 className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                               >
                                 <Eye className="w-4 h-4" />
-                                {announcement.readBy.length}
+                                {announcement.readBy?.length || 0}
                               </button>
                               <button
                                 onClick={() =>

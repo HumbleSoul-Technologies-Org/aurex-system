@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
 import PropertyFormDialog from "@/components/forms/property-form-dialog";
+import PropertyInviteDialog from "@/components/forms/property-invite-dialog";
 import {
   createTenantApi,
   deleteTenant,
@@ -24,7 +25,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogClose,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -46,8 +46,7 @@ import {
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { listTransactions } from "@/app/lib/transactions-client";
-import { deleteMessage } from "@/lib/services/messages";
-import { createTenantInvite } from "@/lib/services/tenant-invites";
+import { deleteMessageApi } from "@/lib/services/messages";
 import {
   getSpecificationsForType,
   getCategoryForType,
@@ -122,10 +121,6 @@ export default function PropertyDetailPage({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [showAddTenant, setShowAddTenant] = useState(false);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [inviteUnit, setInviteUnit] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [generatedInviteLink, setGeneratedInviteLink] = useState("");
   // Delete dialog state
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
@@ -201,24 +196,6 @@ export default function PropertyDetailPage({
   const avgRevenueLostPerUnit = property?.units_available
     ? Math.round(revenueLost / property?.units_available)
     : 0;
-
-  const handleGenerateInvite = () => {
-    const invite = createTenantInvite({
-      propertyId: property.id,
-      unitNumber: inviteUnit || undefined,
-      email: inviteEmail || undefined,
-      createdBy: "admin", // TODO: get from auth context
-      notes: `Invite for property ${property.name}`,
-    });
-    const inviteUrl = `${window.location.origin}/auth/invite?token=${invite.token}`;
-    setGeneratedInviteLink(inviteUrl);
-  };
-
-  const copyInviteLink = async () => {
-    await navigator.clipboard.writeText(generatedInviteLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   if (!property) {
     return (
@@ -786,9 +763,12 @@ export default function PropertyDetailPage({
                       Active Property
                     </div>
                     <div className="inline-block px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg text-sm font-semibold capitalize">
-                      {property?.type}
+                      {property?.propertyType || property?.type || "N/A"}
                     </div>
                   </div>
+                  <div className="mt-4 flex flex-wrap gap-2 items-center\">
+                    <PropertyInviteDialog property={property} />{" "}
+                  </div>{" "}
                 </div>
 
                 {/* Key Stats */}
@@ -1140,76 +1120,6 @@ export default function PropertyDetailPage({
                     <Button size="sm" onClick={() => setShowAddTenant(true)}>
                       Add Tenant
                     </Button>
-                    <Dialog
-                      open={showInviteDialog}
-                      onOpenChange={setShowInviteDialog}
-                    >
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
-                          Generate Invite Link
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Generate Tenant Invite Link</DialogTitle>
-                          <DialogDescription>
-                            Create a secure link for tenants to sign up for this
-                            property.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="text-sm font-medium">
-                              Unit Number (optional)
-                            </label>
-                            <Input
-                              placeholder="e.g. 101"
-                              value={inviteUnit}
-                              onChange={(e) => setInviteUnit(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm font-medium">
-                              Expected Email (optional)
-                            </label>
-                            <Input
-                              type="email"
-                              placeholder="tenant@example.com"
-                              value={inviteEmail}
-                              onChange={(e) => setInviteEmail(e.target.value)}
-                            />
-                          </div>
-                          {generatedInviteLink && (
-                            <div>
-                              <label className="text-sm font-medium">
-                                Invite Link
-                              </label>
-                              <div className="flex gap-2">
-                                <Input value={generatedInviteLink} readOnly />
-                                <Button size="sm" onClick={copyInviteLink}>
-                                  {copied ? (
-                                    <Check className="w-4 h-4" />
-                                  ) : (
-                                    <Copy className="w-4 h-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        <DialogFooter>
-                          <Button
-                            variant="outline"
-                            onClick={() => setShowInviteDialog(false)}
-                          >
-                            Cancel
-                          </Button>
-                          <Button onClick={handleGenerateInvite}>
-                            Generate Link
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
                   </div>
                   {propertyTenants.length > 0 ? (
                     <div className="overflow-x-auto">

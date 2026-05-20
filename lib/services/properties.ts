@@ -13,6 +13,7 @@ export interface PropertySpecification {
 
 export interface PropertyRecord {
   id: string
+  _id?: string
   name: string
   address: string
   city: string
@@ -62,12 +63,31 @@ export function generateUnitNumbers(name: string, city: string, country: string,
   return units
 }
 
+export function normalizePropertyRecord(property: any): PropertyRecord {
+  const normalized = {
+    ...property,
+    id: property.id || property._id || '',
+  } as PropertyRecord
+
+  if (Array.isArray(normalized.tenants)) {
+    normalized.tenants = normalized.tenants.map((tenant: any) => ({
+      ...tenant,
+      id: tenant.id || tenant._id,
+    }))
+  }
+
+  return normalized
+}
+
 export function listProperties(): PropertyRecord[] {
-  return getCollection<PropertyRecord>('properties')
+  return getCollection<PropertyRecord>('properties').map(normalizePropertyRecord)
 }
 
 export function getProperty(id: string): PropertyRecord | null {
-  return getCollection<PropertyRecord>('properties').find((p) => p.id === id) ?? null
+  return (
+    getCollection<PropertyRecord>('properties').find((p) => p.id === id || p._id === id) ??
+    null
+  )
 }
 
 export function getAvailablePropertiesWithUnits() {

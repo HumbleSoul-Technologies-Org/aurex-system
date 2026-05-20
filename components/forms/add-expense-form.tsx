@@ -16,6 +16,10 @@ interface AddExpenseFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit?: (data: ExpenseFormData) => void;
+  mode?: "simple" | "full";
+  initialTenantId?: string;
+  initialPropertyId?: string;
+  maintenanceRequestId?: string;
 }
 
 interface ExpenseFormData {
@@ -48,6 +52,10 @@ export default function AddExpenseForm({
   isOpen,
   onClose,
   onSubmit,
+  mode = "full",
+  initialTenantId,
+  initialPropertyId,
+  maintenanceRequestId,
 }: AddExpenseFormProps) {
   const [formData, setFormData] = useState<ExpenseFormData>({
     category: "maintenance",
@@ -55,7 +63,7 @@ export default function AddExpenseForm({
     amount: "",
     date: new Date().toISOString().split("T")[0],
     description: "",
-    property: "",
+    property: initialPropertyId || "",
     receiptReference: "",
     unit: "",
     paymentMethod: "",
@@ -75,8 +83,11 @@ export default function AddExpenseForm({
     autoPay: false,
   });
 
-  const { properties } = useAppData();
+  const { properties, tenants } = useAppData();
   const [availableUnits, setAvailableUnits] = useState<string[] | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState(
+    initialTenantId || "",
+  );
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -138,6 +149,7 @@ export default function AddExpenseForm({
       });
 
       createTransaction({
+        tenantId: mode === "simple" ? selectedTenantId || undefined : undefined,
         amount: expense.amount,
         type: "expense",
         description: expense.description,
@@ -163,7 +175,7 @@ export default function AddExpenseForm({
         approvedBy: expense.approvedBy,
         approvalDate: expense.approvalDate,
         notes: expense.notes,
-        metadata: { expenseId: expense.id },
+        metadata: { expenseId: expense.id, maintenanceRequestId },
       });
     } catch (err) {
       console.error("Failed to create expense", err);
@@ -207,10 +219,12 @@ export default function AddExpenseForm({
           <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-background">
             <div>
               <h2 className="text-2xl font-bold text-foreground">
-                Add Expense
+                {mode === "simple" ? "Record Expense" : "Add Expense"}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Record a new property expense
+                {mode === "simple"
+                  ? "Approve maintenance and record expense details"
+                  : "Record a new property expense"}
               </p>
             </div>
             <button
@@ -284,22 +298,45 @@ export default function AddExpenseForm({
               />
             </div>
 
-            {/* Expense Type */}
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Expense Type
-              </label>
-              <select
-                name="expenseType"
-                value={formData.expenseType}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="commercial">Commercial</option>
-                <option value="residential">Residential</option>
-                <option value="both">Both</option>
-              </select>
-            </div>
+            {/* Tenant (shown only in simple mode) */}
+            {mode === "simple" && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Tenant
+                </label>
+                <select
+                  value={selectedTenantId}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Tenant</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Expense Type (hidden in simple mode) */}
+            {mode === "full" && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Expense Type
+                </label>
+                <select
+                  name="expenseType"
+                  value={formData.expenseType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="commercial">Commercial</option>
+                  <option value="residential">Residential</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+            )}
 
             {/* Property */}
             <div>
@@ -363,191 +400,210 @@ export default function AddExpenseForm({
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Currency
-                </label>
-                <select
-                  name="currency"
-                  value={formData.currency}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="CAD">CAD</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Payment Source
-                </label>
-                <select
-                  name="paymentSourceType"
-                  value={formData.paymentSourceType}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                >
-                  <option value="">Select Source</option>
-                  <option value="card">Card</option>
-                  <option value="bank">Bank</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-            </div>
+            {/* Advanced Fields (hidden in simple mode) */}
+            {mode === "full" && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Currency
+                    </label>
+                    <select
+                      name="currency"
+                      value={formData.currency}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="CAD">CAD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Payment Source
+                    </label>
+                    <select
+                      name="paymentSourceType"
+                      value={formData.paymentSourceType}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                    >
+                      <option value="">Select Source</option>
+                      <option value="card">Card</option>
+                      <option value="bank">Bank</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Payment Provider
-                </label>
-                <Input
-                  name="paymentSourceProvider"
-                  value={formData.paymentSourceProvider}
-                  onChange={handleChange}
-                  placeholder="Stripe, Plaid, etc."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Card Last 4
-                </label>
-                <Input
-                  name="paymentSourceLast4"
-                  value={formData.paymentSourceLast4}
-                  onChange={handleChange}
-                  placeholder="1234"
-                />
-              </div>
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Payment Provider
+                    </label>
+                    <Input
+                      name="paymentSourceProvider"
+                      value={formData.paymentSourceProvider}
+                      onChange={handleChange}
+                      placeholder="Stripe, Plaid, etc."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Card Last 4
+                    </label>
+                    <Input
+                      name="paymentSourceLast4"
+                      value={formData.paymentSourceLast4}
+                      onChange={handleChange}
+                      placeholder="1234"
+                    />
+                  </div>
+                </div>
 
-            {/* Vendor Info */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Vendor Name
-                </label>
-                <Input
-                  name="vendorName"
-                  value={formData.vendorName}
-                  onChange={handleChange}
-                  placeholder="Vendor name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Invoice #
-                </label>
-                <Input
-                  name="invoiceNumber"
-                  value={formData.invoiceNumber}
-                  onChange={handleChange}
-                  placeholder="Invoice number"
-                />
-              </div>
-            </div>
+                {/* Vendor Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Vendor Name
+                    </label>
+                    <Input
+                      name="vendorName"
+                      value={formData.vendorName}
+                      onChange={handleChange}
+                      placeholder="Vendor name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Invoice #
+                    </label>
+                    <Input
+                      name="invoiceNumber"
+                      value={formData.invoiceNumber}
+                      onChange={handleChange}
+                      placeholder="Invoice number"
+                    />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Due Date
-                </label>
-                <Input
-                  type="date"
-                  name="dueDate"
-                  value={formData.dueDate}
-                  onChange={handleChange}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Approval Required
-                </label>
-                <select
-                  name="requiresApproval"
-                  value={String(formData.requiresApproval)}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      requiresApproval: e.target.value === "true",
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
-              </div>
-            </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Due Date
+                    </label>
+                    <Input
+                      type="date"
+                      name="dueDate"
+                      value={formData.dueDate}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Approval Required
+                    </label>
+                    <select
+                      name="requiresApproval"
+                      value={String(formData.requiresApproval)}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          requiresApproval: e.target.value === "true",
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="false">No</option>
+                      <option value="true">Yes</option>
+                    </select>
+                  </div>
+                </div>
 
-            {formData.requiresApproval && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {formData.requiresApproval && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Approved By
+                      </label>
+                      <Input
+                        name="approvedBy"
+                        value={formData.approvedBy}
+                        onChange={handleChange}
+                        placeholder="Approver name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Approval Date
+                      </label>
+                      <Input
+                        type="date"
+                        name="approvalDate"
+                        value={formData.approvalDate}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Recurring Frequency
+                    </label>
+                    <select
+                      name="recurringFrequency"
+                      value={formData.recurringFrequency}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Auto-pay
+                    </label>
+                    <select
+                      name="autoPay"
+                      value={String(formData.autoPay)}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          autoPay: e.target.value === "true",
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="false">No</option>
+                      <option value="true">Yes</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Notes (full mode only) */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
-                    Approved By
+                    Notes
                   </label>
-                  <Input
-                    name="approvedBy"
-                    value={formData.approvedBy}
+                  <Textarea
+                    name="notes"
+                    value={formData.notes}
                     onChange={handleChange}
-                    placeholder="Approver name"
+                    placeholder="Internal notes or additional context"
+                    className="h-20"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Approval Date
-                  </label>
-                  <Input
-                    type="date"
-                    name="approvalDate"
-                    value={formData.approvalDate}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
+              </>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Recurring Frequency
-                </label>
-                <select
-                  name="recurringFrequency"
-                  value={formData.recurringFrequency}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="quarterly">Quarterly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Auto-pay
-                </label>
-                <select
-                  name="autoPay"
-                  value={String(formData.autoPay)}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      autoPay: e.target.value === "true",
-                    }))
-                  }
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Description */}
+            {/* Description (visible in both modes) */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Description
@@ -562,20 +618,7 @@ export default function AddExpenseForm({
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Notes
-              </label>
-              <Textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                placeholder="Internal notes or additional context"
-                className="h-20"
-              />
-            </div>
-
-            {/* Receipt */}
+            {/* Receipt/Invoice Reference (visible in both modes) */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
                 Receipt/Invoice Reference
@@ -602,7 +645,7 @@ export default function AddExpenseForm({
                 type="submit"
                 className="flex-1 bg-primary hover:bg-primary/90 text-white"
               >
-                Add Expense
+                {mode === "simple" ? "Approve" : "Add Expense"}
               </Button>
             </div>
           </form>

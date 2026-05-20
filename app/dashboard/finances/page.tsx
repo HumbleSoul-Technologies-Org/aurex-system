@@ -22,7 +22,11 @@ import {
   deleteTransaction,
   updateTransaction,
 } from "@/app/lib/transactions-client";
-import { getAllExpenses } from "@/lib/services/expenses";
+import {
+  getAllExpenses,
+  updateExpenseApi,
+  deleteExpenseApi,
+} from "@/lib/services/expenses";
 import { listPayments } from "@/lib/services/payments";
 import {
   BarChart,
@@ -332,20 +336,31 @@ export default function FinancesPage() {
 
           {selectedTx && isEditingTx && (
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                updateTransaction(selectedTx.id, {
+                const basePatch = {
                   amount: Number(txFormData.amount),
                   status: txFormData.status,
                   date: txFormData.date,
                   description: txFormData.description,
                   propertyId: txFormData.propertyId,
                   tenantId: txFormData.tenantId,
-                  type: txFormData.type,
                   category: txFormData.category,
                   paymentMethod: txFormData.paymentMethod,
-                });
-                refreshTransactions();
+                };
+                try {
+                  if (selectedTx.type === "expense") {
+                    await updateExpenseApi(selectedTx.id, basePatch);
+                  } else {
+                    updateTransaction(selectedTx.id, {
+                      ...basePatch,
+                      type: txFormData.type,
+                    });
+                  }
+                } catch (err) {
+                  console.error("Failed to update transaction", err);
+                }
+                await refreshTransactions();
                 setIsTxDialogOpen(false);
               }}
               className="space-y-4"
@@ -488,10 +503,18 @@ export default function FinancesPage() {
               <div className="flex justify-end gap-2">
                 <Button
                   variant="destructive"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!selectedTx) return;
-                    deleteTransaction(selectedTx.id);
-                    refreshTransactions();
+                    try {
+                      if (selectedTx.type === "expense") {
+                        await deleteExpenseApi(selectedTx.id);
+                      } else {
+                        deleteTransaction(selectedTx.id);
+                      }
+                    } catch (err) {
+                      console.error("Failed to delete transaction", err);
+                    }
+                    await refreshTransactions();
                     setIsTxDialogOpen(false);
                   }}
                 >

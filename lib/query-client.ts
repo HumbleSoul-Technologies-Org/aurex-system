@@ -23,7 +23,7 @@ export async function apiRequest(
   url: string,
   data?: unknown,
   token?: string
-): Promise<Response> {
+): Promise<Response> {  
   const headers: Record<string, string> = {};
   if (data) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;

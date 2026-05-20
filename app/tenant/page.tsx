@@ -113,10 +113,11 @@ export default function TenantDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
-          Welcome, {tenant?.name || user?.name || "Tenant"}
+          Welcome, {tenant?.name || "Tenant"}
         </h1>
         <p className="text-sm md:text-base text-muted-foreground">
-          Unit {tenant?.unit || "N/A"} • {propertyInfo?.name || "Property"}
+          Unit {tenant?.unitNumber || "N/A"} •{" "}
+          {propertyInfo?.name || "Property"}
         </p>
       </div>
 

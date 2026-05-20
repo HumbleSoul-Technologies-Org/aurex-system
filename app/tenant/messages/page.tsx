@@ -47,7 +47,7 @@ interface Message {
 
 export default function TenantMessagesPage() {
   const { user } = useAuth();
-  const { tenants } = useAppData();
+  const { tenants, properties } = useAppData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<
@@ -230,9 +230,11 @@ export default function TenantMessagesPage() {
       try {
         const created = await createMessageApi({
           fromUserId: tenantId,
-          to: "You",
+          tenantId,
           message: messageText.trim(),
           createdBy: user?.id,
+          // Note: toUserId should ideally come from auth/settings (admin/manager ID)
+          // For now, the server will handle routing to management inbox
         });
         setMessageText("");
         await fetchMessages();
@@ -248,20 +250,8 @@ export default function TenantMessagesPage() {
   };
 
   const simulateManagementMessage = async () => {
-    // Create a management message in database (for testing)
-    try {
-      const newMsg = createMessage({
-        from: "management",
-        to: user?.name || "tenant",
-        message: "Message from management",
-        subject: "Notice",
-      });
-      // Refresh messages from database
-      await fetchMessages();
-      setSelectedId(newMsg.id);
-    } catch (err) {
-      console.error("Failed to create management message:", err);
-    }
+    // This would be called by management to send a message to this tenant
+    // Removed local implementation; use dashboard communications instead
   };
 
   // Derived list after applying filter
@@ -380,7 +370,8 @@ export default function TenantMessagesPage() {
                       );
                       if (tenant) markAnnouncementRead(m.id, tenant.id);
                     } else {
-                      markMessageSeen(m.id);
+                      // Mark message as seen via API
+                      updateMessageApi(m.id, { seen: true });
                     }
                   }
                   setMessages((prev) =>

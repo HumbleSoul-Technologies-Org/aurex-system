@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,17 +36,22 @@ import {
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useAppData } from "@/lib/data-context";
+import { notifyNewMaintenanceRequest } from "@/lib/services/notifications";
 import {
-  getMaintenanceRequests,
-  createMaintenanceRequest,
-  deleteMaintenanceRequest,
+  MaintenanceRequest,
+  fetchMaintenanceRequestsByTenant,
+  submitMaintenanceRequest,
+  deleteMaintenanceRequestById,
 } from "@/lib/services/maintenance";
 
 export default function MaintenancePage() {
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState("all");
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [maintenanceRequests, setMaintenanceRequests] = useState<
+    MaintenanceRequest[]
+  >([]);
 
   const { tenants, properties } = useAppData();
 
@@ -56,14 +61,7 @@ export default function MaintenancePage() {
     ? properties.find((p) => p.id === tenant.propertyId)
     : null;
 
-  // Get maintenance requests for this tenant (reactive to refreshTrigger)
-  const allMaintenance = useMemo(
-    () => getMaintenanceRequests(),
-    [refreshTrigger],
-  );
-  const tenantMaintenance = tenant
-    ? allMaintenance.filter((m) => m.tenantId === tenant.id)
-    : [];
+  const tenantMaintenance = maintenanceRequests;
 
   const [formData, setFormData] = useState({
     description: "",
@@ -84,6 +82,28 @@ export default function MaintenancePage() {
       ? tenantMaintenance
       : tenantMaintenance.filter((r) => r.status === filter);
 
+  const loadMaintenanceRequests = useCallback(async () => {
+    if (!tenant?.id) {
+      setMaintenanceRequests([]);
+      return;
+    }
+
+    setIsLoadingRequests(true);
+    try {
+      const requests = await fetchMaintenanceRequestsByTenant(tenant.id);
+      setMaintenanceRequests(requests);
+    } catch (error) {
+      console.error("Failed to load maintenance requests:", error);
+      setMaintenanceRequests([]);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  }, [tenant?.id]);
+
+  useEffect(() => {
+    loadMaintenanceRequests();
+  }, [loadMaintenanceRequests]);
+
   const statusCounts = {
     pending: tenantMaintenance.filter((r) => r.status === "pending").length,
     assigned: tenantMaintenance.filter((r) => r.status === "assigned").length,
@@ -98,10 +118,10 @@ export default function MaintenancePage() {
     setSubmitSuccess(false);
 
     try {
-      const newRequest = createMaintenanceRequest({
+      const newRequest = await submitMaintenanceRequest({
         propertyId: tenant.propertyId || "",
         propertyName: propertyInfo?.name || "Unknown Property",
-        unit: tenant.unit || "Unknown Unit",
+        unit: tenant.unitNumber || "Unknown Unit",
         tenantId: tenant.id,
         tenantName: tenant.name,
         description: formData.description,
@@ -110,6 +130,12 @@ export default function MaintenancePage() {
         contactMethod: formData.contactMethod,
         priority: formData.priority,
       });
+
+      notifyNewMaintenanceRequest(
+        formData.description,
+        propertyInfo?.name || "Unknown Property",
+        newRequest.id,
+      );
 
       // Reset form
       setFormData({
@@ -124,8 +150,7 @@ export default function MaintenancePage() {
       setSubmitSuccess(true);
       setShowForm(false);
 
-      // Trigger a re-render to show the new request
-      setRefreshTrigger((prev) => prev + 1);
+      await loadMaintenanceRequests();
 
       // Reset success message after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
@@ -148,13 +173,8 @@ export default function MaintenancePage() {
 
     setDeletingId(requestId);
     try {
-      const success = deleteMaintenanceRequest(requestId);
-      if (success) {
-        // Trigger a re-render to update the UI
-        setRefreshTrigger((prev) => prev + 1);
-      } else {
-        alert("Failed to delete maintenance request. Please try again.");
-      }
+      await deleteMaintenanceRequestById(requestId);
+      await loadMaintenanceRequests();
     } catch (error) {
       console.error("Error deleting maintenance request:", error);
       alert("Failed to delete maintenance request. Please try again.");
@@ -356,7 +376,7 @@ export default function MaintenancePage() {
               </p>
               <p className="text-sm font-medium">
                 {propertyInfo?.name || "Property"} - Unit{" "}
-                {tenant?.unit || "N/A"}
+                {tenant?.unitNumber || "N/A"}
               </p>
             </div>
           </div>
@@ -462,7 +482,14 @@ export default function MaintenancePage() {
 
       {/* Maintenance Requests List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {filteredRequests.length === 0 ? (
+        {isLoadingRequests ? (
+          <Card className="border border-border p-8 text-center col-span-full">
+            <Wrench className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50 animate-pulse" />
+            <p className="text-muted-foreground">
+              Loading maintenance requests…
+            </p>
+          </Card>
+        ) : filteredRequests.length === 0 ? (
           <Card className="border  border-border p-8 text-center col-span-full">
             <Wrench className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">

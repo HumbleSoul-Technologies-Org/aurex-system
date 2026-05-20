@@ -73,12 +73,19 @@ export interface TenantRecord {
   moveOutNotice?: MoveOutNotice
 }
 
+export function normalizeTenantRecord(tenant: any): TenantRecord {
+  return {
+    ...tenant,
+    id: tenant.id || tenant._id || '',
+  } as TenantRecord
+}
+
 export function listTenants(): TenantRecord[] {
-  return getCollection<TenantRecord>('tenants')
+  return getCollection<TenantRecord>('tenants').map(normalizeTenantRecord)
 }
 
 export function getTenant(id: string): TenantRecord | null {
-  return listTenants().find((t) => t.id === id) ?? null
+  return listTenants().find((t) => t.id === id || t._id === id) ?? null
 }
 
 export function updateTenant(id: string, patch: Partial<TenantRecord>): TenantRecord | null {
@@ -142,7 +149,7 @@ export async function createTenantApi(
            ? prop.tenants.map((t: any) => (typeof t === 'string' ? t : t._id))
            : []
           const updatedTenants = [...existingIds, tenant._id]
-          await updateProperty(prop._id, { tenants: updatedTenants })
+          await updateProperty(prop._id || prop.id, { tenants: updatedTenants })
       }
     }
   }
