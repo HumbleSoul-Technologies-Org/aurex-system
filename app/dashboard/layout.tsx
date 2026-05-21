@@ -146,6 +146,11 @@ export default function DashboardLayout({
           icon: <Users className="w-4 h-4" />,
         },
         {
+          label: "Pending Approvals",
+          href: "/dashboard/admin/pending-tenants",
+          icon: <Bell className="w-4 h-4" />,
+        },
+        {
           label: "Maintenance",
           href: "/dashboard/maintenance",
           icon: <Wrench className="w-4 h-4" />,

@@ -52,6 +52,7 @@ interface PropertyFormData {
   imageUrl?: string;
   description: string;
   estate: string;
+  price_per_unit?: number;
 }
 
 interface PropertyFormDialogProps {
@@ -90,6 +91,7 @@ const getDefaultFormData = (): PropertyFormData => ({
   location: { lat: "", lng: "" },
   units: 1,
   pricePerUnit: 0,
+  price_per_unit: 0,
   features: "",
   specificationValues: createSpecificationValues(defaultPropertyType),
   customSpecifications: [],
@@ -140,8 +142,13 @@ export default function PropertyFormDialog({
           lat: initialData.location?.lat?.toString() ?? "",
           lng: initialData.location?.lng?.toString() ?? "",
         },
-        units: initialData.units ?? 1,
-        pricePerUnit: initialData.pricePerUnit ?? 0,
+        units:
+          (initialData as any).units_available ??
+          (Array.isArray((initialData as any).units)
+            ? (initialData as any).units.length
+            : 0) ??
+          0,
+        pricePerUnit: initialData.price_per_unit ?? 0,
         features: Array.isArray(initialData.features)
           ? initialData.features.join("\n")
           : (initialData.features ?? ""),
@@ -536,9 +543,6 @@ export default function PropertyFormDialog({
                       }
                     />
 
-
-
-
                     <Button
                       type="button"
                       variant="ghost"
@@ -752,68 +756,72 @@ export default function PropertyFormDialog({
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Image URL
-              </label>
-              <Input
-                name="imageUrl"
-                value={formData.imageUrl || ""}
-                onChange={handleChange}
-                placeholder="https://example.com/image.jpg"
-              />
+            {!initialData && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Image URL
+                </label>
+                <Input
+                  name="imageUrl"
+                  value={formData.imageUrl || ""}
+                  onChange={handleChange}
+                  placeholder="https://example.com/image.jpg"
+                />
 
-              {!isEditMode && (
-                <div className="mt-3">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Or upload from your computer
-                  </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={triggerFileSelect}
-                      className="px-3"
-                    >
-                      Upload Image
-                    </Button>
-                    <span className="text-sm text-foreground">
-                      {selectedImage ? selectedImage.name : "No file selected"}
-                    </span>
-                    {selectedImage && (
+                {!isEditMode && (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Or upload from your computer
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                       <Button
                         type="button"
-                        variant="ghost"
-                        onClick={() => setSelectedImage(null)}
-                        className="text-sm"
+                        variant="outline"
+                        onClick={triggerFileSelect}
+                        className="px-3"
                       >
-                        Remove
+                        Upload Image
                       </Button>
+                      <span className="text-sm text-foreground">
+                        {selectedImage
+                          ? selectedImage.name
+                          : "No file selected"}
+                      </span>
+                      {selectedImage && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setSelectedImage(null)}
+                          className="text-sm"
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+
+                    {previewUrl && (
+                      <div className="mt-3">
+                        <p className="text-sm font-medium text-foreground mb-2">
+                          Preview
+                        </p>
+                        <img
+                          src={previewUrl}
+                          alt="Selected preview"
+                          className="max-h-40 w-auto rounded border"
+                        />
+                      </div>
                     )}
                   </div>
-
-                  {previewUrl && (
-                    <div className="mt-3">
-                      <p className="text-sm font-medium text-foreground mb-2">
-                        Preview
-                      </p>
-                      <img
-                        src={previewUrl}
-                        alt="Selected preview"
-                        className="max-h-40 w-auto rounded border"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">

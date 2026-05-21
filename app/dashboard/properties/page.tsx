@@ -113,7 +113,10 @@ export default function PropertiesPage() {
           if (res.secure_url && res.public_id) {
             payload.images = [
               ...(payload.images || []),
-              { url: res.secure_url, public_id: res.public_id },
+              {
+                url: res.secure_url || data.imageUrl,
+                public_id: res.public_id,
+              },
             ];
           }
         } catch (e) {
@@ -154,15 +157,13 @@ export default function PropertiesPage() {
             Manage and organize all your rental properties
           </p>
         </div>
-        {properties && properties.length > 0 && (
-          <Button
-            onClick={() => setShowAddForm(true)}
-            className="bg-primary hover:bg-primary/90 text-white"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Property
-          </Button>
-        )}
+        <Button
+          onClick={() => setShowAddForm(true)}
+          className="bg-primary hover:bg-primary/90 text-white"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Add Property
+        </Button>
       </div>
 
       {/* Toolbar */}

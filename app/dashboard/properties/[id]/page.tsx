@@ -55,6 +55,7 @@ import {
 import { deleteProperty } from "@/lib/services/properties";
 import { apiRequest } from "@/lib/query-client";
 import { url } from "inspector";
+import { useAuth } from "@/lib/auth-context";
 
 interface SpecificationRow {
   title: string;
@@ -75,6 +76,7 @@ export default function PropertyDetailPage({
   const [property, setProperty] = useState<any>(() =>
     properties.find((item) => item.id === id),
   );
+  const { token } = useAuth();
   const refreshProperty = () => {
     const updated = properties.find((item) => item.id === id);
     setProperty(updated);
@@ -152,21 +154,22 @@ export default function PropertyDetailPage({
     0,
   );
   let totalMonthlyIncome = tenantMonthly;
+  const totalUnits = property?.units?.length ?? 0;
+  const occupiedUnits = propertyTenants.length;
+  const availableUnits = Math.max(0, totalUnits - occupiedUnits);
+
   // If property has units and a price per unit, use that to calculate income
-  if (property?.units_available && property?.price_per_unit) {
-    totalMonthlyIncome = property?.price_per_unit * property?.units_available;
+  if (totalUnits > 0 && property?.price_per_unit) {
+    totalMonthlyIncome = property.price_per_unit * totalUnits;
   }
   const totalAnnualIncome = totalMonthlyIncome * 12;
-  const occupiedUnits = propertyTenants.length;
   const averageIncomePerUnit =
     occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0;
   const potentialMonthlyIncome = property?.price_per_unit
-    ? property?.price_per_unit * property?.units_available
+    ? property.price_per_unit * totalUnits
     : 0;
   const occupancyPercentage =
-    property?.units_available > 0
-      ? Math.round((occupiedUnits / property?.units_available) * 100)
-      : 0;
+    totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
   const incomeUtilization =
     potentialMonthlyIncome > 0
       ? Math.round((totalMonthlyIncome / potentialMonthlyIncome) * 100)
@@ -517,7 +520,7 @@ export default function PropertyDetailPage({
                   )}
                 </div>
 
-                {/* Upload Dialog */}
+                {/* Image Upload Dialog */}
                 <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
                   <DialogContent>
                     <DialogHeader>
@@ -766,9 +769,12 @@ export default function PropertyDetailPage({
                       {property?.propertyType || property?.type || "N/A"}
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2 items-center\">
-                    <PropertyInviteDialog property={property} />{" "}
-                  </div>{" "}
+                  <div className="mt-4 flex flex-wrap gap-2 items-center">
+                    <PropertyInviteDialog
+                      property={property}
+                      token={token || ""}
+                    />
+                  </div>
                 </div>
 
                 {/* Key Stats */}
@@ -778,7 +784,7 @@ export default function PropertyDetailPage({
                       Available Units
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      {property?.units.length - property?.tenants.length || 0}
+                      {availableUnits}
                     </p>
                   </div>
                   <div>
@@ -888,9 +894,8 @@ export default function PropertyDetailPage({
                       </p>
                       <p className="font-semibold text-foreground">
                         {property?.units !== undefined &&
-                        property?.units.length > 0 &&
-                        property?.tenants !== undefined ? (
-                          property?.units.length - property?.tenants.length || 0
+                        property?.units.length > 0 ? (
+                          availableUnits
                         ) : (
                           <span className="text-muted-foreground">
                             No details found
@@ -1161,7 +1166,7 @@ export default function PropertyDetailPage({
                               <td className="px-4 py-3">
                                 <Image
                                   src={
-                                    tenant?.image ||
+                                    tenant?.avatar?.url ||
                                     "https://img.freepik.com/free-vector/blue-circle-with-white-user_78370-4707.jpg?semt=ais_hybrid&w=740&q=80"
                                   }
                                   alt={tenant?.name || "Tenant"}

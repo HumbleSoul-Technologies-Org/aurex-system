@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { getAvailablePropertiesWithUnits } from "@/lib/services/properties";
+import { useAppData } from "@/lib/data-context";
 import { Calendar, Mail, Phone, User, X } from "lucide-react";
 
 interface TenantFormData {
@@ -87,9 +87,29 @@ export default function TenantForm({
     securityDeposit: "",
   });
 
-  const [availableProperties, setAvailableProperties] = useState(() =>
-    getAvailablePropertiesWithUnits(),
-  );
+  const { properties, tenants } = useAppData();
+
+  const availableProperties = useMemo(() => {
+    return (properties || []).map((property) => {
+      const propertyId = property._id || property.id;
+      const units = Array.isArray(property.units) ? property.units : [];
+      const occupiedUnits = (tenants || [])
+        .filter((tenant) => tenant.propertyId === propertyId)
+        .map(
+          (tenant) => (tenant as any).unitNumber || (tenant as any).unit || "",
+        )
+        .filter(Boolean);
+      const availableUnits = units.filter(
+        (unit) => !occupiedUnits.includes(unit),
+      );
+      return {
+        ...property,
+        units,
+        availableUnits,
+        hasAvailableUnits: availableUnits.length > 0,
+      };
+    });
+  }, [properties, tenants]);
 
   // Helper function to format dates from ISO to YYYY-MM-DD for HTML date inputs
   const formatDateForInput = (dateString: string | undefined): string => {
@@ -105,7 +125,6 @@ export default function TenantForm({
 
   useEffect(() => {
     if (isOpen) {
-      setAvailableProperties(getAvailablePropertiesWithUnits());
       if (mode === "edit" && initialData) {
         setFormData({
           name: initialData.name || "",
@@ -276,7 +295,7 @@ export default function TenantForm({
   };
 
   const selectedProperty = availableProperties.find(
-    (p) => p._id === formData.propertyId,
+    (p) => (p._id || p.id) === formData.propertyId,
   );
 
   const unitOptions = selectedProperty?.availableUnits ?? [];

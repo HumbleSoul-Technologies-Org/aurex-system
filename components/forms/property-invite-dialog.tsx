@@ -19,7 +19,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, Loader2 } from "lucide-react";
 import { createTenantInvite } from "@/lib/services/tenant-invites";
 
 interface PropertyInviteDialogProps {
@@ -31,18 +31,21 @@ interface PropertyInviteDialogProps {
   };
   createdBy?: string;
   onInviteGenerated?: (url: string) => void;
+  token: string;
 }
 
 export default function PropertyInviteDialog({
   property,
   createdBy = "admin",
   onInviteGenerated,
+  token,
 }: PropertyInviteDialogProps) {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [inviteUnit, setInviteUnit] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [generatedInviteLink, setGeneratedInviteLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   type UnitOption = {
     unitNumber: string;
@@ -63,18 +66,39 @@ export default function PropertyInviteDialog({
   const freeUnits = availableUnits.filter((unit) => !unit.occupied);
   const occupiedCount = availableUnits.filter((unit) => unit.occupied).length;
 
-  const handleGenerateInvite = () => {
-    const invite = createTenantInvite({
-      propertyId: property.id,
-      unitNumber: inviteUnit || undefined,
-      email: inviteEmail || undefined,
-      createdBy,
-      notes: `Invite for property ${property.name}`,
-    });
-    const inviteUrl = `${window.location.origin}/auth/invite?token=${invite.token}`;
-    setGeneratedInviteLink(inviteUrl);
-    setCopied(false);
-    onInviteGenerated?.(inviteUrl);
+  const handleGenerateInvite = async () => {
+    setIsGenerating(true);
+    try {
+      const result = await createTenantInvite(
+        {
+          propertyId: property.id,
+          unitNumber: inviteUnit || undefined,
+          email: inviteEmail || undefined,
+          createdBy,
+          notes: `Invite for property ${property.name}`,
+        },
+        token,
+      );
+
+      if (!result || !result.invite) {
+        throw new Error((result as any)?.error || "Failed to create invite");
+      }
+
+      const inviteUrl =
+        (result && (result.invite.inviteUrl as string)) ||
+        `${window.location.origin}/auth/invite?token=${(result.invite && result.invite.token) || ""}`;
+      console.log("====================================");
+      console.log(inviteUrl);
+      console.log("====================================");
+      setGeneratedInviteLink(inviteUrl);
+      setCopied(false);
+      onInviteGenerated?.(inviteUrl);
+    } catch (err: any) {
+      console.error("Failed to generate invite:", err);
+      alert(`Error generating invite: ${err.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const copyInviteLink = async () => {
@@ -129,7 +153,7 @@ export default function PropertyInviteDialog({
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="__no_units" disabled>
                     No units available
                   </SelectItem>
                 )}
@@ -184,7 +208,15 @@ export default function PropertyInviteDialog({
           <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
             Cancel
           </Button>
-          <Button onClick={handleGenerateInvite}>Generate Link</Button>
+          <Button onClick={handleGenerateInvite} disabled={isGenerating}>
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Generating...
+              </>
+            ) : (
+              "Generate Link"
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

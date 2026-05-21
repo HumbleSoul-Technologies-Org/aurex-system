@@ -246,13 +246,22 @@ export default function TenantsPage() {
                   <td className="px-6 py-4 font-semibold text-foreground">
                     {tenant.name}
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-blue-600">
-                    {tenant.property?.name || "Unknown"}
+                  <td className="px-6 py-4 text-xs font-medium text-blue-600">
+                    <Link
+                      className="hover:underline"
+                      href={
+                        tenant.property
+                          ? `/dashboard/properties/${tenant.property.id || tenant.property._id}`
+                          : "#"
+                      }
+                    >
+                      {tenant.property ? tenant.property.name : "N/A"}
+                    </Link>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground text-sm">
+                  <td className="px-6 py-4 text-muted-foreground text-xs">
                     {tenant.unitNumber || "--"}
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-xs">
                     <a
                       href={`mailto:${tenant.email}`}
                       className="text-blue-600 hover:underline"
@@ -260,7 +269,7 @@ export default function TenantsPage() {
                       {tenant.email}
                     </a>
                   </td>
-                  <td className="px-6 py-4 text-sm">
+                  <td className="px-6 py-4 text-xs">
                     <a
                       href={`tel:${tenant.phone}`}
                       className="text-blue-600 hover:underline"
@@ -271,7 +280,7 @@ export default function TenantsPage() {
                   <td className="px-6 py-4 font-semibold text-foreground">
                     ${(tenant.rentAmount ?? 0).toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 text-sm text-foreground capitalize">
+                  <td className="px-6 py-4 text-xs text-foreground capitalize">
                     {(tenant.leaseType || "").replace("_", " ")}
                   </td>
                   <td className="px-6 py-4">

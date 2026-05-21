@@ -22,35 +22,53 @@ export default function InvitePage() {
   const [property, setProperty] = useState<any>(null);
   const { properties } = useAppData();
   const [error, setError] = useState("");
+  const [token, setToken] = useState("");
 
   useEffect(() => {
     const token = searchParams?.get("token");
-
+    setToken(token || "");
     if (!token) {
       setError("No invite token provided");
       setIsValidating(false);
       return;
     }
 
-    const validation = validateTenantInvite(token);
-    if (!validation.valid) {
-      setError(validation.error || "Invalid invite");
-      setIsValidating(false);
-      return;
-    }
+    const validateInvite = async () => {
+      try {
+        const validation = await validateTenantInvite(token);
+        if (!validation.valid) {
+          setError(validation.error || "Invalid invite");
+          setIsValidating(false);
+          return;
+        }
 
-    const inviteData = validation.invite;
-    const prop = properties.find((item) => item.id === inviteData.propertyId);
-    if (!prop) {
-      setError("The invited property is not available.");
-      setIsValidating(false);
-      return;
-    }
+        const inviteData = validation.invite;
+        if (!inviteData?.propertyId) {
+          setError("Invalid invite payload.");
+          setIsValidating(false);
+          return;
+        }
 
-    setInvite(inviteData);
-    setProperty(prop);
-    setIsValid(true);
-    setIsValidating(false);
+        const prop = properties.find(
+          (item) => item.id === inviteData.propertyId,
+        );
+        if (!prop) {
+          setError("The invited property is not available.");
+          setIsValidating(false);
+          return;
+        }
+
+        setInvite(inviteData);
+        setProperty(prop);
+        setIsValid(true);
+        setIsValidating(false);
+      } catch (err: any) {
+        setError(err?.message || "Failed to validate invite");
+        setIsValidating(false);
+      }
+    };
+
+    validateInvite();
   }, [properties]);
 
   if (isValidating) {
@@ -118,7 +136,7 @@ export default function InvitePage() {
           invite={invite}
           property={property}
           onSuccess={() => {
-            router.push("/tenant");
+            router.push("/auth/invite-submitted");
           }}
         />
       </Card>

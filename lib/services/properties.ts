@@ -179,6 +179,7 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
   queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
     current ? [newProperty, ...current] : listProperties(),
   )
+  queryClient.invalidateQueries({ queryKey: ["properties"], exact: false })
 
   // Notify about new property
   notifyNewProperty(newProperty.name, newProperty.id)
@@ -187,13 +188,31 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
 }
 
 export async function updateProperty(id: string, patch: Partial<PropertyRecord>): Promise<PropertyRecord | null> {
-  const res = await apiRequest('PUT', `/property/${id}/update`, patch)
+  const existingProperty = getProperty(id)
+  const finalPatch: Partial<PropertyRecord> = { ...patch }
+
+  if (
+    patch.units_available !== undefined &&
+    patch.units === undefined
+  ) {
+    const name = patch.name ?? existingProperty?.name ?? ''
+    const city = patch.city ?? existingProperty?.city ?? ''
+    const country = patch.country ?? existingProperty?.country ?? ''
+    finalPatch.units = generateUnitNumbers(
+      name,
+      city,
+      country,
+      patch.units_available,
+    )
+  }
+
+  const res = await apiRequest('PUT', `/property/${id}/update`, finalPatch)
   if (!res.ok) {
     console.error('Failed to update property', await res.text())
     return null
   }
 
-  const updated = updateInCollection<PropertyRecord>('properties', id, patch)
+  const updated = updateInCollection<PropertyRecord>('properties', id, finalPatch)
   if (updated) {
     queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
       current
@@ -202,6 +221,7 @@ export async function updateProperty(id: string, patch: Partial<PropertyRecord>)
           )
         : [updated],
     )
+    queryClient.invalidateQueries({ queryKey: ["properties"], exact: false })
   }
 
   return updated
