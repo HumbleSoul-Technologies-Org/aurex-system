@@ -42,18 +42,20 @@ export default function DashboardPage() {
   const { properties, tenants } = useAppData();
   const [payments, setPayments] = useState<any[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Load real data on mount
   useEffect(() => {
+    setIsHydrated(true);
     setPayments(listPayments());
     const onPaymentsUpdated = () => setPayments(listPayments());
     if (typeof window !== "undefined")
       window.addEventListener("paymentsUpdated", onPaymentsUpdated);
+    setMaintenanceRequests(getMaintenanceRequests());
     return () => {
       if (typeof window !== "undefined")
         window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
     };
-    setMaintenanceRequests(getMaintenanceRequests());
   }, []);
 
   // Calculate metrics from real data
@@ -260,10 +262,10 @@ export default function DashboardPage() {
                 Total Properties
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {metrics.totalProperties}
+                {isHydrated ? metrics.totalProperties : "—"}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {metrics.totalUnits} units total
+                {isHydrated ? `${metrics.totalUnits} units total` : "—"}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -280,7 +282,7 @@ export default function DashboardPage() {
                 Occupancy Rate
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {metrics.averageOccupancy}%
+                {isHydrated ? `${metrics.averageOccupancy}%` : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
                 Based on current tenants
@@ -300,7 +302,9 @@ export default function DashboardPage() {
                 Monthly Revenue
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${(metrics.totalMonthlyRevenue / 1000).toFixed(1)}K
+                {isHydrated
+                  ? `$${(metrics.totalMonthlyRevenue / 1000).toFixed(1)}K`
+                  : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
                 From active tenants
@@ -320,7 +324,7 @@ export default function DashboardPage() {
                 Pending Payments
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {metrics.pendingPayments}
+                {isHydrated ? metrics.pendingPayments : "—"}
               </p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-2">
                 Awaiting processing
@@ -340,7 +344,7 @@ export default function DashboardPage() {
                 Open Maintenance
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {metrics.openMaintenanceRequests}
+                {isHydrated ? metrics.openMaintenanceRequests : "—"}
               </p>
               <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
                 Pending requests
@@ -360,7 +364,9 @@ export default function DashboardPage() {
                 YTD Profit
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${(metrics.ytdProfit / 1000).toFixed(0)}K
+                {isHydrated
+                  ? `$${(metrics.ytdProfit / 1000).toFixed(0)}K`
+                  : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
                 After estimated expenses

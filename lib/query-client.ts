@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import axios from "axios";
+import { getAuthToken } from "@/lib/token-manager";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL as string;
 
@@ -22,12 +23,12 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown,
-  token?: string
-): Promise<Response> {  
+  token?: string | null
+): Promise<Response> {
   const headers: Record<string, string> = {};
   if (data) headers["Content-Type"] = "application/json";
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  
+  const authToken = token || getAuthToken();
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 
   const res = await fetch(`${BASE_URL}${url}`, {
     method,
@@ -61,9 +62,16 @@ export const getQueryFn: <T>(options: {
     try {
       const url = `/${queryKey.join("/")}`;
 
+      const authToken = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
       const response = await axiosClient.get(url, {
         signal: controller.signal,
         withCredentials: false, // Explicitly disable credentials for GET requests
+        headers,
       });
 
       return response.data;

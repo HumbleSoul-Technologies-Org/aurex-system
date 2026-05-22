@@ -22,7 +22,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BottomNavigation } from "@/components/ui/bottom-navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { notifications, currentTenant } from "@/app/lib/tenant-data";
+import { useTenantContext } from "@/lib/tenant-context";
+import { TenantContextProvider } from "@/lib/tenant-context-provider";
 
 interface NavItem {
   label: string;
@@ -32,7 +33,10 @@ interface NavItem {
 }
 
 function TenantLayoutContent({ children }: { children: React.ReactNode }) {
+  const { currentTenant, notifications } = useTenantContext();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -52,7 +56,17 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, isLoading, authUser]);
 
-  const unreadNotifications = notifications.filter((n) => !n.read).length;
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    // compute unread notifications after mount to avoid hydration mismatch
+    if (!mounted) return;
+    setUnreadCount(notifications.filter((n) => !n.read).length);
+  }, [mounted]);
+
+  const unreadNotifications = mounted ? unreadCount : 0;
 
   const handleLogout = async () => {
     try {
@@ -180,10 +194,10 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-semibold text-foreground">
-                  {currentTenant?.name || "Tenant"}
+                  {mounted ? currentTenant?.name || "Tenant" : "Tenant"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Unit {currentTenant?.unitNumber || "_ _"}
+                  Unit {mounted ? currentTenant?.unitNumber || "_ _" : "_ _"}
                 </p>
               </div>
             </button>
@@ -286,7 +300,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                 .map((notif) => (
                   <Link
                     key={notif.id}
-                    href={notif.actionUrl}
+                    href={notif.actionUrl || "#"}
                     onClick={() => setNotificationsOpen(false)}
                   >
                     <Card
@@ -346,7 +360,9 @@ export default function TenantLayout({
 }) {
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <TenantLayoutContent>{children}</TenantLayoutContent>
+      <TenantContextProvider>
+        <TenantLayoutContent>{children}</TenantLayoutContent>
+      </TenantContextProvider>
     </Suspense>
   );
 }

@@ -18,13 +18,17 @@ import SendAnnouncementForm, {
   AnnouncementFormData,
 } from "@/components/forms/send-announcement-form";
 import {
-  createMessageApi,
-  getMessagesByTenant,
-  deleteMessageApi,
-  createReplyApi,
-  getRepliesForMessage,
-  updateMessageApi,
-  MessageRecord,
+  getConversationsByOwner,
+  getConversationByProperty,
+  createConversationMessage,
+  createConversationReply,
+  markConversationMessageSeen,
+  deleteConversationMessage,
+  Conversation,
+  ConversationMessage,
+  PropertyConversation,
+  PropertyReference,
+  UserReference,
 } from "@/lib/services/messages";
 import {
   createAnnouncementApi,
@@ -39,7 +43,6 @@ import {
   Plus,
   Send,
   Bell,
-  Archive,
   Paperclip,
   Search,
   Check,
@@ -49,26 +52,6 @@ import {
   MessageCirclePlus,
 } from "lucide-react";
 
-interface Message {
-  id: string;
-  sender: string;
-  senderType: "tenant" | "manager";
-  content: string;
-  timestamp: string;
-  isRead: boolean;
-  sent?: boolean; // whether the message was sent by the current user
-  replied?: boolean; // whether this message has been replied to
-}
-
-interface Conversation {
-  id: string;
-  participant: string;
-  lastMessage: string;
-  timestamp: string;
-  unreadCount: number;
-  messages: Message[];
-}
-
 interface AnnouncementTemplate {
   id: string;
   title: string;
@@ -76,137 +59,84 @@ interface AnnouncementTemplate {
   data: Partial<AnnouncementFormData>;
 }
 
+type PropertyConversationWithParent = PropertyConversation & {
+  parentConversation: Conversation;
+};
+
 export default function CommunicationsPage() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("inbox");
-  const [selectedConversation, setSelectedConversation] =
-    useState<Conversation | null>(null);
+  const { user, token } = useAuth();
+  const [activeTab, setActiveTab] = useState("conversations");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(
+    null,
+  );
   const [messageText, setMessageText] = useState("");
+  const [replyText, setReplyText] = useState("");
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
-  const [selectedAnnouncementForViews, setSelectedAnnouncementForViews] =
-    useState<string | null>(null);
   const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
   const [announcementTemplate, setAnnouncementTemplate] =
     useState<Partial<AnnouncementFormData> | null>(null);
   const { properties, tenants } = useAppData();
-  const [messagesData, setMessagesData] = useState<MessageRecord[]>([]);
+
+  const getPropertyRefId = (propertyId?: string | PropertyReference | null) => {
+    if (!propertyId) return "";
+    return typeof propertyId === "string"
+      ? propertyId
+      : propertyId.id || propertyId._id || "";
+  };
+
+  const getUserRefId = (userRef?: string | UserReference | null) => {
+    if (!userRef) return "";
+    return typeof userRef === "string"
+      ? userRef
+      : userRef.id || userRef._id || "";
+  };
+
+  const getTenantName = (tenantRef?: string | UserReference | null) => {
+    if (!tenantRef) return "dead Tenant";
+
+    // If tenantRef is an object, prefer explicit name/email, otherwise extract id
+    if (typeof tenantRef !== "string") {
+      const id = getUserRefId(tenantRef);
+      if (tenantRef.name) return tenantRef.name;
+      if (tenantRef.email) return tenantRef.email;
+      if (id) {
+        const found = tenants.find((t) => t._id === id || t.id === id);
+        return found?.name || id;
+      }
+      return "Unknown Tenant";
+    }
+
+    // tenantRef is a string id - look up tenant by id
+    const id = tenantRef;
+    const found = tenants.find((t) => t._id === id || t.id === id);
+    return found?.name || id;
+  };
+
+  const getPropertyName = (propertyId?: string | PropertyReference) => {
+    const id = getPropertyRefId(propertyId);
+    if (!id) return "Unknown Property";
+    return properties.find((p) => p.id === id)?.name || id;
+  };
+
+  // New message dialog state
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [sendPropertyId, setSendPropertyId] = useState("");
+  const [sendTenantIds, setSendTenantIds] = useState<string[]>([]);
+  const [sendMessageText, setSendMessageText] = useState("");
+  const [isSendingNew, setIsSendingNew] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  // Data state
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [announcementsData, setAnnouncementsData] = useState<
     AnnouncementRecord[]
   >([]);
+  const [loading, setLoading] = useState(false);
 
-  const announcementTemplates: AnnouncementTemplate[] = [
-    {
-      id: "rent-reminder",
-      title: "Rent Reminder",
-      description: "Standard message reminder for upcoming rent payment",
-      data: {
-        title: "Rent Reminder",
-        message:
-          "Dear tenant,\n\nThis is a friendly reminder that your rent payment of $[amount] is due on [due_date]. Please ensure payment is made by the due date to avoid any late fees.\n\nIf you have already made the payment, please disregard this message.\n\nThank you for your prompt attention to this matter.\n\nBest regards,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-    {
-      id: "maintenance-notice",
-      title: "Maintenance Notice",
-      description: "Template for scheduled maintenance updates",
-      data: {
-        title: "Scheduled Maintenance",
-        message:
-          "Dear tenants,\n\nWe will be conducting scheduled maintenance on [date] from [start_time] to [end_time]. During this time, there may be [describe any disruptions, e.g., water outage, noise, etc.].\n\nWe apologize for any inconvenience this may cause and appreciate your understanding.\n\nIf you have any questions, please contact us at [contact_info].\n\nThank you,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-    {
-      id: "lease-renewal",
-      title: "Lease Renewal",
-      description: "Notice about upcoming lease renewal",
-      data: {
-        title: "Lease Renewal Notice",
-        message:
-          "Dear tenant,\n\nYour current lease is set to expire on [expiration_date]. We would like to discuss the possibility of renewing your lease.\n\nPlease contact us at your earliest convenience to discuss renewal terms and any changes you would like to make.\n\nWe value you as a tenant and hope to continue our partnership.\n\nBest regards,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-    {
-      id: "eviction-notice",
-      title: "Eviction Notice",
-      description: "Formal notice for lease violations",
-      data: {
-        title: "Eviction Notice",
-        message:
-          "Dear tenant,\n\nThis letter serves as formal notice that due to [reason for eviction, e.g., non-payment of rent, lease violations], your tenancy at [property_address] will be terminated effective [termination_date].\n\nYou have [number] days to vacate the premises. Failure to do so may result in legal action.\n\nPlease contact us immediately to discuss this matter.\n\nSincerely,\nProperty Management Team",
-        priority: "urgent",
-      },
-    },
-    {
-      id: "community-event",
-      title: "Community Event",
-      description: "Announcement for community gatherings",
-      data: {
-        title: "Community Event",
-        message:
-          "Dear tenants,\n\nWe are excited to announce a community event: [event_name] on [date] at [time] in [location].\n\n[Brief description of the event and what to expect]\n\nWe hope to see you there! This is a great opportunity to meet your neighbors and enjoy some community spirit.\n\nRSVP by [rsvp_date] to [contact_info].\n\nBest regards,\nProperty Management Team",
-        priority: "low",
-      },
-    },
-    {
-      id: "policy-update",
-      title: "Policy Update",
-      description: "Changes to property policies or rules",
-      data: {
-        title: "Policy Update",
-        message:
-          "Dear tenants,\n\nWe are updating our property policies effective [effective_date]. The following changes will be implemented:\n\n[Describe the policy changes clearly]\n\nThese changes are designed to [explain the purpose/benefit of the changes].\n\nIf you have any questions or concerns, please contact us.\n\nThank you for your understanding and cooperation.\n\nSincerely,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-    {
-      id: "holiday-notice",
-      title: "Holiday Notice",
-      description: "Information about holiday schedules",
-      data: {
-        title: "Holiday Notice",
-        message:
-          "Dear tenants,\n\nPlease be advised that our office will be closed on [holiday_dates] in observance of [holiday_name].\n\nDuring this time, emergency maintenance requests can be reported to [emergency_contact].\n\nNormal business hours will resume on [return_date].\n\nWe wish you a happy holiday season!\n\nBest regards,\nProperty Management Team",
-        priority: "low",
-      },
-    },
-    {
-      id: "utility-update",
-      title: "Utility Update",
-      description: "Information about utility changes",
-      data: {
-        title: "Utility Update",
-        message:
-          "Dear tenants,\n\nWe wanted to inform you about upcoming changes to utility services:\n\n[Describe the utility changes, e.g., rate increases, service interruptions, new providers]\n\nThese changes will take effect on [effective_date].\n\nIf you have any questions about how this affects your tenancy, please contact us.\n\nThank you,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-    {
-      id: "security-alert",
-      title: "Security Alert",
-      description: "Important security information",
-      data: {
-        title: "Security Alert",
-        message:
-          "Dear tenants,\n\nFor your safety and security, we wanted to inform you about [describe the security concern or incident].\n\n[Provide specific details and any safety instructions]\n\nPlease take the following precautions:\n- [List safety measures]\n\nIf you notice anything suspicious, please contact [security_contact] immediately.\n\nYour safety is our top priority.\n\nSincerely,\nProperty Management Team",
-        priority: "urgent",
-      },
-    },
-    {
-      id: "general-announcement",
-      title: "General Announcement",
-      description: "Blank template for custom announcements",
-      data: {
-        title: "General Announcement",
-        message:
-          "Dear tenants,\n\n[Your message here]\n\nBest regards,\nProperty Management Team",
-        priority: "normal",
-      },
-    },
-  ];
-
+  // Load announcements on mount
   useEffect(() => {
     async function loadAnnouncements() {
       const all: AnnouncementRecord[] = [];
@@ -227,37 +157,61 @@ export default function CommunicationsPage() {
     loadAnnouncements();
   }, [properties]);
 
-  // new message dialog state
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendPropertyId, setSendPropertyId] = useState("");
-  const [sendTenantId, setSendTenantId] = useState("");
-  const [sendMessageText, setSendMessageText] = useState("");
-  const [isSendingNew, setIsSendingNew] = useState(false);
+  // Load conversations on mount or when user changes
+  useEffect(() => {
+    async function loadConversations() {
+      if (!user?.id || !token) return;
+      setLoading(true);
+      try {
+        const convs = await getConversationsByOwner(user.id, token);
 
-  const tenantsForSelected = useMemo(
-    () =>
-      sendPropertyId
-        ? tenants.filter((t) => t.propertyId === sendPropertyId)
-        : [],
-    [sendPropertyId, tenants],
-  );
+        setConversations(convs);
+        console.log("Loaded conversations:", convs);
+        if (convs.length > 0 && !selectedPropertyId) {
+          const nested = convs.flatMap((conv) => conv.conversations || []);
+          if (nested.length > 0) {
+            setSelectedPropertyId(getPropertyRefId(nested[0].propertyId));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load conversations:", e);
+      }
+      setLoading(false);
+    }
+    loadConversations();
+  }, [user?.id, token]);
+
+  // Get current selected conversation
+  const propertyConversations = useMemo(() => {
+    return conversations.flatMap(
+      (conv) =>
+        (conv.conversations || []).map((propertyConversation) => ({
+          ...propertyConversation,
+          parentConversation: conv,
+        })) as PropertyConversationWithParent[],
+    );
+  }, [conversations]);
+
+  const currentPropertyConversation = useMemo(() => {
+    if (!selectedPropertyId) return null;
+    return (
+      propertyConversations.find(
+        (conversation) =>
+          getPropertyRefId(conversation.propertyId) === selectedPropertyId,
+      ) ?? null
+    );
+  }, [propertyConversations, selectedPropertyId]);
+
+  const currentConversation =
+    currentPropertyConversation?.parentConversation ?? null;
 
   useEffect(() => {
-    async function loadMessages() {
-      const all: MessageRecord[] = [];
-      for (const t of tenants) {
-        try {
-          const msgs = await getMessagesByTenant(t.id);
-          all.push(...msgs);
-        } catch (e) {
-          // ignore per-tenant failures
-        }
-      }
-      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setMessagesData(all);
-    }
-    loadMessages();
-  }, [tenants]);
+    setSelectedMessageId(null);
+  }, [selectedPropertyId]);
+
+  const getProperty = (propertyId?: string | PropertyReference) => {
+    return properties.find((p) => p._id === propertyId);
+  };
 
   const formatDateTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -270,292 +224,208 @@ export default function CommunicationsPage() {
     });
   };
 
-  const getTenantName = (id?: string) => {
-    if (!id) return "Unknown Tenant";
-    return tenants.find((t) => t.id === id)?.name || id;
-  };
+  // Handle sending a message
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !currentConversation || !user?.id) return;
 
-  // derive counts for each tab to display total items
-  const inboxCount = useMemo(
-    () =>
-      messagesData.filter(
-        // inbox: messages from tenants (fromUserId != admin, or recipient is admin)
-        (msg) => msg.fromUserId !== user?.id,
-      ).length,
-    [messagesData, user?.id],
-  );
-  const sentCount = useMemo(
-    () => messagesData.filter((msg) => msg.fromUserId === user?.id).length,
-    [messagesData, user?.id],
-  );
-  const repliedCount = useMemo(
-    () => messagesData.filter((msg) => msg.replyId).length,
-    [messagesData],
-  );
-
-  const conversations: Conversation[] = useMemo(() => {
-    let filteredMessages = messagesData;
-    if (activeTab === "inbox") {
-      // inbox: messages from tenants (received by admin)
-      filteredMessages = messagesData.filter(
-        (msg) => msg.fromUserId !== user?.id,
-      );
-    } else if (activeTab === "sent") {
-      // sent: messages from admin to tenants
-      filteredMessages = messagesData.filter(
-        (msg) => msg.fromUserId === user?.id,
-      );
-    } else if (activeTab === "replied") {
-      // replied: messages with replies
-      filteredMessages = messagesData.filter((msg) => msg.replyId);
-    }
-    const map = new Map<string, Conversation>();
-    filteredMessages.forEach((msg) => {
-      // Determine other party (sender if message is from tenant, recipient if from admin)
-      const otherId =
-        msg.fromUserId === user?.id ? msg.toUserId : msg.fromUserId;
-      if (!otherId) return;
-      const participant = getTenantName(otherId);
-      let conv = map.get(otherId);
-      if (!conv) {
-        conv = {
-          id: otherId,
-          participant,
-          lastMessage: "",
-          timestamp: "",
-          unreadCount: 0,
-          messages: [],
-        };
-        map.set(otherId, conv);
-      }
-      conv.messages.push({
-        id: msg.id,
-        sender: msg.fromUserId || "",
-        senderType: msg.fromUserId === user?.id ? "manager" : "tenant",
-        content: msg.message,
-        timestamp: msg.createdAt || "",
-        isRead: !!msg.seen,
-        sent: msg.fromUserId === user?.id,
-        replied: !!msg.replyId,
-      });
-      conv.lastMessage = msg.message;
-      conv.timestamp = msg.createdAt || "";
-      if (!msg.seen && msg.fromUserId !== user?.id) {
-        conv.unreadCount += 1;
-      }
-    });
-    return Array.from(map.values());
-  }, [messagesData, activeTab]);
-
-  const renderConversationList = () => {
-    if (conversations.length === 0) {
-      return (
-        <div
-          id="no-messages"
-          className="p-4 text-center text-sm text-muted-foreground"
-        >
-          No messages
-        </div>
-      );
-    }
-    return conversations.map((conversation) => (
-      <button
-        key={conversation.id}
-        onClick={() => {
-          // mark all unread tenant messages in this conversation as seen
-          // mark unseen tenant messages as seen via API
-          conversation.messages.forEach(async (msg) => {
-            if (!msg.isRead && msg.senderType === "tenant") {
-              try {
-                await updateMessageApi(msg.id, { seen: true });
-              } catch (e) {
-                // ignore
-              }
-            }
-          });
-          // refresh data to update counts/icons
-          (async () => {
-            const all: MessageRecord[] = [];
-            for (const t of tenants) {
-              try {
-                const msgs = await getMessagesByTenant(t.id);
-                all.push(...msgs);
-              } catch (e) {}
-            }
-            all.sort((a, b) =>
-              (b.createdAt || "").localeCompare(a.createdAt || ""),
-            );
-            setMessagesData(all);
-          })();
-          setSelectedConversation(conversation);
-        }}
-        className={`w-full flex gap-3 text-left p-4 border-b border-border hover:bg-secondary transition-colors ${
-          selectedConversation?.id === conversation.id ? "bg-secondary" : ""
-        }`}
-      >
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-          <User className="w-5 h-5" />
-        </div>
-        <div>
-          {" "}
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="font-semibold text-foreground text-sm">
-              {conversation.participant}
-            </h3>
-            {conversation.unreadCount > 0 && (
-              <span className="px-2 py-1 bg-primary text-white text-xs font-bold rounded-full">
-                {conversation.unreadCount}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground line-clamp-1 mb-1">
-            {conversation.lastMessage}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {formatDateTime(conversation.timestamp)}
-          </p>
-        </div>
-      </button>
-    ));
-  };
-
-  const deleteMsg = (id: string) => {
-    // remove via API then refresh
-    (async () => {
-      try {
-        await deleteMessageApi(id);
-      } catch (e) {}
-      const all: MessageRecord[] = [];
-      for (const t of tenants) {
-        try {
-          const msgs = await getMessagesByTenant(t.id);
-          all.push(...msgs);
-        } catch (e) {}
-      }
-      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setMessagesData(all);
-    })();
-    setSelectedConversation((prev) =>
-      prev
-        ? { ...prev, messages: prev.messages.filter((m) => m.id !== id) }
-        : prev,
+    const propertyId = getPropertyRefId(
+      currentPropertyConversation?.propertyId,
     );
-  };
+    if (!propertyId || !currentConversation) return;
 
-  const deleteAnnouncement = (id: string) => {
-    (async () => {
-      try {
-        await deleteAnnouncementApi(id);
-      } catch (e) {}
-      const all: AnnouncementRecord[] = [];
-      for (const p of properties) {
-        try {
-          const anns = await getAnnouncementsByProperty(p.id);
-          all.push(...anns);
-        } catch (e) {}
-      }
-      setAnnouncementsData(
-        all.sort((a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || ""),
-        ),
+    setIsSendingMessage(true);
+    try {
+      await createConversationMessage(
+        user.id,
+        propertyId,
+        {
+          category: "message",
+          fromUserId: user.id,
+          toUserId: currentConversation.participants.filter(
+            (p) => p !== user.id,
+          ),
+          message: messageText,
+        },
+        token,
       );
-    })();
-  };
-
-  const deleteAllInboxMessages = () => {
-    (async () => {
-      const inboxMessages = messagesData.filter(
-        (msg) => msg.fromUserId !== user?.id,
+      setMessageText("");
+      // Reload conversation
+      const updated = await getConversationByProperty(
+        user.id,
+        propertyId,
+        token,
       );
-      for (const msg of inboxMessages) {
-        try {
-          await deleteMessageApi(msg.id);
-        } catch (e) {}
-      }
-      const all: MessageRecord[] = [];
-      for (const t of tenants) {
-        try {
-          const msgs = await getMessagesByTenant(t.id);
-          all.push(...msgs);
-        } catch (e) {}
-      }
-      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setMessagesData(all);
-      setSelectedConversation(null);
-    })();
-  };
-
-  const deleteAllSentMessages = () => {
-    (async () => {
-      const sentMessages = messagesData.filter(
-        (msg) => msg.fromUserId === user?.id,
-      );
-      for (const msg of sentMessages) {
-        try {
-          await deleteMessageApi(msg.id);
-        } catch (e) {}
-      }
-      const all: MessageRecord[] = [];
-      for (const t of tenants) {
-        try {
-          const msgs = await getMessagesByTenant(t.id);
-          all.push(...msgs);
-        } catch (e) {}
-      }
-      all.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setMessagesData(all);
-      setSelectedConversation(null);
-    })();
-  };
-
-  const handleSendMessage = () => {
-    if (messageText.trim() && selectedConversation && user?.id) {
-      (async () => {
-        try {
-          await createMessageApi({
-            fromUserId: user.id,
-            toUserId: selectedConversation.id,
-            tenantId: selectedConversation.id,
-            message: messageText,
-            createdBy: user.id,
-          });
-        } catch (e) {}
-        // create a reply to the last message if it exists
-        const last =
-          selectedConversation.messages[
-            selectedConversation.messages.length - 1
-          ];
-        if (last) {
-          try {
-            await createReplyApi(last.id, {
-              reply: messageText,
-              createdBy: user.id,
-            });
-          } catch (e) {}
-        }
-        // reload messages
-        const all: MessageRecord[] = [];
-        for (const t of tenants) {
-          try {
-            const msgs = await getMessagesByTenant(t.id);
-            all.push(...msgs);
-          } catch (e) {}
-        }
-        all.sort((a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || ""),
+      setConversations((prev) => {
+        const updatedPropertyId = propertyId;
+        const exists = prev.some((conv) =>
+          conv.conversations?.some(
+            (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+          ),
         );
-        setMessagesData(all);
-        setMessageText("");
-      })();
+        return exists
+          ? prev.map((conv) =>
+              conv.conversations?.some(
+                (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+              )
+                ? updated
+                : conv,
+            )
+          : [...prev, updated];
+      });
+    } catch (e) {
+      console.error("Failed to send message:", e);
+    } finally {
+      setIsSendingMessage(false);
     }
   };
 
-  const handleSendAnnouncement = (data: any) => {
+  // Handle sending a reply
+  const handleSendReply = async (messageId: string) => {
+    if (!replyText.trim() || !currentConversation || !user?.id) return;
+
+    try {
+      const message = currentPropertyConversation?.messages.find(
+        (m) => m._id === messageId || m.id === messageId,
+      );
+      if (!message) return;
+
+      const propertyId = getPropertyRefId(
+        currentPropertyConversation?.propertyId,
+      );
+      if (!propertyId) return;
+
+      const replyToUserId = getUserRefId(message.fromUserId);
+      if (!replyToUserId) return;
+
+      await createConversationReply(
+        user.id,
+        propertyId,
+        messageId,
+        {
+          fromUserId: user.id,
+          toUserId: replyToUserId,
+          message: replyText,
+        },
+        token,
+      );
+      setReplyText("");
+      setSelectedMessageId(null);
+      // Reload conversation
+      const updated = await getConversationByProperty(
+        user.id,
+        propertyId,
+        token,
+      );
+      setConversations((prev) => {
+        const updatedPropertyId = propertyId;
+        const exists = prev.some((conv) =>
+          conv.conversations?.some(
+            (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+          ),
+        );
+        return exists
+          ? prev.map((conv) =>
+              conv.conversations?.some(
+                (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+              )
+                ? updated
+                : conv,
+            )
+          : [...prev, updated];
+      });
+    } catch (e) {
+      console.error("Failed to send reply:", e);
+    }
+  };
+
+  // Handle mark message as seen
+  const handleMarkSeen = async (messageId: string) => {
+    if (!currentPropertyConversation || !user?.id) return;
+    try {
+      const propertyId = getPropertyRefId(
+        currentPropertyConversation.propertyId,
+      );
+      if (!propertyId) return;
+
+      await markConversationMessageSeen(
+        user.id,
+        propertyId,
+        messageId,
+        user.id,
+        token,
+      );
+      // Reload conversation
+      const updated = await getConversationByProperty(
+        user.id,
+        propertyId,
+        token,
+      );
+      setConversations((prev) => {
+        const updatedPropertyId = propertyId;
+        const exists = prev.some((conv) =>
+          conv.conversations?.some(
+            (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+          ),
+        );
+        return exists
+          ? prev.map((conv) =>
+              conv.conversations?.some(
+                (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+              )
+                ? updated
+                : conv,
+            )
+          : [...prev, updated];
+      });
+    } catch (e) {
+      console.error("Failed to mark as seen:", e);
+    }
+  };
+
+  // Handle delete message
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!currentPropertyConversation || !user?.id) return;
+    try {
+      const propertyId = getPropertyRefId(
+        currentPropertyConversation.propertyId,
+      );
+      if (!propertyId) return;
+
+      await deleteConversationMessage(user.id, propertyId, messageId, token);
+      // Reload conversation
+      const updated = await getConversationByProperty(
+        user.id,
+        propertyId,
+        token,
+      );
+      setConversations((prev) => {
+        const updatedPropertyId = propertyId;
+        const exists = prev.some((conv) =>
+          conv.conversations?.some(
+            (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+          ),
+        );
+        return exists
+          ? prev.map((conv) =>
+              conv.conversations?.some(
+                (pc) => getPropertyRefId(pc.propertyId) === updatedPropertyId,
+              )
+                ? updated
+                : conv,
+            )
+          : [...prev, updated];
+      });
+    } catch (e) {
+      console.error("Failed to delete message:", e);
+    }
+  };
+
+  // Handle send new announcement
+  const handleSendAnnouncement = async (data: any) => {
     setIsSendingAnnouncement(true);
-    (async () => {
-      try {
-        await createAnnouncementApi(data);
-      } catch (e) {}
+    try {
+      await createAnnouncementApi(data);
+      // Reload announcements
       const all: AnnouncementRecord[] = [];
       for (const p of properties) {
         try {
@@ -568,45 +438,68 @@ export default function CommunicationsPage() {
           (b.createdAt || "").localeCompare(a.createdAt || ""),
         ),
       );
-      setIsSendingAnnouncement(false);
       setShowAnnouncementForm(false);
-    })();
+      setAnnouncementTemplate(null);
+    } catch (e) {
+      console.error("Failed to send announcement:", e);
+    }
+    setIsSendingAnnouncement(false);
   };
 
-  const handleCreateNewMessage = () => {
-    if (sendPropertyId && sendTenantId && sendMessageText.trim() && user?.id) {
-      setIsSendingNew(true);
-      (async () => {
-        const tenant = tenants.find((t) => t.id === sendTenantId);
-        try {
-          await createMessageApi({
-            fromUserId: user.id,
-            toUserId: sendTenantId,
-            tenantId: sendTenantId,
-            propertyId: sendPropertyId,
-            message: sendMessageText,
-            createdBy: user.id,
-          });
-        } catch (e) {}
-        const all: MessageRecord[] = [];
-        for (const t of tenants) {
-          try {
-            const msgs = await getMessagesByTenant(t.id);
-            all.push(...msgs);
-          } catch (e) {}
-        }
-        all.sort((a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || ""),
-        );
-        setMessagesData(all);
-        setIsSendingNew(false);
-        setIsSendDialogOpen(false);
-        setSendPropertyId("");
-        setSendTenantId("");
-        setSendMessageText("");
-      })();
+  // Handle send new message via dialog
+  const handleSendNewMessage = async () => {
+    if (
+      !sendPropertyId ||
+      sendTenantIds.length === 0 ||
+      !sendMessageText.trim() ||
+      !user?.id
+    ) {
+      return;
     }
+    setIsSendingNew(true);
+    try {
+      await createConversationMessage(
+        user.id,
+        sendPropertyId,
+        {
+          category: "message",
+          fromUserId: user.id,
+          toUserId: sendTenantIds,
+          message: sendMessageText,
+        },
+        token,
+      );
+      // Reload conversations
+      const convs = await getConversationsByOwner(user.id, token);
+      setConversations(convs);
+      setIsSendDialogOpen(false);
+      setSendPropertyId("");
+      setSendTenantIds([]);
+      setSendMessageText("");
+    } catch (e) {
+      console.error("Failed to send message:", e);
+    }
+    setIsSendingNew(false);
   };
+
+  const tenantsForSelectedProperty = useMemo(() => {
+    if (!sendPropertyId) return [];
+    return tenants.filter((t) => t.propertyId === sendPropertyId);
+  }, [sendPropertyId, tenants]);
+
+  const allMessages = useMemo(() => {
+    if (!currentPropertyConversation) return [];
+    return currentPropertyConversation.messages || [];
+  }, [currentPropertyConversation]);
+
+  const selectedMessage = useMemo(() => {
+    if (!selectedMessageId) return null;
+    return (
+      allMessages.find(
+        (msg) => msg._id === selectedMessageId || msg.id === selectedMessageId,
+      ) ?? null
+    );
+  }, [allMessages, selectedMessageId]);
 
   return (
     <div className="space-y-6">
@@ -627,7 +520,7 @@ export default function CommunicationsPage() {
           <DialogHeader>
             <DialogTitle>New Message</DialogTitle>
             <DialogDescription>
-              Choose tenant and send your message.
+              Send a message to tenants at a property.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -639,7 +532,7 @@ export default function CommunicationsPage() {
                 value={sendPropertyId}
                 onChange={(e) => {
                   setSendPropertyId(e.target.value);
-                  setSendTenantId("");
+                  setSendTenantIds([]);
                 }}
                 className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
               >
@@ -653,21 +546,38 @@ export default function CommunicationsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                Tenant
+                Tenants (select one or more)
               </label>
-              <select
-                value={sendTenantId}
-                onChange={(e) => setSendTenantId(e.target.value)}
-                disabled={!sendPropertyId}
-                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-              >
-                <option value="">Select tenant</option>
-                {tenantsForSelected.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-2 max-h-40 overflow-y-auto border border-input rounded-md p-2">
+                {tenantsForSelectedProperty.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No tenants for this property
+                  </p>
+                ) : (
+                  tenantsForSelectedProperty.map((t) => (
+                    <label
+                      key={t.id}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={sendTenantIds.includes(t.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSendTenantIds([...sendTenantIds, t.id]);
+                          } else {
+                            setSendTenantIds(
+                              sendTenantIds.filter((id) => id !== t.id),
+                            );
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      {t.name}
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
@@ -690,7 +600,7 @@ export default function CommunicationsPage() {
             >
               Cancel
             </Button>
-            <Button onClick={handleCreateNewMessage} disabled={isSendingNew}>
+            <Button onClick={handleSendNewMessage} disabled={isSendingNew}>
               {isSendingNew ? "Sending..." : "Send"}
             </Button>
           </DialogFooter>
@@ -717,32 +627,19 @@ export default function CommunicationsPage() {
       </div>
 
       {/* Main Content */}
-      <Card className="border border-border overflow-hidden">
+      <Card className="border border-border h-screen overflow-hidden">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="border-b border-border rounded-none p-0 h-auto bg-transparent">
             <TabsTrigger
-              value="inbox"
+              value="conversations"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-              onClick={() => setSelectedConversation(null)}
             >
               <MessageSquare className="w-4 h-4 mr-2" />
-              Inbox ({inboxCount})
-            </TabsTrigger>
-            <TabsTrigger
-              value="sent"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-              onClick={() => setSelectedConversation(null)}
-            >
-              <Send className="w-4 h-4 mr-2" />
-              Sent ({sentCount})
-            </TabsTrigger>
-            <TabsTrigger
-              value="replied"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-              onClick={() => setSelectedConversation(null)}
-            >
-              <Archive className="w-4 h-4 mr-2" />
-              Replied ({repliedCount})
+              Conversations (
+              {conversations
+                ?.map((c) => c.conversations?.length || 0)
+                .reduce((a, b) => a + b, 0)}
+              )
             </TabsTrigger>
             <TabsTrigger
               value="announcements"
@@ -751,403 +648,315 @@ export default function CommunicationsPage() {
               <Bell className="w-4 h-4 mr-2" />
               Announcements ({announcementsData.length})
             </TabsTrigger>
-            <TabsTrigger
-              value="templates"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              Templates
-            </TabsTrigger>
           </TabsList>
 
-          {/* Inbox Tab */}
-          <TabsContent
-            value="inbox"
-            className="p-0 grid grid-cols-1 md:grid-cols-3 gap-0"
-          >
-            {/* Conversation List */}
-            <div className="border-r border-border">
-              <div className="p-4 border-b border-border flex items-center justify-between gap-2">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search conversations..."
-                    className="pl-10"
-                  />
+          {/* Conversations Tab */}
+          <TabsContent value="conversations" className="p-0">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_520px_360px] h-full">
+              {/* Property List */}
+              <div className="md:border-r border-border h-full">
+                <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search properties..."
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
-                {/* <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={deleteAllInboxMessages}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete All
-                </Button> */}
+
+                <div className="overflow-y-auto space-y-2 p-2 h-full">
+                  {loading ? (
+                    <p className="text-xs text-muted-foreground text-center p-4">
+                      Loading...
+                    </p>
+                  ) : propertyConversations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center p-4">
+                      No conversations yet
+                    </p>
+                  ) : (
+                    propertyConversations.map((conv) => {
+                      const propId = getPropertyRefId(conv.propertyId);
+                      return (
+                        <button
+                          key={propId}
+                          onClick={() => setSelectedPropertyId(propId)}
+                          className={`w-full text-left h-24 flex flex-col justify-center p-3 rounded-md transition-colors ${
+                            selectedPropertyId === propId
+                              ? "bg-primary text-white"
+                              : "hover:bg-secondary"
+                          }`}
+                        >
+                          <div className="font-medium text-sm truncate">
+                            {getPropertyName(conv?.propertyId)}
+                          </div>
+                          <div className="text-xs opacity-75 truncate">
+                            {getProperty(conv?.propertyId)?.tenants?.length ||
+                              0}{" "}
+                            Tenants
+                          </div>
+                          <div className="text-xs opacity-75 truncate">
+                            {conv.messages?.length || 0} Messages
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
-              <div className="max-h-96 overflow-y-auto">
-                {renderConversationList()}
-              </div>
-            </div>
-
-            {/* Chat Area */}
-            {selectedConversation ? (
-              <div className="md:col-span-2 flex flex-col">
-                {/* Chat Header */}
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                  {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <User className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold">
-                              {message.senderType === "manager"
-                                ? "Management"
-                                : selectedConversation.participant}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {message.senderType === "manager"
-                                ? "management@company.com"
-                                : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
-                            </div>
-
-                            <div className="text-xs text-muted-foreground">
-                              From: {selectedConversation.participant}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className="text-xs text-muted-foreground">
-                            {formatDateTime(message.timestamp)}
-                          </div>
-                          <button
-                            onClick={() => deleteMsg(message.id)}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded-md"
-                            aria-label="Delete message"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          {message.sent && (
-                            <span className="flex items-center gap-1 text-green-600">
-                              <Check className="w-3 h-3" />
-                              <Check className="w-3 h-3 -ml-1" />
-                            </span>
-                          )}
-                          {message.replied && (
-                            <span className="text-xs text-blue-600 font-medium">
-                              Replied
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="ml-13">
-                        <div className="font-medium text-sm mb-2">Message</div>
-                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
-                          {message.content}
-                        </div>
-                      </div>
+              {/* Message Area */}
+              {currentPropertyConversation ? (
+                <div className="flex flex-col h-full">
+                  {/* Header */}
+                  <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+                    <div>
+                      <h2 className="font-bold text-lg text-foreground">
+                        {getPropertyName(
+                          currentPropertyConversation.propertyId,
+                        )}
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        All messages of the conversation for this property.
+                        Select a message to view details and replies.
+                      </p>
                     </div>
-                  ))}
-                </div>
+                    <div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          const pid = getPropertyRefId(
+                            currentPropertyConversation.propertyId,
+                          );
+                          setSendPropertyId(pid);
+                          setIsSendDialogOpen(true);
+                        }}
+                        className="rounded-full"
+                      >
+                        <MessageCirclePlus />
+                      </Button>
+                    </div>
+                  </div>
 
-                {/* Message Input */}
-                <div className="p-4 border-t border-border space-y-3">
-                  <div className="flex items-center gap-2">
+                  {/* Message List */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    {allMessages.length === 0 ? (
+                      <div className="flex h-full min-h-[240px] items-center justify-center text-muted-foreground">
+                        No messages yet. Send the first message!
+                      </div>
+                    ) : (
+                      allMessages?.map((msg, idx) => {
+                        const toUserids = Array.isArray(msg.toUserId)
+                          ? msg.toUserId.map((u) => getUserRefId(u))
+                          : [getUserRefId(msg.toUserId)];
+
+                        console.log("Rendering message:", toUserids, msg);
+                        return (
+                          <div
+                            key={msg._id || idx}
+                            className={`p-4 border-b border-border rounded-md my-3 relative cursor-pointer ${
+                              selectedMessageId === (msg._id || msg.id)
+                                ? "bg-primary/10 text-white"
+                                : "hover:bg-muted/20"
+                            }`}
+                            onClick={() =>
+                              setSelectedMessageId(msg._id || msg.id || null)
+                            }
+                          >
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                              from:{" "}
+                              <b>
+                                {getTenantName(getUserRefId(msg.fromUserId)) ===
+                                user?.id
+                                  ? "You"
+                                  : getTenantName(getUserRefId(msg.fromUserId))}
+                              </b>{" "}
+                              to:
+                              <b>
+                                {toUserids.includes(user?.id || "")
+                                  ? "You"
+                                  : getTenantName(toUserids[0])}{" "}
+                                {/* {toUserids.length > 1
+                                  ? `and ${toUserids.length - 1} others`
+                                  : ""} */}
+                              </b>
+                            </p>
+
+                            <p className="text-sm mb-3 flex-wrap line-clamp-2 text-muted-foreground whitespace-pre-wrap">
+                              {msg.message}
+                            </p>
+                            <p className="text-xs absolute right-1 bottom-1 text-muted-foreground">
+                              {formatDateTime(msg.sentAt)}
+                            </p>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="border-t border-border p-4 bg-background">
+                    <div className="mb-3 space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Send a new message
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        This will add a new message to the selected property
+                        conversation.
+                      </p>
+                    </div>
                     <Textarea
                       placeholder="Type your message..."
                       value={messageText}
                       onChange={(e) => setMessageText(e.target.value)}
-                      className="resize-none"
-                      rows={2}
+                      rows={3}
+                      className="w-full"
                     />
-                    <Button size="sm">
-                      <Paperclip className="w-4 h-4" />
-                    </Button>
+                    <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={isSendingMessage}
+                        className="bg-primary hover:bg-primary/90 text-white"
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        {isSendingMessage ? "Sending..." : "Send message"}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => setMessageText("")}
+                      >
+                        Clear
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    onClick={handleSendMessage}
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Message
-                  </Button>
+
+                  {/* <div className="p-4 border-b border-border rounded-md bg-muted/10 space-y-2">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                          Selected conversation
+                        </p>
+                        <p className="font-semibold text-sm text-foreground">
+                          {getPropertyName(currentConversation.propertyId)}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        {allMessages.length} message
+                        {allMessages.length === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Messages for the currently selected property conversation
+                      are shown below.
+                    </p>
+                  </div> */}
                 </div>
-              </div>
-            ) : (
-              <div className="md:col-span-2 flex items-center justify-center p-8 text-center">
-                <MessageSquare className="w-12 h-12 text-muted-foreground opacity-50" />
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Sent Tab */}
-          <TabsContent
-            value="sent"
-            className="p-0 grid grid-cols-1 md:grid-cols-3 gap-0"
-          >
-            {/* Conversation List */}
-            <div className="border-r border-border">
-              <div className="p-4 border-b gap-2 border-border flex items-center justify-between">
-                <div className="relative flex-1 max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search conversations..."
-                    className="pl-10"
-                  />
+              ) : (
+                <div className="flex min-h-[320px] items-center justify-center p-8 text-muted-foreground">
+                  <MessageSquare className="w-12 h-12 opacity-50" />
                 </div>
-                {/* <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={deleteAllSentMessages}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete All
-                </Button> */}
-                <Button
-                  className="rounded-full circle "
-                  size="sm"
-                  onClick={() => setIsSendDialogOpen(true)}
-                >
-                  <MessageCirclePlus className="w-4 h-4 " />
-                </Button>
-              </div>
-
-              <div className="max-h-96 overflow-y-auto">
-                {renderConversationList()}
-              </div>
-            </div>
-
-            {/* Chat Area */}
-            {selectedConversation ? (
-              <div className="md:col-span-2 flex flex-col">
-                {/* Chat Header */}
-                {/* <div className="p-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-bold text-foreground">{selectedConversation.participant}</h2>
-                  <Button variant="ghost" size="sm">
-                    <Archive className="w-4 h-4" />
-                  </Button>
-                </div> */}
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                  {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <User className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold">
-                              {message.senderType === "manager"
-                                ? "Management"
-                                : selectedConversation.participant}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {message.senderType === "manager"
-                                ? "management@company.com"
-                                : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <div className="text-xs text-muted-foreground">
-                                Sent to: {selectedConversation.participant}
+              )}
+              <div className="md:col-span-2 xl:col-span-1 border border-border rounded-xl bg-background p-4 min-h-[420px]">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Message details
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Select a message to inspect its full details, recipients,
+                    and reply history.
+                  </p>
+                </div>
+                {selectedMessage ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border bg-muted/50 p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                        From
+                      </p>
+                      <p className="font-semibold text-sm">
+                        {getTenantName(
+                          getUserRefId(selectedMessage.fromUserId),
+                        ) === user?.id
+                          ? "You"
+                          : getTenantName(
+                              getUserRefId(selectedMessage.fromUserId),
+                            )}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDateTime(selectedMessage.sentAt)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                        Recipients
+                      </p>
+                      <p className="text-sm">
+                        {selectedMessage.toUserId.length > 0
+                          ? selectedMessage.toUserId
+                              .map(getTenantName)
+                              .join(", ")
+                          : "No recipients"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                        Message
+                      </p>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {selectedMessage.message}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                        Seen by
+                      </p>
+                      <p className="text-sm">
+                        {selectedMessage.seenBy.length > 0
+                          ? selectedMessage.seenBy
+                              .map(getTenantName)
+                              .join(", ") === user?.id
+                            ? "None yet"
+                            : selectedMessage.seenBy
+                                .map(getTenantName)
+                                .join(", ")
+                          : "No one yet"}
+                      </p>
+                    </div>
+                    {selectedMessage.replies &&
+                      selectedMessage.replies.length > 0 && (
+                        <div className="rounded-xl border border-border p-4">
+                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                            Replies
+                          </p>
+                          <div className="space-y-3">
+                            {selectedMessage.replies.map((reply) => (
+                              <div
+                                key={reply._id || reply.id}
+                                className="space-y-1"
+                              >
+                                <div className="font-semibold text-sm">
+                                  {getTenantName(reply.fromUserId)}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDateTime(reply.sentAt)}
+                                </p>
+                                <p className="text-sm whitespace-pre-wrap">
+                                  {reply.message}
+                                </p>
                               </div>
-                            </div>
+                            ))}
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className="text-xs text-muted-foreground">
-                            {formatDateTime(message.timestamp)}
-                          </div>
-                          <button
-                            onClick={() => deleteMsg(message.id)}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded-md"
-                            aria-label="Delete message"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          {message.sent && (
-                            <span className="flex items-center gap-1 text-green-600">
-                              <Check className="w-3 h-3" />
-                              <Check className="w-3 h-3 -ml-1" />
-                            </span>
-                          )}
-                          {message.replied && (
-                            <span className="text-xs text-blue-600 font-medium">
-                              Replied
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="ml-13">
-                        <div className="font-medium text-sm mb-2">Message</div>
-                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
-                          {message.content}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Message Input */}
-                <div className="p-4 border-t border-border space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      className="resize-none"
-                      rows={2}
-                    />
-                    <Button size="sm">
-                      <Paperclip className="w-4 h-4" />
-                    </Button>
+                      )}
                   </div>
-                  <Button
-                    onClick={handleSendMessage}
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Message
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="md:col-span-2 flex items-center justify-center p-8 text-center">
-                <MessageSquare className="w-12 h-12 text-muted-foreground opacity-50" />
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Replied Tab */}
-          <TabsContent
-            value="replied"
-            className="p-0 grid grid-cols-1 md:grid-cols-3 gap-0"
-          >
-            {/* Conversation List */}
-            <div className="border-r border-border">
-              <div className="p-4 border-b border-border">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search conversations..."
-                    className="pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="max-h-96 overflow-y-auto">
-                {renderConversationList()}
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border h-full p-6 flex flex-col items-center justify-center text-center text-muted-foreground">
+                    <p className="font-semibold mb-2">Select a message</p>
+                    <p className="text-sm">
+                      Details about the selected message will appear here.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Chat Area */}
-            {selectedConversation ? (
-              <div className="md:col-span-2 flex flex-col">
-                {/* Chat Header */}
-                <div className="p-4 border-b border-border flex items-center justify-between">
-                  <h2 className="font-bold text-foreground">
-                    {selectedConversation.participant}
-                  </h2>
-                  <Button variant="ghost" size="sm">
-                    <Archive className="w-4 h-4" />
-                  </Button>
-                </div>
-
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                  {selectedConversation.messages.map((message) => (
-                    <div key={message.id} className="space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                            <User className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-semibold">
-                              {message.senderType === "manager"
-                                ? "Management"
-                                : selectedConversation.participant}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {message.senderType === "manager"
-                                ? "management@company.com"
-                                : `${selectedConversation.participant.toLowerCase()}@tenant.com`}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className="text-xs text-muted-foreground">
-                            {formatDateTime(message.timestamp)}
-                          </div>
-                          <button
-                            onClick={() => deleteMsg(message.id)}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded-md"
-                            aria-label="Delete message"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                          {message.sent && (
-                            <span className="flex items-center gap-1 text-green-600">
-                              <Check className="w-3 h-3" />
-                              <Check className="w-3 h-3 -ml-1" />
-                            </span>
-                          )}
-                          {message.replied && (
-                            <span className="text-xs text-blue-600 font-medium">
-                              Replied
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="ml-13">
-                        <div className="font-medium text-sm mb-2">Message</div>
-                        <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50">
-                          {message.content}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Message Input */}
-                <div className="p-4 border-t border-border space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      className="resize-none"
-                      rows={2}
-                    />
-                    <Button size="sm">
-                      <Paperclip className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <Button
-                    onClick={handleSendMessage}
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Send Message
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="md:col-span-2 flex items-center justify-center p-8 text-center">
-                <MessageSquare className="w-12 h-12 text-muted-foreground opacity-50" />
-              </div>
-            )}
           </TabsContent>
 
           {/* Announcements Tab */}
@@ -1179,67 +988,26 @@ export default function CommunicationsPage() {
                               {announcement.title}
                             </p>
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() =>
-                                  setSelectedAnnouncementForViews(
-                                    selectedAnnouncementForViews ===
-                                      announcement.id
-                                      ? null
-                                      : announcement.id,
-                                  )
-                                }
-                                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                              >
-                                <Eye className="w-4 h-4" />
-                                {announcement.readBy?.length || 0}
-                              </button>
+                              <Eye className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-sm text-muted-foreground">
+                                {readTenants.length} / {tenants.length}
+                              </span>
                               <button
                                 onClick={() =>
                                   deleteAnnouncement(announcement.id)
                                 }
-                                className="p-1 text-red-600 hover:bg-red-100 rounded-md"
-                                aria-label="Delete announcement"
+                                className="p-1 text-destructive hover:bg-destructive/10 rounded"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDateTime(
-                                  announcement.sentAt ||
-                                    announcement.createdAt ||
-                                    "",
-                                )}
-                              </p>
                             </div>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-2">
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
                             {announcement.message}
                           </p>
-                          {selectedAnnouncementForViews === announcement.id && (
-                            <div className="mt-3 p-3 bg-muted rounded-md">
-                              <p className="text-sm font-medium mb-2">
-                                Seen by:
-                              </p>
-                              {readTenants.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  No one yet
-                                </p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {readTenants.map((tenant) => {
-                                    const property = properties.find(
-                                      (p) => p.id === tenant.propertyId,
-                                    );
-                                    return (
-                                      <div key={tenant.id} className="text-sm">
-                                        {tenant.name} -{" "}
-                                        {property?.name || "Unknown Property"}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <p className="text-xs text-muted-foreground mt-3">
+                            {formatDateTime(announcement.createdAt || "")}
+                          </p>
                         </Card>
                       );
                     })
@@ -1248,43 +1016,29 @@ export default function CommunicationsPage() {
               </div>
             </div>
           </TabsContent>
-
-          {/* Templates Tab */}
-          <TabsContent value="templates" className="p-6">
-            <div className="space-y-4">
-              <Button className="w-full justify-start bg-primary hover:bg-primary/90 text-white">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Template
-              </Button>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {announcementTemplates.map((template) => (
-                  <Card key={template.id} className="border border-border p-4">
-                    <h3 className="font-semibold text-foreground mb-2">
-                      {template.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {template.description}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border bg-transparent w-full"
-                      onClick={() => {
-                        setAnnouncementTemplate(template.data);
-                        setShowAnnouncementForm(true);
-                        setActiveTab("announcements");
-                      }}
-                    >
-                      Use Template
-                    </Button>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
         </Tabs>
       </Card>
     </div>
   );
+
+  async function deleteAnnouncement(id: string) {
+    try {
+      await deleteAnnouncementApi(id);
+      // Reload announcements
+      const all: AnnouncementRecord[] = [];
+      for (const p of properties) {
+        try {
+          const anns = await getAnnouncementsByProperty(p.id);
+          all.push(...anns);
+        } catch (e) {}
+      }
+      setAnnouncementsData(
+        all.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        ),
+      );
+    } catch (e) {
+      console.error("Failed to delete announcement:", e);
+    }
+  }
 }

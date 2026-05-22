@@ -87,9 +87,7 @@ export default function PropertyInviteDialog({
       const inviteUrl =
         (result && (result.invite.inviteUrl as string)) ||
         `${window.location.origin}/auth/invite?token=${(result.invite && result.invite.token) || ""}`;
-      console.log("====================================");
-      console.log(inviteUrl);
-      console.log("====================================");
+    
       setGeneratedInviteLink(inviteUrl);
       setCopied(false);
       onInviteGenerated?.(inviteUrl);
@@ -126,8 +124,11 @@ export default function PropertyInviteDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          
           <div>
+            
             <label className="text-sm font-medium">
+              
               Unit Number (optional)
             </label>
             <Select value={inviteUnit} onValueChange={setInviteUnit}>

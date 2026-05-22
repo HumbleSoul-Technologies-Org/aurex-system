@@ -71,6 +71,7 @@ export interface TenantRecord {
   notificationPreferences?: NotificationPreferences
   documentDelivery?: 'email' | 'in-app' | 'both'
   moveOutNotice?: MoveOutNotice
+  avatar?: { url?: string; public_id?: string }
 }
 
 export function normalizeTenantRecord(tenant: any): TenantRecord {

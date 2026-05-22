@@ -308,10 +308,14 @@ export default function PropertiesPage() {
         </div>
       )}
 
+      
+
       {/* List View */}
       {viewMode === "list" && (
         <Card className="border border-border overflow-hidden">
           <div className="overflow-x-auto">
+
+            
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-secondary">

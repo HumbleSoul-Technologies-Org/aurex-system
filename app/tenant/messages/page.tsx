@@ -1,17 +1,11 @@
-"use client";
+﻿"use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { useAppData } from "@/lib/data-context";
 import {
-  getMessagesByTenant,
-  createMessageApi,
-  updateMessageApi,
-  MessageRecord,
+  createConversationMessage,
+  markConversationMessageSeen,
 } from "@/lib/services/messages";
-import {
-  getAnnouncementsByProperty,
-  markAnnouncementRead,
-} from "@/lib/services/announcements";
+import { useAuth } from "@/lib/auth-context";
+import { useTenantContext } from "@/lib/tenant-context";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   User,
@@ -24,62 +18,60 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
-type Reply = { repliedOn: string | null; reply: string | null };
-
-// align with dashboard communications message schema
-// duplicates the interface defined there for consistency
-// fields are minimal and shared between tenant and management views
 interface Message {
   id: string;
+  fromUserId?: string;
+  toUserId?: string[];
   sender: string;
   senderType: "tenant" | "manager";
   content: string;
   timestamp: string;
   isRead: boolean;
-  sent?: boolean; // true if authored by current user
-  replied?: boolean; // true if there is a reply record
-  subject?: string; // optional subject field
+  sent?: boolean;
+  replied?: boolean;
+  subject?: string;
   isStarred?: boolean;
   isArchived?: boolean;
   type?: "message" | "announcement";
+  originalId?: string; // _id or id from server
+  message?: string;
+  sentAt?: string;
+  seenBy?: string[];
+  replies?: any[];
+  category?: string;
+  propertyId?: string; // track source property
 }
 
 export default function TenantMessagesPage() {
-  const { user } = useAuth();
-  const { tenants, properties } = useAppData();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { user, token } = useAuth();
+  const {
+    currentTenant,
+    currentProperty,
+    messages: tenantMessages,
+    loading,
+    loadMessages,
+  } = useTenantContext();
+  const { toast } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<
     "inbox" | "sent" | "starred" | "archived"
   >("inbox");
+  const [messageFlags, setMessageFlags] = useState<
+    Record<string, { isStarred?: boolean; isArchived?: boolean }>
+  >({});
 
   // quick message input state
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const isMobile = useIsMobile();
-  const [showDetailsOnMobile, setShowDetailsOnMobile] = useState(false);
   const [modalMounted, setModalMounted] = useState(false);
   const [modalAnimateIn, setModalAnimateIn] = useState(false);
+  const isMobile = useIsMobile();
+  const [showDetailsOnMobile, setShowDetailsOnMobile] = useState(false);
 
-  // quick‑send input state remains in `text`
-
-  useEffect(() => {
-    if (showDetailsOnMobile) {
-      setModalMounted(true);
-      // trigger animation on next frame
-      requestAnimationFrame(() => setModalAnimateIn(true));
-    } else if (modalMounted) {
-      // trigger exit animation, then unmount
-      setModalAnimateIn(false);
-      const t = setTimeout(() => setModalMounted(false), 300);
-      return () => clearTimeout(t);
-    }
-  }, [showDetailsOnMobile]);
-
-  // Filter chips drag-to-scroll
+  // Drag-to-scroll for filter chips
   const chipsRef = useRef<HTMLDivElement | null>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -111,7 +103,6 @@ export default function TenantMessagesPage() {
 
     const onPointerUp = () => {
       pointerDown = false;
-      // leave isDragging state for one tick so click handlers can check it
       setTimeout(() => (isDragging.current = false), 0);
     };
 
@@ -126,200 +117,360 @@ export default function TenantMessagesPage() {
     };
   }, []);
 
-  const fetchMessages = async () => {
-    setLoading(true);
-    try {
-      // load messages from server for this tenant
-      const tenant = tenants.find((t) => t.email === user?.email);
-      const tenantId = tenant?.id;
-      const tenantMessages: Message[] = [];
-      if (tenantId) {
-        try {
-          const msgs = await getMessagesByTenant(tenantId);
-          msgs.forEach((msg) =>
-            tenantMessages.push({
-              id: msg.id,
-              sender: msg.fromUserId || msg.createdBy || "tenant",
-              senderType: msg.fromUserId ? "tenant" : "tenant",
-              content: msg.message,
-              timestamp: msg.createdAt || "",
-              isRead: !!msg.seen,
-              sent: msg.createdBy === user?.id || msg.fromUserId === user?.id,
-              replied: !!msg.replyId,
-              subject: msg.subject || undefined,
-              isStarred: false,
-              isArchived: false,
-              type: "message",
-            }),
-          );
-        } catch (e) {
-          console.error("Failed to load messages for tenant", e);
-        }
-      }
+  const getPropertyOwnerId = (property: any) => {
+    if (!property) return null;
+    return (
+      property.owner ||
+      property.ownerId ||
+      property.owner?._id ||
+      property.owner?.id ||
+      null
+    );
+  };
 
-      // Get announcements for this tenant by fetching per-property and filtering
-      const tenantAnnouncements: Message[] = [];
-      for (const p of properties) {
-        try {
-          const anns = await getAnnouncementsByProperty(p.id);
-          anns.forEach((ann) => {
-            const included =
-              ann.recipients === "all" ||
-              (tenantId && ann.tenantIds && ann.tenantIds.includes(tenantId));
-            if (included) {
-              tenantAnnouncements.push({
-                id: ann.id,
-                sender: "management",
-                senderType: "manager",
-                content: ann.message,
-                timestamp: ann.sentAt || ann.createdAt || "",
-                isRead: tenantId
-                  ? (ann.readBy || []).includes(tenantId)
-                  : false,
-                sent: false,
-                replied: false,
-                subject: ann.title,
-                isStarred: false,
-                isArchived: false,
-                type: "announcement",
-              });
-            }
-          });
-        } catch (e) {
-          // ignore
-        }
-      }
+  const getUserReferenceId = (ref: any): string => {
+    if (!ref) return "";
+    return typeof ref === "string" ? ref : ref.id || ref._id || "";
+  };
 
-      const allItems = [...tenantMessages, ...tenantAnnouncements];
-
-      // Sort by date
-      const sorted = allItems.sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      );
-
-      setMessages(sorted);
-    } catch (e) {
-      console.error("Failed to fetch messages:", e);
-    } finally {
-      setLoading(false);
+  const normalizeRecipientIds = (value: any): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.map((item) => getUserReferenceId(item)).filter(Boolean);
     }
+    return [getUserReferenceId(value)].filter(Boolean);
+  };
+
+  const flattenConversationMessages = (items: any[]): any[] => {
+    if (!Array.isArray(items)) return [];
+    return items.flatMap((item) => {
+      if (item?.conversations && Array.isArray(item.conversations)) {
+        return item.conversations.flatMap((conversation: any) =>
+          Array.isArray(conversation.messages)
+            ? conversation.messages.map((msg: any) => ({
+                ...msg,
+                _propertyId: conversation.propertyId,
+              }))
+            : [],
+        );
+      }
+      if (Array.isArray(item?.messages)) {
+        return item.messages;
+      }
+      return [item];
+    });
   };
 
   useEffect(() => {
-    if (user) {
-      fetchMessages();
-    }
-  }, [user]);
+    if (!currentTenant?.id || !currentProperty?.id) return;
+    loadMessages();
+  }, [currentTenant?.id, currentProperty?.id, loadMessages]);
 
-  // reset selection when filter changes so details pane only shows items in current view
+  // Reset selection when filter changes
   useEffect(() => {
     setSelectedId(null);
   }, [filter]);
 
-  // send immediately using quick message field
+  // Send message
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!messageText.trim()) return;
+
     setIsSending(true);
     try {
-      // all metadata hard-coded; only `message` is dynamic
-      // `from` uses current user's email for tracking
-      const tenant = tenants.find((t) => t.email === user?.email);
-      const tenantId = tenant?.id;
-      try {
-        const created = await createMessageApi({
-          fromUserId: tenantId,
-          tenantId,
-          message: messageText.trim(),
-          createdBy: user?.id,
-          // Note: toUserId should ideally come from auth/settings (admin/manager ID)
-          // For now, the server will handle routing to management inbox
+      const tenant = currentTenant;
+      const prop = currentProperty;
+      const ownerId = getPropertyOwnerId(prop);
+
+      if (!tenant?.id || !prop?.id || !ownerId) {
+        toast({
+          title: "Error",
+          description: "Unable to determine property or owner",
+          variant: "destructive",
         });
-        setMessageText("");
-        await fetchMessages();
-        setSelectedId(created.id);
-      } catch (err) {
-        console.error("Failed to create message", err);
+        return;
       }
+
+      // Send message to property owner as admin
+      await createConversationMessage(
+        ownerId,
+        prop.id,
+        {
+          category: "message",
+          fromUserId: tenant.id,
+          toUserId: [ownerId],
+          message: messageText.trim(),
+        },
+        token,
+      );
+
+      setMessageText("");
+      toast({
+        title: "Success",
+        description: "Message sent to management",
+      });
+
+      await loadMessages();
     } catch (err) {
       console.error("Failed to send message:", err);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsSending(false);
     }
   };
 
-  const simulateManagementMessage = async () => {
-    // This would be called by management to send a message to this tenant
-    // Removed local implementation; use dashboard communications instead
+  // Mark message as read
+  const markMessageRead = async (messageId: string) => {
+    try {
+      const ownerId = getPropertyOwnerId(currentProperty);
+
+      if (!currentTenant?.id || !currentProperty?.id || !ownerId) return;
+
+      await markConversationMessageSeen(
+        ownerId,
+        currentProperty.id,
+        messageId,
+        currentTenant.id,
+        token,
+      );
+
+      await loadMessages();
+    } catch (e) {
+      console.error("Failed to mark message as read:", e);
+    }
   };
 
-  // Derived list after applying filter
+  // Filter messages
+  const mergedMessages = useMemo(() => {
+    const rawMessages = flattenConversationMessages(tenantMessages || []);
+
+    const normalizeIncoming = (m: any): Message => {
+      const id = m._id || m.id || m.originalId || "";
+      const fromUserId = m.fromUserId || "";
+      const toUserId = normalizeRecipientIds(m.toUserId || m.to);
+      const timestamp =
+        m.sentAt ||
+        m.sent_at ||
+        m.createdAt ||
+        m.created_at ||
+        m.timestamp ||
+        m.date ||
+        "";
+      const content = m.message || m.content || m.body || "";
+      const category = m.category || m.type || "message";
+      const isRead = !!(
+        m.isRead ||
+        (Array.isArray(m.seenBy) &&
+          currentTenant &&
+          m.seenBy.includes(currentTenant.id)) ||
+        (Array.isArray(m.readBy) &&
+          currentTenant &&
+          m.readBy.includes(currentTenant.id))
+      );
+
+      const isTenantSender = currentTenant
+        ? fromUserId === currentTenant.id
+        : !!m.sent;
+
+      return {
+        id,
+        fromUserId,
+        toUserId,
+        sender: fromUserId || "",
+        senderType: isTenantSender ? "tenant" : "manager",
+        content,
+        timestamp,
+        isRead,
+        sent: isTenantSender,
+        replied: Array.isArray(m.replies) && m.replies.length > 0,
+        subject:
+          m.subject ||
+          (category === "announcement" ? "Announcement" : undefined),
+        isStarred: !!m.isStarred,
+        isArchived: !!m.isArchived,
+        type: category === "announcement" ? "announcement" : "message",
+        originalId: id,
+        message: m.message,
+        sentAt: m.sentAt,
+        seenBy: Array.isArray(m.seenBy) ? m.seenBy : [],
+        replies: Array.isArray(m.replies) ? m.replies : [],
+        category,
+        propertyId: m._propertyId || "",
+      } as Message;
+    };
+
+    const tenantMessageShapes: Message[] = rawMessages.map(normalizeIncoming);
+
+    return tenantMessageShapes
+      .map((message) => ({
+        ...message,
+        ...messageFlags[message.id],
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      );
+  }, [currentTenant?.id, messageFlags, tenantMessages]);
+
   const filtered = useMemo(() => {
-    return messages.filter((m) => {
+    return mergedMessages.filter((m) => {
+      const currentId = currentTenant?.id || currentTenant?._id || user?.id;
+      const fromIdRaw = (m as any).fromUserId || m.sender || "";
+      const fromId =
+        typeof fromIdRaw === "string"
+          ? fromIdRaw
+          : fromIdRaw.id || fromIdRaw._id || "";
+      const toRaw = (m as any).toUserId || [];
+      const toIds: string[] = Array.isArray(toRaw)
+        ? toRaw
+            .map((t) => (typeof t === "string" ? t : t.id || t._id || ""))
+            .filter(Boolean)
+        : [];
+      const isManagerMessage = m.senderType === "manager";
+      const isBroadcastMessage = isManagerMessage && toIds.length === 0;
+
+      // If we don't yet have a current user id, show messages to avoid empty UI during bootstrap
+      if (!currentId) return true;
+
+      // Filter by current property (only for regular messages, not announcements)
+      const currentPropId = currentProperty?.id || currentProperty?._id || "";
+      const msgPropertyId = m.propertyId || "";
+      if (
+        m.type !== "announcement" &&
+        currentPropId &&
+        msgPropertyId &&
+        msgPropertyId !== currentPropId
+      ) {
+        return false;
+      }
+
       if (filter === "inbox") {
-        // messages received from management (including announcements)
-        return m.senderType === "manager";
+        if (m.type === "announcement") return true;
+        if (isBroadcastMessage) return true;
+        return toIds.includes(currentId) && fromId !== currentId;
       }
       if (filter === "sent") {
-        // messages sent by tenant
-        return m.senderType === "tenant";
+        return fromId === currentId;
       }
       if (filter === "starred") return !!m.isStarred;
       if (filter === "archived") return !!m.isArchived;
       return true;
     });
-  }, [messages, filter]);
+  }, [mergedMessages, filter, currentProperty?.id, currentProperty?._id]);
 
-  const selected = messages.find((m) => m.id === selectedId) ?? null;
+  const selected = mergedMessages.find((m) => m.id === selectedId) ?? null;
+
+  // Get property owner name
+  const getPropertyOwnerName = () => {
+    return currentProperty?.name || "Management";
+  };
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
+      {typeof window !== "undefined" &&
+        window.location.hostname === "localhost" && (
+          <div className="mb-3 p-2 bg-gray-50 border rounded text-xs">
+            <div className="font-medium">DEBUG: mergedMessages</div>
+            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
+              {JSON.stringify(
+                {
+                  length: mergedMessages.length,
+                  preview: mergedMessages.slice(0, 3),
+                },
+                null,
+                2,
+              )}
+            </pre>
+            <div className="font-medium">DEBUG: filtered</div>
+            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
+              {JSON.stringify(
+                {
+                  filter,
+                  currentTenantId: currentTenant?.id || currentTenant?._id,
+                  userId: user?.id,
+                  length: filtered.length,
+                  preview: filtered.slice(0, 3),
+                },
+                null,
+                2,
+              )}
+            </pre>
+            <div className="font-medium">DEBUG: per-message</div>
+            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
+              {JSON.stringify(
+                mergedMessages.map((m) => {
+                  const fromIdRaw = (m as any).fromUserId || m.sender || "";
+                  const fromId =
+                    typeof fromIdRaw === "string"
+                      ? fromIdRaw
+                      : fromIdRaw.id || fromIdRaw._id || "";
+                  const toRaw = (m as any).toUserId || [];
+                  const toIds: string[] = Array.isArray(toRaw)
+                    ? toRaw
+                        .map((t) =>
+                          typeof t === "string" ? t : t.id || t._id || "",
+                        )
+                        .filter(Boolean)
+                    : [];
+                  const currentId =
+                    currentTenant?.id || currentTenant?._id || user?.id;
+                  return {
+                    id: m.id,
+                    fromId,
+                    toIds,
+                    includesCurrent: currentId
+                      ? toIds.includes(currentId)
+                      : null,
+                  };
+                }),
+                null,
+                2,
+              )}
+            </pre>
+          </div>
+        )}
       <header className="sticky top-4 z-20 bg-background/60 backdrop-blur-sm rounded-md p-3 sm:p-4 mb-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg sm:text-2xl font-semibold">Messages</h1>
           <p className="text-sm text-muted-foreground hidden sm:block">
-            Conversation with management
+            Conversation with {getPropertyOwnerName()}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={simulateManagementMessage}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-sm"
-          >
-            <Mail className="w-4 h-4" /> Simulate
-          </button>
-          <button
-            onClick={simulateManagementMessage}
-            className="hidden items-center gap-2 px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 text-sm sm:inline-flex"
-          >
-            <Mail className="w-4 h-4" /> Test
-          </button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-4">
         {/* Left: message list + send form */}
-        {/* On small screens show list or details depending on selection */}
         <div
           className={`flex flex-col ${isMobile ? "min-h-[60vh]" : "h-[70vh]"} border rounded-md overflow-hidden bg-white`}
         >
+          {/* Send message form */}
           <div className="p-3 border-b flex items-center gap-2">
             <input
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
               placeholder="Write a quick message..."
               className="flex-1 border rounded-md px-3 py-2 text-sm"
             />
             <button
               onClick={send}
-              disabled={isSending}
-              className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-white disabled:opacity-50"
+              disabled={isSending || !messageText.trim()}
+              className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-white disabled:opacity-50 hover:bg-primary/90"
             >
               <Send className="w-4 h-4" />
             </button>
           </div>
 
+          {/* Filter chips */}
           <div className="p-2 border-b">
             <div
               ref={chipsRef}
@@ -337,7 +488,11 @@ export default function TenantMessagesPage() {
                     if (isDragging.current) return;
                     setFilter(key as any);
                   }}
-                  className={`flex-shrink-0 cursor-pointer px-3 py-1.5 rounded-full text-sm ${filter === key ? "bg-primary text-white" : "bg-gray-100 text-sm"} animate-[--tw-duration:200ms]`}
+                  className={`flex-shrink-0 cursor-pointer px-3 py-1.5 rounded-full text-sm ${
+                    filter === key
+                      ? "bg-primary text-white"
+                      : "bg-gray-100 text-gray-700"
+                  }`}
                 >
                   {label}
                 </button>
@@ -345,259 +500,159 @@ export default function TenantMessagesPage() {
             </div>
           </div>
 
+          {/* Messages list */}
           <div className="flex-1 overflow-auto p-3 space-y-3">
-            {loading && <div className="text-gray-500">Loading...</div>}
-            {!loading && filtered.length === 0 && (
-              <div className="text-gray-500 flex-1 flex relative w-full pt-[50%] items-center justify-center text-center">
-                <span>
-                  No messages.
-                  <img
-                    src="/no-message2.avif"
-                    className="w-34 h-34"
-                    alt="No messages"
-                  />
-                </span>
+            {loading.messages && (
+              <div className="text-gray-500 text-center py-8">Loading...</div>
+            )}
+            {!loading.messages && filtered.length === 0 && (
+              <div className="text-gray-500 flex flex-col items-center justify-center pt-16 text-center">
+                <span>No messages.</span>
+                <img
+                  src="/no-message2.avif"
+                  className="w-32 h-32 mt-4"
+                  alt="No messages"
+                />
               </div>
             )}
             {filtered.map((m) => (
               <div
                 key={m.id}
                 onClick={() => {
-                  if (m.senderType === "manager" && !m.isRead) {
-                    if (m.type === "announcement") {
-                      const tenant = tenants.find(
-                        (t) => t.email === user?.email,
-                      );
-                      if (tenant) markAnnouncementRead(m.id, tenant.id);
-                    } else {
-                      // Mark message as seen via API
-                      updateMessageApi(m.id, { seen: true });
-                    }
+                  if (!m.isRead && m.senderType === "manager") {
+                    markMessageRead(m.originalId || m.id);
                   }
-                  setMessages((prev) =>
-                    prev.map((x) =>
-                      x.id === m.id ? { ...x, isRead: true } : x,
-                    ),
-                  );
                   setSelectedId(m.id);
                   if (isMobile) setShowDetailsOnMobile(true);
                 }}
-                className={`w-full cursor-pointer p-3 rounded-lg shadow-sm border flex items-start gap-3 transition-all motion-safe:animate-fade-in ${
-                  m.id === selectedId
-                    ? "bg-primary/5 border-primary"
-                    : "bg-white"
-                } ${
-                  !m.isRead
-                    ? "bg-blue-50 border-blue-200 hover:border-blue-300"
-                    : "hover:border-gray-300"
+                className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                  selectedId === m.id
+                    ? "bg-blue-50 border-blue-300"
+                    : !m.isRead
+                      ? "bg-yellow-50 border-yellow-200"
+                      : "hover:bg-gray-50"
                 }`}
               >
-                <div
-                  className={`flex-shrink-0 ${
-                    !m.isRead ? "text-blue-600" : "text-muted-foreground"
-                  }`}
-                >
-                  {!m.isRead ? (
-                    <Mail className="w-5 h-5" />
-                  ) : (
-                    <MailOpen className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`text-sm truncate ${
-                        !m.isRead
-                          ? "font-semibold text-foreground"
-                          : "font-medium text-gray-600"
-                      }`}
-                    >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">
                       {m.senderType === "manager" ? "Management" : "You"}
                     </div>
-                    <div
-                      className={`text-xs whitespace-nowrap ${
-                        !m.isRead
-                          ? "text-blue-600 font-semibold"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {new Date(m.timestamp).toLocaleTimeString()}
+                    <div className="text-xs text-gray-500 truncate">
+                      {m.subject || m.content.substring(0, 50)}
                     </div>
                   </div>
-                  <div
-                    className={`text-sm mt-1 line-clamp-2 ${
-                      !m.isRead
-                        ? "text-gray-700 font-medium"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {m.content}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {!m.isRead && m.senderType === "manager" && (
+                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                    )}
+                    {m.isStarred && (
+                      <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                    )}
                   </div>
+                </div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {new Date(m.timestamp).toLocaleDateString()}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Right: details pane */}
-        <div
-          className={`border rounded-md p-4 ${isMobile ? "min-h-[60vh]" : "h-[70vh]"} overflow-auto bg-white ${isMobile ? "hidden" : ""}`}
-        >
-          {isMobile && showDetailsOnMobile && (
-            <div className="mb-3">
-              <button
-                onClick={() => setShowDetailsOnMobile(false)}
-                className="p-2 rounded-md bg-gray-100 text-sm inline-flex items-center justify-center"
-                aria-label="Close message"
-              >
-                <X className="w-4 h-4" />
-                <span className="sr-only">Close</span>
-              </button>
-            </div>
-          )}
-          {!selected && (
-            <div className="text-muted-foreground flex-1 flex flex-col items-center justify-center gap-3">
-              Select a message to view details.
-              <MailOpen className="w-10 h-10" />
-            </div>
-          )}
-          {selected && (
-            <div>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-semibold">
-                      {selected.senderType === "manager" ? "Management" : "You"}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {selected.senderType === "manager"
-                        ? "management@company.com"
-                        : user?.email || "—"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button className="px-2 py-1 rounded-md bg-gray-100">
-                    <Star className="w-4 h-4" />
-                  </button>
-                  <button className="px-2 py-1 rounded-md bg-gray-100">
-                    <Archive className="w-4 h-4" />
-                  </button>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(selected.timestamp).toLocaleString()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {selected.subject && (
-                  <div>
-                    <div className="font-medium">Subject</div>
-                    <div className="text-sm">{selected.subject}</div>
-                  </div>
-                )}
-
-                <div>
-                  <div className="font-medium">Message</div>
-                  <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50 mt-2">
-                    {selected.content}
-                  </div>
-                </div>
-
-                {selected.replied && (
-                  <div>
-                    <div className="font-medium">Reply</div>
-                    <div className="flex justify-end mt-2">
-                      <div className="whitespace-pre-wrap text-sm text-gray-800 p-3 rounded-md border bg-blue-50 max-w-[80%] text-right">
-                        (see reply)
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Mobile modal for details */}
-        {isMobile && modalMounted && selected && (
-          <div className="fixed shadow-md inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none border-t-2 border-primary">
+        {/* Right: message details (desktop) or modal (mobile) */}
+        {selected && (
+          <div
+            className={`${
+              isMobile
+                ? `fixed inset-0 z-50 bg-black/50 flex items-end transition-opacity duration-300 ${
+                    modalAnimateIn ? "opacity-100" : "opacity-0"
+                  }`
+                : "flex flex-col border rounded-md overflow-hidden bg-white"
+            }`}
+            onClick={() => isMobile && setShowDetailsOnMobile(false)}
+          >
             <div
-              className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${modalAnimateIn ? "opacity-100 pointer-events-auto" : "opacity-0"}`}
-              onClick={() => setShowDetailsOnMobile(false)}
-            />
-            <div
-              className={`relative w-full h-[85vh] sm:h-[80vh] bg-white rounded-t-xl sm:rounded-xl shadow-lg overflow-auto p-4 transform transition-all duration-300 ${modalAnimateIn ? "opacity-100 translate-y-0 scale-100 pointer-events-auto" : "opacity-0 translate-y-6 scale-95"}`}
+              className={`${isMobile ? "bg-white rounded-t-lg max-h-[90vh]" : ""} flex flex-col h-full`}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="mb-3 flex justify-end">
-                <button
-                  onClick={() => setShowDetailsOnMobile(false)}
-                  className="p-2 rounded-md bg-gray-100 text-sm inline-flex items-center justify-center"
-                  aria-label="Close message"
-                >
-                  <X className="w-5 h-5" />
-                  <span className="sr-only">Close</span>
-                </button>
+              {/* Header */}
+              <div className="p-4 border-b flex items-center justify-between">
+                <div className="flex-1">
+                  <h2 className="font-semibold">
+                    {selected.senderType === "manager"
+                      ? "Management"
+                      : "Your Message"}
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    {new Date(selected.timestamp).toLocaleString()}
+                  </p>
+                </div>
+                {isMobile && (
+                  <button
+                    onClick={() => setShowDetailsOnMobile(false)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <User className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-semibold">
-                      {selected.senderType === "manager" ? "Management" : "You"}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {selected.senderType === "manager"
-                        ? "management@company.com"
-                        : user?.email || "—"}
-                    </div>
-                  </div>
+              {/* Content */}
+              <div className="flex-1 overflow-auto p-4">
+                <div className="whitespace-pre-wrap text-sm">
+                  {selected.content}
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button className="px-2 py-1 rounded-md bg-gray-100">
-                    <Star className="w-4 h-4" />
-                  </button>
-                  <button className="px-2 py-1 rounded-md bg-gray-100">
-                    <Archive className="w-4 h-4" />
-                  </button>
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(selected.timestamp).toLocaleTimeString()}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
                 {selected.subject && (
-                  <div>
-                    <div className="font-medium">Subject</div>
-                    <div className="text-sm">{selected.subject}</div>
+                  <div className="mt-4 text-xs text-gray-500">
+                    Subject: {selected.subject}
                   </div>
                 )}
+              </div>
 
-                <div>
-                  <div className="font-medium">Message</div>
-                  <div className="whitespace-pre-wrap text-sm text-gray-800 p-4 rounded-md border bg-gray-50 mt-2">
-                    {selected.content}
-                  </div>
-                </div>
-
-                {selected.replied && (
-                  <div>
-                    <div className="font-medium">Reply</div>
-                    <div className="flex justify-end mt-2">
-                      <div className="whitespace-pre-wrap text-sm text-gray-800 p-3 rounded-md border bg-blue-50 max-w-[80%] text-right">
-                        (see reply)
-                      </div>
-                    </div>
-                  </div>
-                )}
+              {/* Actions */}
+              <div className="p-4 border-t flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!selectedId) return;
+                    setMessageFlags((prev) => ({
+                      ...prev,
+                      [selectedId]: {
+                        ...prev[selectedId],
+                        isStarred: !prev[selectedId]?.isStarred,
+                      },
+                    }));
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded"
+                >
+                  <Star
+                    className={`w-4 h-4 ${
+                      selected.isStarred
+                        ? "fill-yellow-500 text-yellow-500"
+                        : "text-gray-400"
+                    }`}
+                  />
+                </button>
+                <button
+                  onClick={() => {
+                    if (!selectedId) return;
+                    setMessageFlags((prev) => ({
+                      ...prev,
+                      [selectedId]: {
+                        ...prev[selectedId],
+                        isArchived: !prev[selectedId]?.isArchived,
+                      },
+                    }));
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded"
+                >
+                  <Archive
+                    className={`w-4 h-4 ${
+                      selected.isArchived
+                        ? "fill-gray-500 text-gray-500"
+                        : "text-gray-400"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           </div>

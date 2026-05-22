@@ -57,9 +57,26 @@ export default function MaintenancePage() {
 
   // Find the tenant record for the current user
   const tenant = user ? tenants.find((t) => t.email === user.email) : null;
-  const propertyInfo = tenant?.propertyId
-    ? properties.find((p) => p.id === tenant.propertyId)
-    : null;
+  const propertyInfo =
+    properties.find((p) => {
+      if (!p) return false;
+      // If tenant has a propertyId, match by property id first
+      const propId = tenant?.propertyId;
+      if (propId && (p.id === propId || (p as any)._id === propId)) return true;
+
+      // Otherwise, check if this property's tenants list contains the tenant id
+      const tenantId = tenant?.id || tenant?._id;
+      if (!tenantId) return false;
+      return (
+        Array.isArray(p.tenants) &&
+        p.tenants.some((t: any) => {
+          if (typeof t === "string") return t === tenantId;
+          const tid =
+            (t as any).id || (t as any)._id || (t as any).toString?.();
+          return tid === tenantId;
+        })
+      );
+    }) || null;
 
   const tenantMaintenance = maintenanceRequests;
 
