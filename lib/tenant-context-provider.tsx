@@ -430,10 +430,17 @@ export function TenantContextProvider({
 
   useEffect(() => {
     if (!currentTenant?.id) return;
+    loadMaintenance();
     loadPayments();
     loadNotifications();
     loadDocuments();
-  }, [currentTenant?.id, loadDocuments, loadNotifications, loadPayments]);
+  }, [
+    currentTenant?.id,
+    loadDocuments,
+    loadMaintenance,
+    loadNotifications,
+    loadPayments,
+  ]);
 
   useEffect(() => {
     if (!currentTenant?.id || !currentProperty?.id) return;

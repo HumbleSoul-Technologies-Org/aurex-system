@@ -35,11 +35,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useAppData } from "@/lib/data-context";
+import { useTenantContext } from "@/lib/tenant-context";
 import { notifyNewMaintenanceRequest } from "@/lib/services/notifications";
 import {
   MaintenanceRequest,
-  fetchMaintenanceRequestsByTenant,
   submitMaintenanceRequest,
   deleteMaintenanceRequestById,
 } from "@/lib/services/maintenance";
@@ -53,32 +52,21 @@ export default function MaintenancePage() {
     MaintenanceRequest[]
   >([]);
 
-  const { tenants, properties } = useAppData();
+  const {
+    currentTenant: tenant,
+    currentProperty: propertyInfo,
+    maintenanceRequests: contextMaintenanceRequests,
+    refetch,
+  } = useTenantContext();
 
-  // Find the tenant record for the current user
-  const tenant = user ? tenants.find((t) => t.email === user.email) : null;
-  const propertyInfo =
-    properties.find((p) => {
-      if (!p) return false;
-      // If tenant has a propertyId, match by property id first
-      const propId = tenant?.propertyId;
-      if (propId && (p.id === propId || (p as any)._id === propId)) return true;
+  const tenantUnitNumber =
+    tenant?.unitNumber ||
+    (tenant as any)?.unit ||
+    (tenant as any)?.unit_no ||
+    "Unknown Unit";
 
-      // Otherwise, check if this property's tenants list contains the tenant id
-      const tenantId = tenant?.id || tenant?._id;
-      if (!tenantId) return false;
-      return (
-        Array.isArray(p.tenants) &&
-        p.tenants.some((t: any) => {
-          if (typeof t === "string") return t === tenantId;
-          const tid =
-            (t as any).id || (t as any)._id || (t as any).toString?.();
-          return tid === tenantId;
-        })
-      );
-    }) || null;
-
-  const tenantMaintenance = maintenanceRequests;
+  // Use maintenance requests from context
+  const tenantMaintenance = contextMaintenanceRequests || maintenanceRequests;
 
   const [formData, setFormData] = useState({
     description: "",
@@ -99,27 +87,13 @@ export default function MaintenancePage() {
       ? tenantMaintenance
       : tenantMaintenance.filter((r) => r.status === filter);
 
-  const loadMaintenanceRequests = useCallback(async () => {
-    if (!tenant?.id) {
-      setMaintenanceRequests([]);
-      return;
-    }
-
-    setIsLoadingRequests(true);
-    try {
-      const requests = await fetchMaintenanceRequestsByTenant(tenant.id);
-      setMaintenanceRequests(requests);
-    } catch (error) {
-      console.error("Failed to load maintenance requests:", error);
-      setMaintenanceRequests([]);
-    } finally {
+  // Tenant context already loads maintenance requests, so we can sync them to local state
+  useEffect(() => {
+    if (contextMaintenanceRequests) {
+      setMaintenanceRequests(contextMaintenanceRequests);
       setIsLoadingRequests(false);
     }
-  }, [tenant?.id]);
-
-  useEffect(() => {
-    loadMaintenanceRequests();
-  }, [loadMaintenanceRequests]);
+  }, [contextMaintenanceRequests]);
 
   const statusCounts = {
     pending: tenantMaintenance.filter((r) => r.status === "pending").length,
@@ -138,7 +112,7 @@ export default function MaintenancePage() {
       const newRequest = await submitMaintenanceRequest({
         propertyId: tenant.propertyId || "",
         propertyName: propertyInfo?.name || "Unknown Property",
-        unit: tenant.unitNumber || "Unknown Unit",
+        unit: tenantUnitNumber,
         tenantId: tenant.id,
         tenantName: tenant.name,
         description: formData.description,
@@ -167,7 +141,7 @@ export default function MaintenancePage() {
       setSubmitSuccess(true);
       setShowForm(false);
 
-      await loadMaintenanceRequests();
+      await refetch("maintenance");
 
       // Reset success message after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
@@ -191,7 +165,7 @@ export default function MaintenancePage() {
     setDeletingId(requestId);
     try {
       await deleteMaintenanceRequestById(requestId);
-      await loadMaintenanceRequests();
+      await refetch("maintenance");
     } catch (error) {
       console.error("Error deleting maintenance request:", error);
       alert("Failed to delete maintenance request. Please try again.");
@@ -392,8 +366,7 @@ export default function MaintenancePage() {
                 Request will be submitted for:
               </p>
               <p className="text-sm font-medium">
-                {propertyInfo?.name || "Property"} - Unit{" "}
-                {tenant?.unitNumber || "N/A"}
+                {propertyInfo?.name || "Property"} - Unit {tenantUnitNumber}
               </p>
             </div>
           </div>
