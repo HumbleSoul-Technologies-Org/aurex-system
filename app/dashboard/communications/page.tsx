@@ -94,25 +94,30 @@ export default function CommunicationsPage() {
       : userRef.id || userRef._id || "";
   };
 
-  const getTenantName = (tenantRef?: string | UserReference | null) => {
-    if (!tenantRef) return "dead Tenant";
+  const getUserName = (userRef?: string | UserReference | null) => {
+    if (!userRef) return "Unknown User";
 
-    // If tenantRef is an object, prefer explicit name/email, otherwise extract id
-    if (typeof tenantRef !== "string") {
-      const id = getUserRefId(tenantRef);
-      if (tenantRef.name) return tenantRef.name;
-      if (tenantRef.email) return tenantRef.email;
-      if (id) {
-        const found = tenants.find((t) => t._id === id || t.id === id);
-        return found?.name || id;
-      }
-      return "Unknown Tenant";
+    const id = getUserRefId(userRef);
+    if (id) {
+      const found = tenants.find((t) => t._id === id || t.id === id);
+      if (found?.name) return found.name;
     }
 
-    // tenantRef is a string id - look up tenant by id
-    const id = tenantRef;
-    const found = tenants.find((t) => t._id === id || t.id === id);
-    return found?.name || id;
+    if (typeof userRef !== "string") {
+      if (typeof userRef.name === "string" && userRef.name) return userRef.name;
+      if (typeof userRef.email === "string" && userRef.email)
+        return userRef.email;
+    }
+
+    return id || (typeof userRef === "string" ? userRef : "Unknown User");
+  };
+
+  const getFromUserName = (fromUserId?: string | UserReference | null) => {
+    return getUserName(fromUserId);
+  };
+
+  const getToUserName = (toUserId?: string | UserReference | null) => {
+    return getUserName(toUserId);
   };
 
   const getPropertyName = (propertyId?: string | PropertyReference) => {
@@ -746,11 +751,15 @@ export default function CommunicationsPage() {
                       </div>
                     ) : (
                       allMessages?.map((msg, idx) => {
+                        const fromUserId = getUserRefId(msg.fromUserId);
                         const toUserids = Array.isArray(msg.toUserId)
                           ? msg.toUserId.map((u) => getUserRefId(u))
                           : [getUserRefId(msg.toUserId)];
+                        const isFromCurrentUser = fromUserId === user?.id;
+                        const firstToUser = Array.isArray(msg.toUserId)
+                          ? msg.toUserId[0]
+                          : msg.toUserId;
 
-                        console.log("Rendering message:", toUserids, msg);
                         return (
                           <div
                             key={msg._id || idx}
@@ -766,19 +775,15 @@ export default function CommunicationsPage() {
                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                               from:{" "}
                               <b>
-                                {getTenantName(getUserRefId(msg.fromUserId)) ===
-                                user?.id
+                                {isFromCurrentUser
                                   ? "You"
-                                  : getTenantName(getUserRefId(msg.fromUserId))}
+                                  : getFromUserName(msg.fromUserId)}
                               </b>{" "}
                               to:
                               <b>
                                 {toUserids.includes(user?.id || "")
                                   ? "You"
-                                  : getTenantName(toUserids[0])}{" "}
-                                {/* {toUserids.length > 1
-                                  ? `and ${toUserids.length - 1} others`
-                                  : ""} */}
+                                  : getToUserName(firstToUser)}{" "}
                               </b>
                             </p>
 
@@ -872,13 +877,9 @@ export default function CommunicationsPage() {
                         From
                       </p>
                       <p className="font-semibold text-sm">
-                        {getTenantName(
-                          getUserRefId(selectedMessage.fromUserId),
-                        ) === user?.id
+                        {getUserRefId(selectedMessage.fromUserId) === user?.id
                           ? "You"
-                          : getTenantName(
-                              getUserRefId(selectedMessage.fromUserId),
-                            )}
+                          : getFromUserName(selectedMessage.fromUserId)}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatDateTime(selectedMessage.sentAt)}
@@ -891,7 +892,11 @@ export default function CommunicationsPage() {
                       <p className="text-sm">
                         {selectedMessage.toUserId.length > 0
                           ? selectedMessage.toUserId
-                              .map(getTenantName)
+                              .map((toRef) =>
+                                getUserRefId(toRef) === user?.id
+                                  ? "You"
+                                  : getToUserName(toRef),
+                              )
                               .join(", ")
                           : "No recipients"}
                       </p>
@@ -911,12 +916,12 @@ export default function CommunicationsPage() {
                       <p className="text-sm">
                         {selectedMessage.seenBy.length > 0
                           ? selectedMessage.seenBy
-                              .map(getTenantName)
-                              .join(", ") === user?.id
-                            ? "None yet"
-                            : selectedMessage.seenBy
-                                .map(getTenantName)
-                                .join(", ")
+                              .map((seenRef) =>
+                                getUserRefId(seenRef) === user?.id
+                                  ? "You"
+                                  : getToUserName(seenRef),
+                              )
+                              .join(", ")
                           : "No one yet"}
                       </p>
                     </div>
@@ -933,7 +938,7 @@ export default function CommunicationsPage() {
                                 className="space-y-1"
                               >
                                 <div className="font-semibold text-sm">
-                                  {getTenantName(reply.fromUserId)}
+                                  {getFromUserName(reply.fromUserId)}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                   {formatDateTime(reply.sentAt)}

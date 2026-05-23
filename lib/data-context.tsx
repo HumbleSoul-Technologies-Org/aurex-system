@@ -58,7 +58,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // derive tenants from properties (API now returns populated tenant subdocuments)
   const propertiesData = propertiesQuery.data ?? listProperties();
   const tenantsDerived: TenantRecord[] = (propertiesData as any[])
-    .flatMap((p) => (Array.isArray(p.tenants) ? p.tenants : []))
+    .flatMap((p) =>
+      (Array.isArray(p.tenants) ? p.tenants : []).map((tenant: any) => ({
+        ...tenant,
+        propertyId: tenant.propertyId || p.id || p._id,
+      })),
+    )
     .filter(Boolean)
     .map((tenant: any) => ({
       ...tenant,

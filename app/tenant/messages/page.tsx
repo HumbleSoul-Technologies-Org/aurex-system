@@ -4,6 +4,7 @@ import {
   createConversationMessage,
   markConversationMessageSeen,
 } from "@/lib/services/messages";
+import { markAnnouncementRead } from "@/lib/services/announcements";
 import { useAuth } from "@/lib/auth-context";
 import { useTenantContext } from "@/lib/tenant-context";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import AnnouncementCard from "@/components/announcement-card";
 
 interface Message {
   id: string;
@@ -44,14 +46,27 @@ interface Message {
   propertyId?: string; // track source property
 }
 
+interface AnnouncementUI {
+  id: string;
+  title?: string;
+  message: string;
+  sentAt?: string;
+  readBy?: string[];
+  isRead?: boolean;
+  propertyId?: string;
+  raw?: any;
+}
+
 export default function TenantMessagesPage() {
   const { user, token } = useAuth();
   const {
     currentTenant,
     currentProperty,
     messages: tenantMessages,
+    announcements,
     loading,
     loadMessages,
+    loadAnnouncements,
   } = useTenantContext();
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -316,9 +331,86 @@ export default function TenantMessagesPage() {
       );
   }, [currentTenant?.id, messageFlags, tenantMessages]);
 
-  const filtered = useMemo(() => {
-    return mergedMessages.filter((m) => {
-      const currentId = currentTenant?.id || currentTenant?._id || user?.id;
+  // Derive announcements and conversation messages separately (do not merge shapes)
+  const { announcementItems, conversationItems } = useMemo(() => {
+    const rawMessages = flattenConversationMessages(tenantMessages || []);
+
+    const annMap = new Map<string, AnnouncementUI>();
+    const conv: Message[] = [];
+
+    const addAnnouncement = (announcement: AnnouncementUI) => {
+      if (!announcement.id) return;
+      if (!annMap.has(announcement.id)) {
+        annMap.set(announcement.id, announcement);
+      }
+    };
+
+    announcements?.forEach((m) => {
+      addAnnouncement({
+        id: m.id,
+        title: m.title || "Announcement",
+        message: m.message || "",
+        sentAt: m.sentAt || m.createdAt || "",
+        readBy: m.readBy || [],
+        isRead:
+          currentTenant?.id && Array.isArray(m.readBy)
+            ? m.readBy.includes(currentTenant.id)
+            : false,
+        propertyId: m.propertyId || "",
+        raw: m,
+      });
+    });
+
+    rawMessages.forEach((m: any) => {
+      const category = m.category || m.type || "message";
+      const propId = m._propertyId || m.propertyId || "";
+      if (category === "announcement") {
+        const readBy = Array.isArray(m.seenBy) ? m.seenBy : m.readBy || [];
+        addAnnouncement({
+          id: m._id || m.id || "",
+          title:
+            m.subject ||
+            m.title ||
+            (m.category === "announcement" ? "Announcement" : undefined),
+          message: m.message || m.content || "",
+          sentAt: m.sentAt || m.sent_at || m.createdAt || "",
+          readBy,
+          isRead:
+            currentTenant?.id && Array.isArray(readBy)
+              ? readBy.includes(currentTenant.id)
+              : false,
+          propertyId: propId,
+          raw: m,
+        });
+      } else {
+        // reuse existing normalization used above by finding normalized item
+        const normalized = mergedMessages.find(
+          (mm) => mm.originalId === (m._id || m.id),
+        );
+        if (normalized) conv.push(normalized);
+      }
+    });
+
+    return {
+      announcementItems: Array.from(annMap.values()),
+      conversationItems: conv,
+    };
+  }, [tenantMessages, mergedMessages, announcements, currentTenant?.id]);
+
+  // Filtered view: apply filters separately then combine for rendering
+  const combinedForRender = useMemo(() => {
+    const currentId = currentTenant?.id || currentTenant?._id || user?.id;
+    const currentPropId = currentProperty?.id || currentProperty?._id || "";
+
+    // filter announcements by property (allow if no propertyId meaning global)
+    const filteredAnnouncements = announcementItems.filter((a) => {
+      if (!currentPropId) return true;
+      if (!a.propertyId) return true; // global announcement
+      return a.propertyId === currentPropId;
+    });
+
+    // filter conversations using existing rules
+    const filteredConversations = conversationItems.filter((m) => {
       const fromIdRaw = (m as any).fromUserId || m.sender || "";
       const fromId =
         typeof fromIdRaw === "string"
@@ -333,36 +425,60 @@ export default function TenantMessagesPage() {
       const isManagerMessage = m.senderType === "manager";
       const isBroadcastMessage = isManagerMessage && toIds.length === 0;
 
-      // If we don't yet have a current user id, show messages to avoid empty UI during bootstrap
       if (!currentId) return true;
 
-      // Filter by current property (only for regular messages, not announcements)
-      const currentPropId = currentProperty?.id || currentProperty?._id || "";
       const msgPropertyId = m.propertyId || "";
-      if (
-        m.type !== "announcement" &&
-        currentPropId &&
-        msgPropertyId &&
-        msgPropertyId !== currentPropId
-      ) {
+      if (currentPropId && msgPropertyId && msgPropertyId !== currentPropId)
         return false;
-      }
 
       if (filter === "inbox") {
-        if (m.type === "announcement") return true;
         if (isBroadcastMessage) return true;
         return toIds.includes(currentId) && fromId !== currentId;
       }
-      if (filter === "sent") {
-        return fromId === currentId;
-      }
+      if (filter === "sent") return fromId === currentId;
       if (filter === "starred") return !!m.isStarred;
       if (filter === "archived") return !!m.isArchived;
       return true;
     });
-  }, [mergedMessages, filter, currentProperty?.id, currentProperty?._id]);
 
-  const selected = mergedMessages.find((m) => m.id === selectedId) ?? null;
+    // only include announcements in 'inbox' filter
+    const annsToShow = filter === "inbox" ? filteredAnnouncements : [];
+
+    // combine and sort by timestamp
+    const combined: Array<{
+      kind: "announcement" | "message";
+      ts: string;
+      data: any;
+    }> = [];
+    annsToShow.forEach((a) =>
+      combined.push({ kind: "announcement", ts: a.sentAt || "", data: a }),
+    );
+    filteredConversations.forEach((m) =>
+      combined.push({
+        kind: "message",
+        ts: m.timestamp || m.sentAt || "",
+        data: m,
+      }),
+    );
+
+    combined.sort(
+      (x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime(),
+    );
+    return combined;
+  }, [
+    announcementItems,
+    conversationItems,
+    filter,
+    currentTenant?.id,
+    currentProperty?.id,
+  ]);
+
+  const selectedMessageItem =
+    mergedMessages.find((m) => m.id === selectedId) ?? null;
+  const selectedAnnouncementItem =
+    (announcementItems || []).find((a: any) => a.id === selectedId) ?? null;
+  const selected = selectedMessageItem || selectedAnnouncementItem || null;
+  const isSelectedAnnouncement = selected && !(selected as any).senderType;
 
   // Get property owner name
   const getPropertyOwnerName = () => {
@@ -392,8 +508,8 @@ export default function TenantMessagesPage() {
                   filter,
                   currentTenantId: currentTenant?.id || currentTenant?._id,
                   userId: user?.id,
-                  length: filtered.length,
-                  preview: filtered.slice(0, 3),
+                  length: combinedForRender.length,
+                  preview: combinedForRender.slice(0, 3),
                 },
                 null,
                 2,
@@ -505,7 +621,7 @@ export default function TenantMessagesPage() {
             {loading.messages && (
               <div className="text-gray-500 text-center py-8">Loading...</div>
             )}
-            {!loading.messages && filtered.length === 0 && (
+            {!loading.messages && combinedForRender.length === 0 && (
               <div className="text-gray-500 flex flex-col items-center justify-center pt-16 text-center">
                 <span>No messages.</span>
                 <img
@@ -515,52 +631,87 @@ export default function TenantMessagesPage() {
                 />
               </div>
             )}
-            {filtered.map((m) => (
-              <div
-                key={m.id}
-                onClick={() => {
-                  if (!m.isRead && m.senderType === "manager") {
-                    markMessageRead(m.originalId || m.id);
-                  }
-                  setSelectedId(m.id);
-                  if (isMobile) setShowDetailsOnMobile(true);
-                }}
-                className={`p-3 border rounded-md cursor-pointer transition-colors ${
-                  selectedId === m.id
-                    ? "bg-blue-50 border-blue-300"
-                    : !m.isRead
-                      ? "bg-yellow-50 border-yellow-200"
-                      : "hover:bg-gray-50"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">
-                      {m.senderType === "manager" ? "Management" : "You"}
+            {combinedForRender.map((entry, idx) => {
+              if (entry.kind === "announcement") {
+                const a = entry.data as AnnouncementUI;
+                return (
+                  <div
+                    key={a.id || idx}
+                    onClick={async () => {
+                      setSelectedId(a.id);
+                      const tenantId = currentTenant?.id;
+                      if (!a.isRead && tenantId) {
+                        try {
+                          await markAnnouncementRead(
+                            a.id,
+                            tenantId as string,
+                            token ?? undefined,
+                          );
+                          await loadAnnouncements();
+                        } catch (err) {
+                          console.error(
+                            "Failed to mark announcement read:",
+                            err,
+                          );
+                        }
+                      }
+                      if (isMobile) setShowDetailsOnMobile(true);
+                    }}
+                  >
+                    <AnnouncementCard announcement={a} />
+                  </div>
+                );
+              }
+              const m = entry.data as Message;
+              return (
+                <div
+                  key={m.id || idx}
+                  onClick={() => {
+                    if (!m.isRead && m.senderType === "manager") {
+                      markMessageRead(m.originalId || m.id);
+                    }
+                    setSelectedId(m.id);
+                    if (isMobile) setShowDetailsOnMobile(true);
+                  }}
+                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                    selectedId === m.id
+                      ? "bg-blue-50 border-blue-300"
+                      : !m.isRead
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "hover:bg-gray-50"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">
+                        {m.senderType === "manager" ? "Management" : "You"}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {m.subject || m.content.substring(0, 50)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {m.subject || m.content.substring(0, 50)}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {m.isRead ? (
+                        <MailOpen className="w-4 h-4 text-muted-foreground" />
+                      ) : (
+                        <Mail className="w-4 h-4 text-blue-600" />
+                      )}
+                      {m.isStarred && (
+                        <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {!m.isRead && m.senderType === "manager" && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
-                    )}
-                    {m.isStarred && (
-                      <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                    )}
+                  <div className="text-xs text-gray-400 mt-1">
+                    {new Date(m.timestamp).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {new Date(m.timestamp).toLocaleDateString()}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* Right: message details (desktop) or modal (mobile) */}
-        {selected && (
+        {selected ? (
           <div
             className={`${
               isMobile
@@ -579,12 +730,18 @@ export default function TenantMessagesPage() {
               <div className="p-4 border-b flex items-center justify-between">
                 <div className="flex-1">
                   <h2 className="font-semibold">
-                    {selected.senderType === "manager"
-                      ? "Management"
-                      : "Your Message"}
+                    {isSelectedAnnouncement
+                      ? (selected as any).title || "Announcement"
+                      : (selected as any).senderType === "manager"
+                        ? "Management"
+                        : "Your Message"}
                   </h2>
                   <p className="text-xs text-gray-500">
-                    {new Date(selected.timestamp).toLocaleString()}
+                    {isSelectedAnnouncement
+                      ? new Date(
+                          (selected as any).sentAt || "",
+                        ).toLocaleString()
+                      : new Date((selected as any).timestamp).toLocaleString()}
                   </p>
                 </div>
                 {isMobile && (
@@ -600,60 +757,76 @@ export default function TenantMessagesPage() {
               {/* Content */}
               <div className="flex-1 overflow-auto p-4">
                 <div className="whitespace-pre-wrap text-sm">
-                  {selected.content}
+                  {isSelectedAnnouncement
+                    ? (selected as any).message
+                    : (selected as any).content}
                 </div>
-                {selected.subject && (
+                {!isSelectedAnnouncement && (selected as any).subject && (
                   <div className="mt-4 text-xs text-gray-500">
-                    Subject: {selected.subject}
+                    Subject: {(selected as any).subject}
                   </div>
                 )}
               </div>
 
               {/* Actions */}
-              <div className="p-4 border-t flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (!selectedId) return;
-                    setMessageFlags((prev) => ({
-                      ...prev,
-                      [selectedId]: {
-                        ...prev[selectedId],
-                        isStarred: !prev[selectedId]?.isStarred,
-                      },
-                    }));
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded"
-                >
-                  <Star
-                    className={`w-4 h-4 ${
-                      selected.isStarred
-                        ? "fill-yellow-500 text-yellow-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                </button>
-                <button
-                  onClick={() => {
-                    if (!selectedId) return;
-                    setMessageFlags((prev) => ({
-                      ...prev,
-                      [selectedId]: {
-                        ...prev[selectedId],
-                        isArchived: !prev[selectedId]?.isArchived,
-                      },
-                    }));
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded"
-                >
-                  <Archive
-                    className={`w-4 h-4 ${
-                      selected.isArchived
-                        ? "fill-gray-500 text-gray-500"
-                        : "text-gray-400"
-                    }`}
-                  />
-                </button>
-              </div>
+              {!isSelectedAnnouncement && (
+                <div className="p-4 border-t flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (!selectedId) return;
+                      setMessageFlags((prev) => ({
+                        ...prev,
+                        [selectedId]: {
+                          ...prev[selectedId],
+                          isStarred: !prev[selectedId]?.isStarred,
+                        },
+                      }));
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <Star
+                      className={`w-4 h-4 ${
+                        (selected as any).isStarred
+                          ? "fill-yellow-500 text-yellow-500"
+                          : "text-gray-400"
+                      }`}
+                    />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!selectedId) return;
+                      setMessageFlags((prev) => ({
+                        ...prev,
+                        [selectedId]: {
+                          ...prev[selectedId],
+                          isArchived: !prev[selectedId]?.isArchived,
+                        },
+                      }));
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <Archive
+                      className={`w-4 h-4 ${
+                        (selected as any).isArchived
+                          ? "fill-gray-500 text-gray-500"
+                          : "text-gray-400"
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center border rounded-md bg-white">
+            <div className="text-center">
+              <MailOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-lg font-semibold text-foreground mb-2">
+                Select a message
+              </h2>
+              <p className="text-muted-foreground">
+                Click on a message to view details
+              </p>
             </div>
           </div>
         )}

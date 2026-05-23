@@ -28,7 +28,6 @@ export interface AnnouncementFormData {
   propertyId?: string;
   tenantSelectionMode?: string;
   tenantTypeFilter?: "all" | "residential" | "commercial" | "mixed";
-  propertyTypeFilter?: string;
   tenantIds?: string[];
 }
 
@@ -49,7 +48,6 @@ export default function SendAnnouncementForm({
     propertyId: "",
     tenantSelectionMode: "all",
     tenantTypeFilter: "all",
-    propertyTypeFilter: "",
     tenantIds: [],
   };
 
@@ -81,43 +79,71 @@ export default function SendAnnouncementForm({
     [tenantsForSelectedProperty],
   );
 
+  const selectedTenantIds = useMemo(() => {
+    if (!formData.propertyId) return [];
+    if (formData.tenantSelectionMode === "withDueDate") {
+      return tenantsWithDueDate.map((t) => t.id);
+    }
+    if (formData.tenantSelectionMode === "custom") {
+      return formData.tenantIds ?? [];
+    }
+    return tenantsForSelectedProperty.map((t) => t.id);
+  }, [
+    formData.propertyId,
+    formData.tenantSelectionMode,
+    tenantsForSelectedProperty,
+    tenantsWithDueDate,
+    formData.tenantIds,
+  ]);
+
+  const arraysEqual = (a: string[] = [], b: string[] = []) =>
+    a.length === b.length && a.every((value, index) => value === b[index]);
+
+  useEffect(() => {
+    if (formData.tenantSelectionMode === "custom") {
+      return;
+    }
+    setFormData((prev) => {
+      if (arraysEqual(prev.tenantIds ?? [], selectedTenantIds)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        tenantIds: selectedTenantIds,
+      };
+    });
+  }, [selectedTenantIds, formData.tenantSelectionMode]);
+
+  useEffect(() => {
+    if (formData.tenantSelectionMode !== "custom") return;
+    setFormData((prev) => {
+      const filteredTenantIds = (prev.tenantIds ?? []).filter((id) =>
+        tenantsForSelectedProperty.some((t) => t.id === id),
+      );
+      if (arraysEqual(filteredTenantIds, prev.tenantIds ?? [])) {
+        return prev;
+      }
+      return {
+        ...prev,
+        tenantIds: filteredTenantIds,
+      };
+    });
+  }, [
+    formData.propertyId,
+    tenantsForSelectedProperty,
+    formData.tenantSelectionMode,
+  ]);
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
     >,
   ) => {
-    const { name, value, options } = e.target as HTMLSelectElement;
-    if (name === "tenantIds" && options) {
-      const selected = Array.from(options)
-        .filter((o) => o.selected)
-        .map((o) => o.value);
-      setFormData((prev) => ({
-        ...prev,
-        [name]: selected,
-      }));
-    } else {
-      setFormData((prev) => {
-        const newData = {
-          ...prev,
-          [name]: value,
-        };
-        if (name === "recipients" && value !== "property") {
-          newData.propertyId = "";
-          newData.tenantSelectionMode = "all";
-          newData.tenantIds = [];
-        }
-        if (name === "tenantSelectionMode") {
-          if (value === "all") {
-            newData.tenantIds = tenantsForSelectedProperty.map((t) => t.id);
-          } else if (value === "withDueDate") {
-            newData.tenantIds = tenantsWithDueDate.map((t) => t.id);
-          } else if (value === "custom") {
-            newData.tenantIds = [];
-          }
-        }
-        return newData;
-      });
-    }
+    const { name, value } = e.target as HTMLSelectElement;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -133,7 +159,6 @@ export default function SendAnnouncementForm({
       propertyId: "",
       tenantSelectionMode: "all",
       tenantTypeFilter: "all",
-      propertyTypeFilter: "",
       tenantIds: [],
     });
     onClose();
@@ -229,71 +254,39 @@ export default function SendAnnouncementForm({
               >
                 <option value="all">All Tenants</option>
                 <option value="property">By Property</option>
-                <option value="custom">Custom List</option>
-                <option value="managers">Managers Only</option>
               </select>
             </div>
 
-            {formData.recipients === "all" && (
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Tenant Type Filter
-                </label>
-                <select
-                  name="tenantTypeFilter"
-                  value={formData.tenantTypeFilter}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="all">All Tenant Types</option>
-                  <option value="residential">Residential</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="mixed">Mixed</option>
-                </select>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Property
+              </label>
+              <select
+                name="propertyId"
+                value={formData.propertyId}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                required
+              >
+                <option value="">Select property</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {formData.recipients === "all" && formData.propertyId && (
+              <div className="text-sm text-muted-foreground">
+                This announcement will be sent to all{" "}
+                {tenantsForSelectedProperty.length} tenants in the selected
+                property.
               </div>
             )}
 
-            {/* Conditional Property and Tenants */}
             {formData.recipients === "property" && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Property
-                  </label>
-                  <select
-                    name="propertyId"
-                    value={formData.propertyId}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    required
-                  >
-                    <option value="">Select property</option>
-                    {properties.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Property Type Filter
-                  </label>
-                  <select
-                    name="propertyTypeFilter"
-                    value={formData.propertyTypeFilter}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">All Types</option>
-                    <option value="residential">Residential</option>
-                    <option value="commercial">Commercial</option>
-                    <option value="mixed_use">Mixed Use</option>
-                    <option value="industrial">Industrial</option>
-                    <option value="retail">Retail</option>
-                    <option value="office">Office</option>
-                  </select>
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Tenants
@@ -307,7 +300,7 @@ export default function SendAnnouncementForm({
                   >
                     <option value="all">All Tenants in Property</option>
                     <option value="withDueDate">Tenants with Due Date</option>
-                    <option value="custom">Custom Selection</option>
+                    <option value="custom">Custom Tenants</option>
                   </select>
                 </div>
                 {formData.tenantSelectionMode === "all" && (
@@ -338,23 +331,50 @@ export default function SendAnnouncementForm({
                 )}
                 {formData.tenantSelectionMode === "custom" && (
                   <div>
-                    <select
-                      name="tenantIds"
-                      multiple
-                      value={formData.tenantIds}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                      required
-                    >
-                      {tenantsForSelectedProperty.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Hold Ctrl (Cmd on Mac) to select multiple tenants
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Select one or more tenants:
                     </p>
+                    <div className="max-h-64 overflow-y-auto border border-input rounded-md p-2 bg-muted">
+                      {tenantsForSelectedProperty.length > 0 ? (
+                        tenantsForSelectedProperty.map((t) => (
+                          <label
+                            key={t.id}
+                            className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-100"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={
+                                formData.tenantIds?.includes(t.id) ?? false
+                              }
+                              onChange={() => {
+                                setFormData((prev) => {
+                                  const existing = prev.tenantIds ?? [];
+                                  const nextIds = existing.includes(t.id)
+                                    ? existing.filter((id) => id !== t.id)
+                                    : [...existing, t.id];
+                                  return {
+                                    ...prev,
+                                    tenantIds: nextIds,
+                                  };
+                                });
+                              }}
+                              className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm text-foreground">
+                              {t.name}
+                              {t.unitNumber ? ` — Unit ${t.unitNumber}` : ""}
+                            </span>
+                          </label>
+                        ))
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No tenants found for this property.
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-2">
+                      {formData.tenantIds?.length ?? 0} tenant(s) selected.
+                    </div>
                   </div>
                 )}
               </>
