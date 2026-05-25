@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 
 export default function InvitePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
@@ -25,9 +24,13 @@ export default function InvitePage() {
   const [token, setToken] = useState("");
 
   useEffect(() => {
-    const token = searchParams?.get("token");
-    setToken(token || "");
-    if (!token) {
+    const params =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search)
+        : null;
+    const tokenFromUrl = params?.get("token") ?? "";
+    setToken(tokenFromUrl);
+    if (!tokenFromUrl) {
       setError("No invite token provided");
       setIsValidating(false);
       return;
@@ -35,7 +38,7 @@ export default function InvitePage() {
 
     const validateInvite = async () => {
       try {
-        const validation = await validateTenantInvite(token);
+        const validation = await validateTenantInvite(tokenFromUrl);
         if (!validation.valid) {
           setError(validation.error || "Invalid invite");
           setIsValidating(false);

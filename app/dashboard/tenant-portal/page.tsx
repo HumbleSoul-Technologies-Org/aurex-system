@@ -43,6 +43,11 @@ import {
   initializeSystemSettings,
   updateFeatureToggles,
 } from "@/lib/services/settings";
+import {
+  formatCurrency,
+  getActiveCurrency,
+  getCurrencySymbol,
+} from "@/lib/currency";
 import Link from "next/link";
 
 const featureToggleMap: Record<string, string> = {
@@ -89,6 +94,7 @@ export default function TenantPortalPage() {
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<string>("");
+  const [activeCurrency, setActiveCurrency] = useState<string>("USD");
 
   // Load tenants, properties, and payments data on mount
   useEffect(() => {
@@ -100,6 +106,15 @@ export default function TenantPortalPage() {
       if (typeof window !== "undefined")
         window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
     };
+  }, []);
+
+  useEffect(() => {
+    try {
+      setActiveCurrency(getActiveCurrency());
+    } catch (e) {
+      // fallback silently to USD
+      setActiveCurrency("USD");
+    }
   }, []);
 
   // Calculate statistics from real tenant and payment data
