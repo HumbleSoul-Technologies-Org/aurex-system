@@ -56,6 +56,7 @@ import { deleteProperty } from "@/lib/services/properties";
 import { apiRequest } from "@/lib/query-client";
 import { url } from "inspector";
 import { useAuth } from "@/lib/auth-context";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 
 interface SpecificationRow {
   title: string;
@@ -73,10 +74,15 @@ export default function PropertyDetailPage({
 }: PropertyDetailPageProps) {
   const { id } = use(params);
   const { properties, tenants } = useAppData();
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const [property, setProperty] = useState<any>(() =>
     properties.find((item) => item.id === id),
   );
   const { token } = useAuth();
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
   const refreshProperty = () => {
     const updated = properties.find((item) => item.id === id);
     setProperty(updated);
@@ -1048,7 +1054,10 @@ export default function PropertyDetailPage({
                         Price Per Unit
                       </p>
                       <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        ${property?.price_per_unit.toLocaleString()}
+                        {formatCurrency(
+                          property?.price_per_unit,
+                          activeCurrency,
+                        )}
                       </p>
                     </div>
                     <div className="p-4 bg-secondary rounded-lg">
@@ -1184,7 +1193,10 @@ export default function PropertyDetailPage({
                                 </Link>
                               </td>
                               <td className="px-4 py-3 font-semibold text-foreground">
-                                ${(tenant.rentAmount ?? 0).toLocaleString()}
+                                {formatCurrency(
+                                  tenant.rentAmount ?? 0,
+                                  activeCurrency,
+                                )}
                               </td>
                               <td className="px-4 py-3">
                                 <span
@@ -1246,7 +1258,7 @@ export default function PropertyDetailPage({
                         Monthly Income
                       </p>
                       <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        ${formatCompactNumber(totalMonthlyIncome)}
+                        {formatCurrency(totalMonthlyIncome, activeCurrency)}
                       </p>
                     </Card>
                     <Card className="border border-border p-4">
@@ -1254,7 +1266,7 @@ export default function PropertyDetailPage({
                         Annual Income
                       </p>
                       <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        ${formatCompactNumber(totalAnnualIncome)}
+                        {formatCurrency(totalAnnualIncome, activeCurrency)}
                       </p>
                     </Card>
                     <Card className="border border-border p-4">
@@ -1282,7 +1294,10 @@ export default function PropertyDetailPage({
                       Price per Unit
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      ${property?.price_per_unit.toLocaleString()}
+                      {formatCurrency(
+                        property?.price_per_unit ?? 0,
+                        activeCurrency,
+                      )}
                     </p>
                   </Card>
                   <Card className="border border-border p-4">
@@ -1290,7 +1305,7 @@ export default function PropertyDetailPage({
                       Average Income per Unit
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      ${averageIncomePerUnit.toLocaleString()}
+                      {formatCurrency(averageIncomePerUnit, activeCurrency)}
                     </p>
                   </Card>
                   <Card className="border border-border p-4">
@@ -1343,13 +1358,16 @@ export default function PropertyDetailPage({
                                 {tenant.name}
                               </td>
                               <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">
-                                ${(tenant.rentAmount ?? 0).toLocaleString()}
+                                {formatCurrency(
+                                  tenant.rentAmount ?? 0,
+                                  activeCurrency,
+                                )}
                               </td>
                               <td className="px-4 py-3 font-semibold text-foreground">
-                                $
-                                {(
-                                  (tenant.rentAmount ?? 0) * 12
-                                ).toLocaleString()}
+                                {formatCurrency(
+                                  (tenant.rentAmount ?? 0) * 12,
+                                  activeCurrency,
+                                )}
                               </td>
                               <td className="px-4 py-3 text-foreground capitalize">
                                 {tenant.leaseType}
@@ -1364,10 +1382,13 @@ export default function PropertyDetailPage({
                               TOTAL
                             </td>
                             <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
-                              ${formatCompactNumber(tenantCollected)}
+                              {formatCurrency(tenantCollected, activeCurrency)}
                             </td>
                             <td className="px-4 py-3 font-bold text-green-600 dark:text-green-400">
-                              ${formatCompactNumber(tenantCollected * 12)}
+                              {formatCurrency(
+                                tenantCollected * 12,
+                                activeCurrency,
+                              )}
                             </td>
                             <td></td>
                           </tr>

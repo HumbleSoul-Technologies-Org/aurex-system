@@ -738,7 +738,7 @@ export default function CommunicationsPage() {
                         }}
                         className="rounded-full"
                       >
-                        <MessageCirclePlus />
+                        <MessageCirclePlus /> Create Message
                       </Button>
                     </div>
                   </div>
@@ -798,62 +798,6 @@ export default function CommunicationsPage() {
                       })
                     )}
                   </div>
-
-                  <div className="border-t border-border p-4 bg-background">
-                    <div className="mb-3 space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        Send a new message
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        This will add a new message to the selected property
-                        conversation.
-                      </p>
-                    </div>
-                    <Textarea
-                      placeholder="Type your message..."
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      rows={3}
-                      className="w-full"
-                    />
-                    <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <Button
-                        onClick={handleSendMessage}
-                        disabled={isSendingMessage}
-                        className="bg-primary hover:bg-primary/90 text-white"
-                      >
-                        <Send className="w-4 h-4 mr-2" />
-                        {isSendingMessage ? "Sending..." : "Send message"}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => setMessageText("")}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* <div className="p-4 border-b border-border rounded-md bg-muted/10 space-y-2">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                          Selected conversation
-                        </p>
-                        <p className="font-semibold text-sm text-foreground">
-                          {getPropertyName(currentConversation.propertyId)}
-                        </p>
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {allMessages.length} message
-                        {allMessages.length === 1 ? "" : "s"}
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Messages for the currently selected property conversation
-                      are shown below.
-                    </p>
-                  </div> */}
                 </div>
               ) : (
                 <div className="flex min-h-[320px] items-center justify-center p-8 text-muted-foreground">
@@ -1007,6 +951,7 @@ export default function CommunicationsPage() {
                               </button>
                             </div>
                           </div>
+
                           <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
                             {announcement.message}
                           </p>

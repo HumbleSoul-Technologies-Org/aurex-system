@@ -28,6 +28,7 @@ import {
   deleteExpenseApi,
 } from "@/lib/services/expenses";
 import { listPayments } from "@/lib/services/payments";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 import {
   BarChart,
   Bar,
@@ -79,6 +80,7 @@ export default function FinancesPage() {
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [activeCurrency, setActiveCurrency] = useState("USD");
 
   useEffect(() => {
     // load server-backed expenses for display
@@ -92,6 +94,7 @@ export default function FinancesPage() {
       }
     })();
 
+    setActiveCurrency(getActiveCurrency());
     setPayments(listPayments());
     const onTxUpdate = () => refreshTransactions();
     const onPaymentsUpdated = () => setPayments(listPayments());
@@ -230,7 +233,7 @@ export default function FinancesPage() {
             Total Revenue
           </p>
           <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
-            ${totalRevenue.toLocaleString()}
+            {formatCurrency(totalRevenue, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">From rent payments</p>
         </Card>
@@ -240,7 +243,7 @@ export default function FinancesPage() {
             Total Expenses
           </p>
           <p className="text-2xl sm:text-3xl font-bold text-foreground mb-1 whitespace-nowrap truncate">
-            ${totalExpenses.toLocaleString()}
+            {formatCurrency(totalExpenses, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">Maintenance & other</p>
         </Card>
@@ -252,7 +255,7 @@ export default function FinancesPage() {
           <p
             className={`text-2xl sm:text-3xl font-bold mb-1 ${totalRevenue - totalExpenses > 0 ? "text-green-600" : "text-red-600"} whitespace-nowrap truncate`}
           >
-            ${(totalRevenue - totalExpenses).toLocaleString()}
+            {formatCurrency(totalRevenue - totalExpenses, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             Revenue minus expenses
@@ -264,7 +267,7 @@ export default function FinancesPage() {
             Pending Payments
           </p>
           <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
-            ${totalPending.toLocaleString()}
+            {formatCurrency(totalPending, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             {pendingPayments.length} payments
@@ -297,7 +300,8 @@ export default function FinancesPage() {
                 <strong>Type:</strong> {selectedTx.type}
               </p>
               <p>
-                <strong>Amount:</strong> ${selectedTx.amount.toLocaleString()}
+                <strong>Amount:</strong>{" "}
+                {formatCurrency(selectedTx.amount, activeCurrency)}
               </p>
               <p>
                 <strong>Status:</strong> {selectedTx.status}
@@ -624,7 +628,7 @@ export default function FinancesPage() {
 
                   <div className="text-right">
                     <p className="font-bold text-foreground">
-                      ${payment.amount.toLocaleString()}
+                      {formatCurrency(payment.amount, activeCurrency)}
                     </p>
                     <p
                       className={`text-xs font-semibold ${payment.status === "completed" ? "text-green-600" : "text-orange-600"}`}
@@ -683,7 +687,7 @@ export default function FinancesPage() {
                       <DropdownMenuItem
                         onClick={async () => {
                           try {
-                            const text = `Payment ${payment.transId || payment.id}: $${(payment.amount || 0).toFixed(2)}`;
+                            const text = `Payment ${payment.transId || payment.id}: ${formatCurrency(payment.amount || 0, activeCurrency)}`;
                             if (navigator.share) {
                               await navigator.share({
                                 title: "Payment",
@@ -763,7 +767,7 @@ export default function FinancesPage() {
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                            -${expense.amount.toLocaleString()}
+                            -{formatCurrency(expense.amount, activeCurrency)}
                           </p>
                           <p
                             className={`text-xs font-semibold ${expense.status === "completed" ? "text-green-600" : expense.status === "pending" ? "text-orange-600" : "text-red-600"}`}
@@ -926,7 +930,9 @@ export default function FinancesPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ name, value }: any) => `${name}: $${value}`}
+                        label={({ name, value }: any) =>
+                          `${name}: ${formatCurrency(Number(value), activeCurrency)}`
+                        }
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -935,7 +941,11 @@ export default function FinancesPage() {
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: any) => `$${value}`} />
+                      <Tooltip
+                        formatter={(value: any) =>
+                          formatCurrency(Number(value), activeCurrency)
+                        }
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -945,9 +955,21 @@ export default function FinancesPage() {
             {/* Summary Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                { label: "Total Revenue", value: "$127,500", change: "+12.5%" },
-                { label: "Total Expenses", value: "$42,300", change: "-3.2%" },
-                { label: "Net Income", value: "$85,200", change: "+18.7%" },
+                {
+                  label: "Total Revenue",
+                  value: formatCurrency(127500, activeCurrency),
+                  change: "+12.5%",
+                },
+                {
+                  label: "Total Expenses",
+                  value: formatCurrency(42300, activeCurrency),
+                  change: "-3.2%",
+                },
+                {
+                  label: "Net Income",
+                  value: formatCurrency(85200, activeCurrency),
+                  change: "+18.7%",
+                },
                 { label: "Occupancy Rate", value: "94%", change: "+2.1%" },
               ].map((stat) => (
                 <Card key={stat.label} className="border border-border p-4">

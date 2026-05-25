@@ -24,14 +24,20 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const { user, token } = useAuth();
   const { properties } = useAppData();
+
+  useState(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   const filteredProperties = properties.filter((prop) => {
     const matchesSearch =
@@ -271,10 +277,10 @@ export default function PropertiesPage() {
                         Price per Unit
                       </span>
                       <span className="font-semibold text-foreground">
-                        $
-                        {property.price_per_unit
-                          .toString()
-                          .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                        {formatCurrency(
+                          property.price_per_unit,
+                          activeCurrency,
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -308,14 +314,10 @@ export default function PropertiesPage() {
         </div>
       )}
 
-      
-
       {/* List View */}
       {viewMode === "list" && (
         <Card className="border border-border overflow-hidden">
           <div className="overflow-x-auto">
-
-            
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border bg-secondary">
@@ -373,10 +375,7 @@ export default function PropertiesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
-                      $
-                      {property.price_per_unit
-                        .toString()
-                        .replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      {formatCurrency(property.price_per_unit, activeCurrency)}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-xs font-semibold rounded-full">

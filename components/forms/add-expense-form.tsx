@@ -9,13 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { X, DollarSign, Calendar, Tag } from "lucide-react";
 import { createTransaction } from "@/app/lib/transactions-client";
-import { createExpenseApi } from "@/lib/services/expenses";
+import { createExpenseApi, type ExpenseRecord } from "@/lib/services/expenses";
 import { useAppData } from "@/lib/data-context";
 
 interface AddExpenseFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit?: (data: ExpenseFormData) => void;
+  onSubmit?: (data: ExpenseRecord) => void;
   mode?: "simple" | "full";
   initialTenantId?: string;
   initialPropertyId?: string;
@@ -177,10 +177,10 @@ export default function AddExpenseForm({
         notes: expense.notes,
         metadata: { expenseId: expense.id, maintenanceRequestId },
       });
+      onSubmit?.(expense);
     } catch (err) {
       console.error("Failed to create expense", err);
     }
-    onSubmit?.(formData);
     setFormData({
       category: "maintenance",
       expenseType: "commercial",

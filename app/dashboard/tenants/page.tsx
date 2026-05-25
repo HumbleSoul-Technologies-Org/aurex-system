@@ -23,12 +23,19 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { useEffect } from "react";
 
 export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const [filterStatus, setFilterStatus] = useState<
     "all" | "paid" | "due" | "moving-out"
   >("all");
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
   const [showAddForm, setShowAddForm] = useState(false);
 
   const { tenants, properties } = useAppData();
@@ -278,7 +285,7 @@ export default function TenantsPage() {
                     </a>
                   </td>
                   <td className="px-6 py-4 font-semibold text-foreground">
-                    ${(tenant.rentAmount ?? 0).toLocaleString()}
+                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
                   </td>
                   <td className="px-6 py-4 text-xs text-foreground capitalize">
                     {(tenant.leaseType || "").replace("_", " ")}

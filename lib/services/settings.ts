@@ -1,12 +1,27 @@
+import { apiRequest } from '@/lib/query-client'
 import { insertIntoCollection, getCollection, updateInCollection, generateId, removeFromCollection } from '@/lib/local-store'
 import { SystemSettings } from '@/lib/local-store'
+import { getCurrentUser } from '@/lib/services/auth'
+
+export interface CompanyAddress {
+  address?: string
+  estate?: string
+  street?: string
+  city?: string
+  country?: string
+}
+
+export interface CompanyLogo {
+  url?: string
+  public_id?: string
+}
 
 export interface CompanyInfo {
   name?: string
-  address?: string
+  address?: CompanyAddress
   phone?: string
   email?: string
-  logoUrl?: string
+  logo?: CompanyLogo
   licenseNumber?: string
 }
 
@@ -112,7 +127,21 @@ export interface FeatureToggles {
   maintenanceRequests: boolean
   documentAccess: boolean
   messages: boolean
-   
+  evictionNotice?: boolean
+}
+
+export interface FinanceSettings {
+  currency: string
+  exchangeRates: Record<string, number>
+  paymentMethods: PaymentMethod[]
+}
+
+export interface SystemFeatureToggles {
+  map: boolean
+  messaging: boolean
+  analytics: boolean
+  reporting: boolean
+  auditing: boolean
 }
 
 export interface DoNotDisturb {
@@ -134,16 +163,20 @@ export interface SecuritySettings {
   allowAccountDeletion: boolean
   requirePasswordReset?: boolean
   passwordExpirationDays?: number
+  allowProfileEditing?: boolean
+  autoLockEnabled?: boolean
+  failedLoginThreshold?: number
 }
 
 export interface TenantPortalSettings {
-  notificationPreferences: any
-  paymentSettings: any
-  documentAccess: any
-  maintenancePreferences: any 
-  featureToggles:   any
-  communicationPreferences: any
-  securitySettings: any
+  notificationPreferences: NotificationPreferences | any
+  paymentSettings: PaymentSettings | any
+  documentAccess: DocumentAccess | any
+  maintenancePreferences: MaintenancePreferences | any
+  featureToggles: FeatureToggles | any
+  communicationPreferences: CommunicationPreferences | any
+  securitySettings: SecuritySettings | any
+  financeSettings?: FinanceSettings | any
 }
 
 const defaultTenantPortalSettings: TenantPortalSettings = {
@@ -189,7 +222,7 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     maintenanceRequests: true,
     documentAccess: true,
     messages: true,
-    
+    evictionNotice: false,
   },
   communicationPreferences: {
     preferredContactMethod: 'email',
@@ -205,8 +238,27 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     allowPasswordChange: true,
     autoLogoutInactivityMinutes: 30,
     allowAccountDeletion: false,
+    allowProfileEditing: true,
+    autoLockEnabled: false,
+    failedLoginThreshold: 5,
     requirePasswordReset: false,
     passwordExpirationDays: 90
+  }
+  ,
+  financeSettings: {
+    currency: 'USD',
+    exchangeRates: {
+      USD: 1,
+      EUR: 0.92,
+      GBP: 0.79,
+      KES: 140,
+    },
+    paymentMethods: [
+      { type: 'credit_card', enabled: false, processingFee: 2.9 },
+      { type: 'bank_transfer', enabled: false, processingFee: 0.5 },
+      { type: 'mpesa', enabled: false, processingFee: 0.5 },
+      { type: 'mobile_money', enabled: false, processingFee: 0.5 },
+    ]
   }
 }
 
@@ -468,11 +520,26 @@ export function createDefaultSystemSettings(): SystemSettings {
     },
     companyInfo: {
       name: 'Tenant Manager',
-      address: '123 Main St',
+      address: {
+        address: '123 Main St',
+        estate: '',
+        city: 'Nairobi',
+        country: 'Kenya',
+      },
       phone: '+1 (555) 123-4567',
       email: 'support@tenantmanager.com',
-      logoUrl: '',
+      logo: {
+        url: '',
+        public_id: '',
+      },
       licenseNumber: ''
+    },
+    systemFeatures: {
+      map: true,
+      messaging: true,
+      analytics: false,
+      reporting: true,
+      auditing: false,
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -613,4 +680,342 @@ export function updateSecuritySettings(updates: Partial<SecuritySettings>): Syst
       ...updates
     }
   })
+}
+
+// ============================================================================
+// API Integration - Server Persistence Layer
+// ============================================================================
+
+interface FlatSettingsData {
+  ownerId?: string
+  _id?: string
+  companyInfo_name?: string
+  companyInfo_address?: string
+  companyInfo_city?: string
+  companyInfo_country?: string
+  companyInfo_phone?: string
+  companyInfo_email?: string
+  tenantPortalFeatures_rentPayment?: boolean
+  tenantPortalFeatures_maintenanceRequests?: boolean
+  tenantPortalFeatures_documentAccess?: boolean
+  tenantPortalFeatures_messages?: boolean
+  tenantPortalFeatures_announcements?: boolean
+  tenantPortalFeatures_evictionNotice?: boolean
+  financeSettings_currency?: string
+  notificationSettings_emailNotifications?: boolean
+  notificationSettings_smsNotifications?: boolean
+  systemFeatures_map?: boolean
+  systemFeatures_messaging?: boolean
+  systemFeatures_analytics?: boolean
+  systemFeatures_reporting?: boolean
+  systemFeatures_auditing?: boolean
+  tenantPortalSecurity_autoLogoutInactivityMinutes?: number
+  tenantPortalSecurity_allowProfileEditing?: boolean
+  tenantPortalSecurity_autoLockEnabled?: boolean
+  tenantPortalSecurity_failedLoginThreshold?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+/**
+ * Convert nested settings structure to flat API format
+ * Used when persisting to server
+ */
+export function convertToFlatSettings(settings: Partial<TenantPortalSettings> & any): FlatSettingsData {
+  return {
+    companyInfo_name: settings.companyInfo?.name || settings.companyInfo_name,
+    companyInfo_address: settings.companyInfo?.address || settings.companyInfo_address,
+    companyInfo_city: settings.companyInfo?.city || settings.companyInfo_city,
+    companyInfo_country: settings.companyInfo?.country || settings.companyInfo_country,
+    companyInfo_phone: settings.companyInfo?.phone || settings.companyInfo_phone,
+    companyInfo_email: settings.companyInfo?.email || settings.companyInfo_email,
+    tenantPortalFeatures_rentPayment: settings.featureToggles?.paymentPortal ?? settings.tenantPortalFeatures_rentPayment,
+    tenantPortalFeatures_maintenanceRequests: settings.featureToggles?.maintenanceRequests ?? settings.tenantPortalFeatures_maintenanceRequests,
+    tenantPortalFeatures_documentAccess: settings.featureToggles?.documentAccess ?? settings.tenantPortalFeatures_documentAccess,
+    tenantPortalFeatures_messages: settings.featureToggles?.messages ?? settings.tenantPortalFeatures_messages,
+    tenantPortalFeatures_announcements: settings.featureToggles?.announcements ?? settings.tenantPortalFeatures_announcements,
+    tenantPortalFeatures_evictionNotice: settings.featureToggles?.evictionNotice ?? settings.tenantPortalFeatures_evictionNotice,
+    financeSettings_currency: settings.financeSettings?.currency || settings.financeSettings_currency || 'USD',
+    notificationSettings_emailNotifications: settings.notificationPreferences?.email ?? settings.notificationSettings_emailNotifications ?? true,
+    notificationSettings_smsNotifications: settings.notificationPreferences?.sms ?? settings.notificationSettings_smsNotifications ?? false,
+    systemFeatures_map: settings.systemFeatures?.map ?? settings.systemFeatures_map ?? true,
+    systemFeatures_messaging: settings.systemFeatures?.messaging ?? settings.systemFeatures_messaging ?? true,
+    systemFeatures_analytics: settings.systemFeatures?.analytics ?? settings.systemFeatures_analytics ?? false,
+    systemFeatures_reporting: settings.systemFeatures?.reporting ?? settings.systemFeatures_reporting ?? true,
+    systemFeatures_auditing: settings.systemFeatures?.auditing ?? settings.systemFeatures_auditing ?? false,
+    tenantPortalSecurity_autoLogoutInactivityMinutes: settings.securitySettings?.autoLogoutInactivityMinutes ?? settings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
+    tenantPortalSecurity_allowProfileEditing: settings.securitySettings?.allowProfileEditing ?? settings.tenantPortalSecurity_allowProfileEditing ?? true,
+    tenantPortalSecurity_autoLockEnabled: settings.securitySettings?.autoLockEnabled ?? settings.tenantPortalSecurity_autoLockEnabled ?? false,
+    tenantPortalSecurity_failedLoginThreshold: settings.securitySettings?.failedLoginThreshold ?? settings.tenantPortalSecurity_failedLoginThreshold ?? 5,
+  }
+}
+
+/**
+ * Convert flat API settings to nested structure for frontend
+ */
+export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantPortalSettings {
+  return {
+    notificationPreferences: {
+      email: flatSettings.notificationSettings_emailNotifications ?? true,
+      sms: flatSettings.notificationSettings_smsNotifications ?? false,
+      inApp: true,
+      smsProvider: '',
+      emailTemplate: '',
+    },
+    paymentSettings: {
+      enableAutopay: false,
+      autopayThreshold: 0,
+      acceptedMethods: [],
+      paymentProviders: [],
+    },
+    documentAccess: {
+      allowUploads: true,
+      maxFileSize: 10485760,
+      allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+      requireApproval: false,
+      retentionDays: 365,
+    },
+    maintenancePreferences: {
+      enableRequests: true,
+      requireTenantApproval: false,
+      estimatedResponseTime: 48,
+      allowEmergencyAfterHours: true,
+      priorityLevels: [],
+    },
+    featureToggles: {
+      paymentPortal: flatSettings.tenantPortalFeatures_rentPayment ?? true,
+      maintenanceRequests: flatSettings.tenantPortalFeatures_maintenanceRequests ?? true,
+      documentAccess: flatSettings.tenantPortalFeatures_documentAccess ?? true,
+      messages: flatSettings.tenantPortalFeatures_messages ?? true,
+      evictionNotice: flatSettings.tenantPortalFeatures_evictionNotice ?? false,
+    },
+    communicationPreferences: {
+      preferredContactMethod: 'email',
+      languages: ['en'],
+      timezone: 'UTC',
+      doNotDisturb: {
+        enabled: false,
+        startTime: '',
+        endTime: '',
+      },
+    },
+    securitySettings: {
+      allowPasswordChange: true,
+      autoLogoutInactivityMinutes: flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
+      allowAccountDeletion: false,
+      allowProfileEditing: flatSettings.tenantPortalSecurity_allowProfileEditing ?? true,
+      autoLockEnabled: flatSettings.tenantPortalSecurity_autoLockEnabled ?? false,
+      failedLoginThreshold: flatSettings.tenantPortalSecurity_failedLoginThreshold ?? 5,
+    },
+    financeSettings: {
+      currency: flatSettings.financeSettings_currency || 'USD',
+      exchangeRates: {
+        USD: 1,
+        EUR: 0.92,
+        GBP: 0.79,
+        KES: 140,
+      },
+      paymentMethods: [],
+    },
+  }
+}
+
+/**
+ * Fetch settings from API - fetch admin's own settings
+ */
+export async function fetchSettingsFromApi(): Promise<FlatSettingsData | null> {
+  try {
+    const res = await apiRequest('GET', '/settings')
+    const data = await res.json()
+    return data || null
+  } catch (error) {
+    console.warn('Failed to fetch settings from API, falling back to localStorage:', error)
+    return null
+  }
+}
+
+/**
+ * Fetch settings by ID from API
+ */
+export async function fetchSettingsByIdFromApi(id: string): Promise<FlatSettingsData | null> {
+  try {
+    const res = await apiRequest('GET', `/settings/${id}`)
+    const data = await res.json()
+    return data || null
+  } catch (error) {
+    console.warn(`Failed to fetch settings ${id} from API:`, error)
+    return null
+  }
+}
+
+/**
+ * Create settings on API
+ */
+export async function createSettingsOnApi(settingsData: Partial<FlatSettingsData>): Promise<FlatSettingsData | null> {
+  try {
+    const res = await apiRequest('POST', '/settings', settingsData)
+    const data = await res.json()
+    return data?.settings || data || null
+  } catch (error) {
+    console.warn('Failed to create settings on API:', error)
+    return null
+  }
+}
+
+/**
+ * Update settings on API
+ */
+export async function updateSettingsOnApi(id: string, settingsData: Partial<FlatSettingsData>): Promise<FlatSettingsData | null> {
+  try {
+    const res = await apiRequest('PUT', `/settings/${id}`, settingsData)
+    const data = await res.json()
+    return data?.settings || data || null
+  } catch (error) {
+    console.warn(`Failed to update settings ${id} on API:`, error)
+    return null
+  }
+}
+
+/**
+ * Delete settings on API
+ */
+export async function deleteSettingsOnApi(id: string): Promise<boolean> {
+  try {
+    await apiRequest('DELETE', `/settings/${id}`)
+    return true
+  } catch (error) {
+    console.warn(`Failed to delete settings ${id} on API:`, error)
+    return false
+  }
+}
+
+// ============================================================================
+// Independent Field Updates - Real-time Persistence
+// ============================================================================
+
+/**
+ * Simple debounce helper
+ * Delays function execution, cancels previous pending calls on new invocation
+ */
+export function debounce<T extends (...args: any[]) => Promise<any>>(
+  func: T,
+  delayMs: number
+): (...args: Parameters<T>) => Promise<any> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  return (...args: Parameters<T>) => {
+    return new Promise((resolve, reject) => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId)
+      }
+
+      timeoutId = setTimeout(async () => {
+        try {
+          const result = await func(...args)
+          resolve(result)
+        } catch (error) {
+          reject(error)
+        }
+      }, delayMs)
+    })
+  }
+}
+
+/**
+ * Update a single setting field on the API
+ * Sends only the flat key that changed
+ */
+export async function updateSettingFieldAsync(
+  settingsId: string,
+  flatKey: string,
+  value: any
+): Promise<boolean> {
+  if (!settingsId) {
+    console.warn('Cannot update field without settingsId')
+    return false
+  }
+
+  try {
+    const flatUpdate = { [flatKey]: value }
+    const result = await updateSettingsOnApi(settingsId, flatUpdate)
+    return !!result
+  } catch (error) {
+    console.error(`Failed to update field ${flatKey}:`, error)
+    return false
+  }
+}
+
+/**
+ * Create a debounced field update handler
+ * Returns a function that can be called repeatedly; only latest value is persisted
+ */
+export function createFieldUpdateHandler(
+  settingsId: string | null,
+  flatKey: string,
+  onSettingsIdCreated?: (id: string) => void,
+  debounceMs: number = 500
+): (value: any) => Promise<void> {
+  const debouncedUpdate = debounce(
+    async (value: any) => {
+      if (!settingsId) {
+        // Auto-create settings on first change
+        const created = await createSettingsOnApi({ [flatKey]: value })
+        if (created?._id && onSettingsIdCreated) {
+          onSettingsIdCreated(created._id)
+        }
+        return
+      }
+
+      await updateSettingFieldAsync(settingsId, flatKey, value)
+    },
+    debounceMs
+  )
+
+  return async (value: any) => {
+    try {
+      await debouncedUpdate(value)
+    } catch (error) {
+      console.error(`Error updating field ${flatKey}:`, error)
+    }
+  }
+}
+
+/**
+ * Field status type for UI feedback
+ */
+export type FieldStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+/**
+ * Helper to manage per-field saving status
+ */
+export class FieldStatusManager {
+  private statusMap: Record<string, FieldStatus> = {}
+
+  setStatus(flatKey: string, status: FieldStatus): void {
+    this.statusMap[flatKey] = status
+  }
+
+  getStatus(flatKey: string): FieldStatus {
+    return this.statusMap[flatKey] ?? 'idle'
+  }
+
+  markSaving(flatKey: string): void {
+    this.setStatus(flatKey, 'saving')
+  }
+
+  markSaved(flatKey: string): void {
+    this.setStatus(flatKey, 'saved')
+  }
+
+  markError(flatKey: string): void {
+    this.setStatus(flatKey, 'error')
+  }
+
+  markIdle(flatKey: string): void {
+    this.setStatus(flatKey, 'idle')
+  }
+
+  getAll(): Record<string, FieldStatus> {
+    return { ...this.statusMap }
+  }
 }

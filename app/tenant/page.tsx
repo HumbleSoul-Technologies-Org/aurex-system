@@ -17,11 +17,17 @@ import { useAuth } from "@/lib/auth-context";
 import { useAppData } from "@/lib/data-context";
 import { listTransactions } from "@/app/lib/transactions-client";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { useState, useEffect } from "react";
 
 export default function TenantDashboard() {
   const { user } = useAuth();
-
   const { tenants, properties } = useAppData();
+  const [activeCurrency, setActiveCurrency] = useState("USD");
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   // Find the tenant record for the current user
   const tenant = user ? tenants.find((t) => t.email === user.email) : null;
@@ -131,7 +137,7 @@ export default function TenantDashboard() {
                 Monthly Rent
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${tenant?.rentAmount || "0"}
+                {formatCurrency(tenant?.rentAmount || 0, activeCurrency)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 Lease Started on:{" "}

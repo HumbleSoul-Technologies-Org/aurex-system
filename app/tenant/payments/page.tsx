@@ -25,6 +25,11 @@ import {
 import Link from "next/link";
 import { currentTenant } from "@/app/lib/tenant-data";
 import {
+  formatCurrency,
+  getActiveCurrency,
+  getCurrencySymbol,
+} from "@/lib/currency";
+import {
   listPayments,
   createPayment,
   PaymentRecord,
@@ -36,7 +41,12 @@ import { useAppData } from "@/lib/data-context";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const { properties } = useAppData();
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   // Make Payment state
   const [step, setStep] = useState<
@@ -154,7 +164,7 @@ export default function PaymentsPage() {
                 Total Paid (YTD)
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${totalPaid.toLocaleString()}
+                {formatCurrency(totalPaid, activeCurrency)}
               </p>
             </Card>
 
@@ -163,7 +173,10 @@ export default function PaymentsPage() {
                 Monthly Rent
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                ${currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0}
+                {formatCurrency(
+                  currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0,
+                  activeCurrency,
+                )}
               </p>
             </Card>
 
@@ -257,7 +270,7 @@ export default function PaymentsPage() {
                         {payment.transId || payment.id}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">
-                        ${(payment.amount || 0).toFixed(2)}
+                        {formatCurrency(payment.amount || 0, activeCurrency)}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4">
                         <Badge
@@ -314,7 +327,7 @@ export default function PaymentsPage() {
                             <DropdownMenuItem
                               onClick={async () => {
                                 try {
-                                  const text = `Payment ${payment.transId || payment.id}: $${(payment.amount || 0).toFixed(2)}`;
+                                  const text = `Payment ${payment.transId || payment.id}: ${formatCurrency(payment.amount || 0, activeCurrency)}`;
                                   if (navigator.share) {
                                     await navigator.share({
                                       title: "Payment",
@@ -392,7 +405,7 @@ export default function PaymentsPage() {
                         >
                           <div className="flex flex-col items-start">
                             <span className="font-semibold">
-                              {"$" + option.value.toFixed(2)}
+                              {formatCurrency(option.value, activeCurrency)}
                             </span>
                             {option.label !== "Custom" && (
                               <span className="text-xs opacity-70">
@@ -412,7 +425,10 @@ export default function PaymentsPage() {
                     </label>
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-semibold text-foreground">
-                        $
+                        {formatCurrency(0, activeCurrency).replace(
+                          /[0-9.,\s]/g,
+                          "",
+                        )}
                       </span>
                       <input
                         type="text"
@@ -514,7 +530,7 @@ export default function PaymentsPage() {
                           Payment Amount
                         </span>
                         <span className="font-semibold text-foreground">
-                          ${amount.toFixed(2)}
+                          {formatCurrency(amount, activeCurrency)}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -530,7 +546,7 @@ export default function PaymentsPage() {
                       <div className="border-t border-border pt-3 flex justify-between text-sm">
                         <span className="text-muted-foreground">Total</span>
                         <span className="font-bold text-foreground text-base md:text-lg">
-                          ${amount.toFixed(2)}
+                          {formatCurrency(amount, activeCurrency)}
                         </span>
                       </div>
                     </div>
@@ -565,8 +581,8 @@ export default function PaymentsPage() {
                     Payment Successful!
                   </h2>
                   <p className="text-muted-foreground text-sm md:text-base">
-                    Your payment of ${amount.toFixed(2)} has been processed
-                    successfully.
+                    Your payment of {formatCurrency(amount, activeCurrency)} has
+                    been processed successfully.
                   </p>
                 </div>
 
@@ -582,7 +598,7 @@ export default function PaymentsPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Amount</span>
                     <span className="font-semibold text-foreground">
-                      ${amount.toFixed(2)}
+                      {formatCurrency(amount, activeCurrency)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">

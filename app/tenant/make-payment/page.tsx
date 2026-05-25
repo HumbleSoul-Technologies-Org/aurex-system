@@ -9,11 +9,22 @@ import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { createPayment, PaymentRecord } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
+import {
+  formatCurrency,
+  getActiveCurrency,
+  getCurrencySymbol,
+} from "@/lib/currency";
+import { useEffect } from "react";
 
 export default function MakePaymentPage() {
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">(
     "amount",
   );
+  const [activeCurrency, setActiveCurrency] = useState("USD");
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   const user = useMemo(() => getCurrentUser(), []);
   const tenant = useMemo(
@@ -160,7 +171,7 @@ export default function MakePaymentPage() {
                         <span className="font-semibold">
                           {option.label === "Custom"
                             ? option.label
-                            : "$" + option.value.toFixed(2)}
+                            : formatCurrency(option.value, activeCurrency)}
                         </span>
                         {option.label !== "Custom" && (
                           <span className="text-xs opacity-70">
@@ -180,7 +191,7 @@ export default function MakePaymentPage() {
                 </label>
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-semibold text-foreground">
-                    $
+                    {getCurrencySymbol(activeCurrency)}
                   </span>
                   <input
                     type="text"
@@ -282,7 +293,7 @@ export default function MakePaymentPage() {
                       Payment Amount
                     </span>
                     <span className="font-semibold text-foreground">
-                      ${amount.toFixed(2)}
+                      {formatCurrency(amount, activeCurrency)}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -298,7 +309,7 @@ export default function MakePaymentPage() {
                   <div className="border-t border-border pt-3 flex justify-between text-sm">
                     <span className="text-muted-foreground">Total</span>
                     <span className="font-bold text-foreground text-base md:text-lg">
-                      ${amount.toFixed(2)}
+                      {formatCurrency(amount, activeCurrency)}
                     </span>
                   </div>
                 </div>
@@ -333,8 +344,8 @@ export default function MakePaymentPage() {
                 Payment Successful!
               </h2>
               <p className="text-muted-foreground text-sm md:text-base">
-                Your payment of ${amount.toFixed(2)} has been processed
-                successfully.
+                Your payment of {formatCurrency(amount, activeCurrency)} has
+                been processed successfully.
               </p>
             </div>
 
@@ -348,7 +359,7 @@ export default function MakePaymentPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Amount</span>
                 <span className="font-semibold text-foreground">
-                  ${amount.toFixed(2)}
+                  {formatCurrency(amount, activeCurrency)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">

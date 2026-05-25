@@ -523,7 +523,7 @@ export default function MaintenancePage() {
                   </span> */}
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mt-2 line-clamp-3 break-words leading-relaxed">
+                  <p className="text-xs w-full text-justify text-muted-foreground mt-2 line-clamp-3 break-words leading-relaxed">
                     {request.description}
                   </p>
                 </div>

@@ -487,7 +487,7 @@ export default function TenantMessagesPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-      {typeof window !== "undefined" &&
+      {/* {typeof window !== "undefined" &&
         window.location.hostname === "localhost" && (
           <div className="mb-3 p-2 bg-gray-50 border rounded text-xs">
             <div className="font-medium">DEBUG: mergedMessages</div>
@@ -548,7 +548,7 @@ export default function TenantMessagesPage() {
               )}
             </pre>
           </div>
-        )}
+        )} */}
       <header className="sticky top-4 z-20 bg-background/60 backdrop-blur-sm rounded-md p-3 sm:p-4 mb-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg sm:text-2xl font-semibold">Messages</h1>

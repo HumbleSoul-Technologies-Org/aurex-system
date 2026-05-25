@@ -2,12 +2,11 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import axios from "axios";
 import { getAuthToken } from "@/lib/token-manager";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL as string;
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api';
 
 // Axios instance for GET only
 const axiosClient = axios.create({
   baseURL: BASE_URL,
-  
 });
 
 // Throws error if response is not OK

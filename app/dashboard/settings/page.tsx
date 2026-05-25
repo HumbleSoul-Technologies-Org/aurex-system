@@ -27,6 +27,9 @@ import {
   ToggleLeft,
   MessageSquare,
   Lock as LockIcon,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import {
   getSystemSettings,
@@ -34,49 +37,285 @@ import {
   updateSystemSettings,
   getTenantPortalSettings,
   updateTenantPortalSettings,
+  fetchSettingsFromApi,
+  fetchSettingsByIdFromApi,
+  createSettingsOnApi,
+  updateSettingsOnApi,
+  convertToFlatSettings,
+  convertToNestedSettings,
+  createFieldUpdateHandler,
+  FieldStatus,
+  debounce,
 } from "@/lib/services/settings";
-import { SystemSettings } from "@/lib/local-store";
+import { SystemSettings, clearDB } from "@/lib/local-store";
+import { currencies } from "@/lib/data/currencies";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandItem,
+  CommandEmpty,
+} from "@/components/ui/command";
+
+function PasswordChangeForm({ settings, updateSettings }: any) {
+  const [current, setCurrent] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const handleChange = () => {
+    if (!newPw || newPw !== confirm) {
+      alert("New password and confirmation must match");
+      return;
+    }
+    // Note: real deployments should send this to the server. We store locally for development convenience.
+    updateSettings({ adminAuth: { password: newPw } });
+    setCurrent("");
+    setNewPw("");
+    setConfirm("");
+    alert("Admin password updated (local only)");
+  };
+
+  return (
+    <div className="space-y-3">
+      <Input
+        type="password"
+        placeholder="Current password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+      />
+      <Input
+        type="password"
+        placeholder="New password"
+        value={newPw}
+        onChange={(e) => setNewPw(e.target.value)}
+      />
+      <Input
+        type="password"
+        placeholder="Confirm new password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+      />
+      <div className="flex justify-end">
+        <Button onClick={handleChange} className="bg-primary text-white">
+          Change Password
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AccountDeletionCard() {
+  const [password, setPassword] = useState("");
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [inProgress, setInProgress] = useState(false);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) return;
+    const id = setInterval(
+      () => setCountdown((c) => (c !== null ? c - 1 : null)),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, [countdown]);
+
+  const startDeletion = () => {
+    if (!password) {
+      alert("Enter admin password to confirm");
+      return;
+    }
+    setCountdown(10);
+    setInProgress(true);
+  };
+
+  const confirmDelete = () => {
+    // perform local clear (dangerous) - this clears localStorage DB
+    clearDB();
+    alert("Local data cleared. Reloading...");
+    window.location.href = "/";
+  };
+
+  return (
+    <div className="space-y-3">
+      <Input
+        type="password"
+        placeholder="Admin password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      {!inProgress && (
+        <Button className="bg-red-600 text-white" onClick={startDeletion}>
+          Delete All Local Data
+        </Button>
+      )}
+      {inProgress && (
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Confirm deletion in: {countdown}s
+          </p>
+          <div className="flex gap-3 mt-2">
+            <Button
+              onClick={() => {
+                setInProgress(false);
+                setCountdown(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-700 text-white"
+              onClick={confirmDelete}
+              disabled={(countdown ?? 0) > 0}
+            >
+              Confirm Delete Now
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * UI component to show field save status
+ * Displays spinner while saving, checkmark after success, error icon on failure
+ */
+function FieldSaveIndicator({ status }: { status: FieldStatus }) {
+  if (status === "saving") {
+    return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+  }
+  if (status === "saved") {
+    return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+  }
+  if (status === "error") {
+    return <AlertCircle className="w-4 h-4 text-red-600" />;
+  }
+  return null;
+}
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("company");
+  const [activeTab, setActiveTab] = useState("profile");
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  // Per-field status tracking: { 'companyInfo_name': 'saving', ... }
+  const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>(
+    {},
+  );
+
+  // Per-field error tracking
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Helper to mark field as saving/saved/error
+  const markFieldStatus = (flatKey: string, status: FieldStatus) => {
+    setFieldStatus((prev) => ({ ...prev, [flatKey]: status }));
+  };
+
+  const markFieldError = (flatKey: string, error: string) => {
+    setFieldErrors((prev) => ({ ...prev, [flatKey]: error }));
+    markFieldStatus(flatKey, "error");
+  };
+
+  const clearFieldError = (flatKey: string) => {
+    setFieldErrors((prev) => ({ ...prev, [flatKey]: "" }));
+  };
+
+  // Factory to create debounced field update handlers
+  const createIndependentFieldHandler = (
+    flatKey: string,
+    setter: (value: any) => void,
+  ) => {
+    const debouncedUpdate = debounce(
+      async (value: any) => {
+        clearFieldError(flatKey);
+        markFieldStatus(flatKey, "saving");
+
+        try {
+          // Auto-create settings on first change
+          if (!settingsId) {
+            const created = await createSettingsOnApi({ [flatKey]: value });
+            if (created?._id) {
+              setSettingsId(created._id);
+            }
+          } else {
+            // Update existing settings
+            const updated = await updateSettingsOnApi(settingsId, {
+              [flatKey]: value,
+            });
+            if (!updated) {
+              throw new Error("Failed to save to server");
+            }
+          }
+
+          // Update local state
+          setter(value);
+          markFieldStatus(flatKey, "saved");
+
+          // Clear "saved" indicator after 2 seconds
+          setTimeout(() => markFieldStatus(flatKey, "idle"), 2000);
+        } catch (error) {
+          console.error(`Error updating field ${flatKey}:`, error);
+          markFieldError(
+            flatKey,
+            error instanceof Error ? error.message : "Save failed",
+          );
+        }
+      },
+      500, // 500ms debounce
+    );
+
+    return async (value: any) => {
+      await debouncedUpdate(value);
+    };
+  };
+
+  // Wrapper for onChange handlers
+  const handleFieldChange =
+    (flatKey: string, setter: (value: any) => void) => (e: any) => {
+      const value = e.target?.value ?? e.target?.checked ?? e;
+      setter(value);
+      createIndependentFieldHandler(flatKey, setter)(value);
+    };
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const systemSettings =
-          getSystemSettings() ?? initializeSystemSettings();
-        setSettings(systemSettings);
+        // Try to load from API first
+        const apiSettings = await fetchSettingsFromApi();
+
+        if (apiSettings) {
+          // Successfully loaded from API
+          setSettingsId(apiSettings._id || null);
+          const nestedSettings = convertToNestedSettings(apiSettings);
+          const localSettings =
+            getSystemSettings() ?? initializeSystemSettings();
+          // Merge API settings with local defaults
+          const merged = {
+            ...localSettings,
+            tenantPortalSettings: nestedSettings,
+          };
+          setSettings(merged);
+        } else {
+          // Fallback to localStorage
+          const localSettings =
+            getSystemSettings() ?? initializeSystemSettings();
+          setSettings(localSettings);
+          setApiError("Using local storage - API unavailable");
+        }
       } catch (error) {
         console.error("Error loading settings:", error);
+        // Fallback to localStorage on any error
+        const localSettings = getSystemSettings() ?? initializeSystemSettings();
+        setSettings(localSettings);
+        setApiError("Error loading from API, using local storage");
       } finally {
         setLoading(false);
       }
     };
     loadSettings();
   }, []);
-
-  const handleSave = async () => {
-    if (!settings) return;
-    setSaving(true);
-    try {
-      const updated = updateSystemSettings(settings);
-      if (updated) {
-        setSettings(updated);
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("system-settings-changed"));
-        }
-        alert("Settings saved successfully!");
-      }
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      alert("Failed to save settings");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const updateSettings = (updates: any) => {
     setSettings((prev: SystemSettings | null) => {
@@ -109,10 +348,27 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground mb-1">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and preferences
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-1">
+              Settings
+            </h1>
+            <p className="text-muted-foreground">
+              Manage your account and preferences
+            </p>
+          </div>
+          <div className="text-right">
+            {apiError ? (
+              <div className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded border border-amber-200">
+                ⚠️ {apiError}
+              </div>
+            ) : settingsId ? (
+              <div className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded border border-green-200">
+                ✓ API Connected
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -120,52 +376,161 @@ export default function SettingsPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="border-b border-border rounded-none p-0 h-auto bg-transparent">
             <TabsTrigger
-              value="company"
+              value="profile"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
               <Building className="w-4 h-4 mr-2" />
-              Company
-            </TabsTrigger>
-            <TabsTrigger
-              value="properties"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <SettingsIcon className="w-4 h-4 mr-2" />
-              Properties
-            </TabsTrigger>
-            <TabsTrigger
-              value="tenants"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Tenants
-            </TabsTrigger>
-            <TabsTrigger
-              value="compliance"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <Shield className="w-4 h-4 mr-2" />
-              Compliance
-            </TabsTrigger>
-            <TabsTrigger
-              value="notifications"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <Bell className="w-4 h-4 mr-2" />
-              Notifications
+              Profile
             </TabsTrigger>
             <TabsTrigger
               value="portal"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
-              <FileText className="w-4 h-4 mr-2" />
+              <SettingsIcon className="w-4 h-4 mr-2" />
               Portal
+            </TabsTrigger>
+            <TabsTrigger
+              value="finance"
+              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Finance
+            </TabsTrigger>
+            <TabsTrigger
+              value="notifications"
+              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              Notifications
+            </TabsTrigger>
+            <TabsTrigger
+              value="features"
+              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+            >
+              <Bell className="w-4 h-4 mr-2" />
+              Features
+            </TabsTrigger>
+            <TabsTrigger
+              value="security"
+              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Security
             </TabsTrigger>
           </TabsList>
 
-          {/* Company Tab */}
-          <TabsContent value="company" className="p-6 space-y-6">
+          {/* Profile Tab */}
+          <TabsContent value="profile" className="p-6 space-y-6">
             <div>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Personal Profile
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Your personal account information used for administrative
+                actions.
+              </p>
+              <div className="space-y-4 mb-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Name
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={(settings as any).adminProfile?.name || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            adminProfile: {
+                              ...((settings as any).adminProfile || {}),
+                              name: value,
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_adminName",
+                            (v) =>
+                              updateSettings({
+                                adminProfile: {
+                                  ...((settings as any).adminProfile || {}),
+                                  name: v,
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_adminName"] || "idle"}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Phone
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={(settings as any).adminProfile?.phone || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            adminProfile: {
+                              ...((settings as any).adminProfile || {}),
+                              phone: value,
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_adminPhone",
+                            (v) =>
+                              updateSettings({
+                                adminProfile: {
+                                  ...((settings as any).adminProfile || {}),
+                                  phone: v,
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_adminPhone"] || "idle"}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Email
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="email"
+                      value={(settings as any).adminProfile?.email || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateSettings({
+                          adminProfile: {
+                            ...((settings as any).adminProfile || {}),
+                            email: value,
+                          },
+                        });
+                        createIndependentFieldHandler(
+                          "companyInfo_adminEmail",
+                          (v) =>
+                            updateSettings({
+                              adminProfile: {
+                                ...((settings as any).adminProfile || {}),
+                                email: v,
+                              },
+                            }),
+                        )(value);
+                      }}
+                    />
+                    <FieldSaveIndicator
+                      status={fieldStatus["companyInfo_adminEmail"] || "idle"}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <h3 className="text-lg font-bold text-foreground mb-4">
                 Company Information
               </h3>
@@ -174,96 +539,903 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Company Name
                   </label>
-                  <Input
-                    value={settings.companyInfo?.name || ""}
-                    onChange={(e) =>
-                      updateSettings({
-                        companyInfo: {
-                          ...settings.companyInfo,
-                          name: e.target.value,
-                        },
-                      })
-                    }
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={settings.companyInfo?.name || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateSettings({
+                          companyInfo: {
+                            ...settings.companyInfo,
+                            name: value,
+                          },
+                        });
+                        createIndependentFieldHandler("companyInfo_name", (v) =>
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              name: v,
+                            },
+                          }),
+                        )(value);
+                      }}
+                    />
+                    <FieldSaveIndicator
+                      status={fieldStatus["companyInfo_name"] || "idle"}
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Address
                   </label>
-                  <Input
-                    value={settings.companyInfo?.address || ""}
-                    onChange={(e) =>
-                      updateSettings({
-                        companyInfo: {
-                          ...settings.companyInfo,
-                          address: e.target.value,
-                        },
-                      })
-                    }
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Street / Address"
+                        value={settings.companyInfo?.address?.address || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              address: {
+                                ...(settings.companyInfo?.address || {}),
+                                address: value,
+                              },
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_address",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  address: {
+                                    ...(settings.companyInfo?.address || {}),
+                                    address: v,
+                                  },
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_address"] || "idle"}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Estate / Area"
+                        value={settings.companyInfo?.address?.estate || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              address: {
+                                ...(settings.companyInfo?.address || {}),
+                                estate: value,
+                              },
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_estate",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  address: {
+                                    ...(settings.companyInfo?.address || {}),
+                                    estate: v,
+                                  },
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_estate"] || "idle"}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="City"
+                        value={settings.companyInfo?.address?.city || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              address: {
+                                ...(settings.companyInfo?.address || {}),
+                                city: value,
+                              },
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_city",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  address: {
+                                    ...(settings.companyInfo?.address || {}),
+                                    city: v,
+                                  },
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_city"] || "idle"}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Country"
+                        value={settings.companyInfo?.address?.country || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              address: {
+                                ...(settings.companyInfo?.address || {}),
+                                country: value,
+                              },
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_country",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  address: {
+                                    ...(settings.companyInfo?.address || {}),
+                                    country: v,
+                                  },
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_country"] || "idle"}
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Phone
                     </label>
-                    <Input
-                      value={settings.companyInfo?.phone || ""}
-                      onChange={(e) =>
-                        updateSettings({
-                          companyInfo: {
-                            ...settings.companyInfo,
-                            phone: e.target.value,
-                          },
-                        })
-                      }
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={settings.companyInfo?.phone || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              phone: value,
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_phone",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  phone: v,
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_phone"] || "idle"}
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Email
                     </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="email"
+                        value={settings.companyInfo?.email || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          updateSettings({
+                            companyInfo: {
+                              ...settings.companyInfo,
+                              email: value,
+                            },
+                          });
+                          createIndependentFieldHandler(
+                            "companyInfo_email",
+                            (v) =>
+                              updateSettings({
+                                companyInfo: {
+                                  ...settings.companyInfo,
+                                  email: v,
+                                },
+                              }),
+                          )(value);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={fieldStatus["companyInfo_email"] || "idle"}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Company Logo URL
+                  </label>
+                  <div className="flex items-center gap-2">
                     <Input
-                      type="email"
-                      value={settings.companyInfo?.email || ""}
-                      onChange={(e) =>
+                      placeholder="https://.../logo.png"
+                      value={settings.companyInfo?.logo?.url || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
                         updateSettings({
                           companyInfo: {
                             ...settings.companyInfo,
-                            email: e.target.value,
+                            logo: {
+                              ...(settings.companyInfo?.logo || {}),
+                              url: value,
+                            },
                           },
-                        })
-                      }
+                        });
+                        createIndependentFieldHandler(
+                          "companyInfo_logoUrl",
+                          (v) =>
+                            updateSettings({
+                              companyInfo: {
+                                ...settings.companyInfo,
+                                logo: {
+                                  ...(settings.companyInfo?.logo || {}),
+                                  url: v,
+                                },
+                              },
+                            }),
+                        )(value);
+                      }}
+                    />
+                    <FieldSaveIndicator
+                      status={fieldStatus["companyInfo_logoUrl"] || "idle"}
                     />
                   </div>
+                  {settings.companyInfo?.logo?.url && (
+                    <div className="mt-3">
+                      <img
+                        src={settings.companyInfo.logo.url}
+                        alt="Company logo preview"
+                        className="h-16 w-16 object-contain rounded"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     License Number
                   </label>
-                  <Input
-                    value={settings.companyInfo?.licenseNumber || ""}
-                    onChange={(e) =>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={settings.companyInfo?.licenseNumber || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateSettings({
+                          companyInfo: {
+                            ...settings.companyInfo,
+                            licenseNumber: value,
+                          },
+                        });
+                        createIndependentFieldHandler(
+                          "companyInfo_licenseNumber",
+                          (v) =>
+                            updateSettings({
+                              companyInfo: {
+                                ...settings.companyInfo,
+                                licenseNumber: v,
+                              },
+                            }),
+                        )(value);
+                      }}
+                    />
+                    <FieldSaveIndicator
+                      status={
+                        fieldStatus["companyInfo_licenseNumber"] || "idle"
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Finance Tab (placeholder) */}
+          <TabsContent value="finance" className="p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Finance Settings
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Currency and payment method configuration.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Default Currency
+                </label>
+                <div className="w-64">
+                  <Command>
+                    <CommandInput placeholder="Search currency or country..." />
+                    <CommandList>
+                      {currencies.length === 0 && (
+                        <CommandEmpty>No currencies</CommandEmpty>
+                      )}
+                      {currencies.map((c) => (
+                        <CommandItem
+                          key={`${c.country}-${c.code}`}
+                          onSelect={() => {
+                            const value = c.code;
+                            updateSettings({
+                              tenantPortalSettings: {
+                                ...settings.tenantPortalSettings,
+                                financeSettings: {
+                                  ...settings.tenantPortalSettings
+                                    ?.financeSettings,
+                                  currency: value,
+                                },
+                              },
+                            });
+                            // persist independently
+                            createIndependentFieldHandler(
+                              "financeSettings_currency",
+                              (v) =>
+                                updateSettings({
+                                  tenantPortalSettings: {
+                                    ...settings.tenantPortalSettings,
+                                    financeSettings: {
+                                      ...settings.tenantPortalSettings
+                                        ?.financeSettings,
+                                      currency: v,
+                                    },
+                                  },
+                                }),
+                            )(value);
+                          }}
+                        >
+                          <div className="flex justify-between w-full">
+                            <div>
+                              <div className="font-medium">
+                                {c.code} — {c.currency}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {c.country}
+                              </div>
+                            </div>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandList>
+                  </Command>
+                  <div className="mt-2 text-sm flex items-center gap-2">
+                    <div>
+                      Selected:{" "}
+                      {settings.tenantPortalSettings?.financeSettings
+                        ?.currency || "USD"}
+                    </div>
+                    <FieldSaveIndicator
+                      status={fieldStatus["financeSettings_currency"] || "idle"}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Payment Methods
+                </label>
+                <div className="space-y-2">
+                  {(
+                    settings.tenantPortalSettings?.financeSettings
+                      ?.paymentMethods || ([] as any[])
+                  ).map((method: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-muted p-2 rounded"
+                    >
+                      <div className="text-sm capitalize">{method.type}</div>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={method.enabled}
+                          disabled={
+                            !(
+                              settings.tenantPortalSettings?.featureToggles
+                                ?.paymentPortal ?? true
+                            )
+                          }
+                          onCheckedChange={(checked) => {
+                            const updatedMethods = [
+                              ...(
+                                settings.tenantPortalSettings?.financeSettings
+                                  ?.paymentMethods || []
+                              ).slice(0, idx),
+                              { ...method, enabled: checked },
+                              ...(
+                                settings.tenantPortalSettings?.financeSettings
+                                  ?.paymentMethods || []
+                              ).slice(idx + 1),
+                            ];
+
+                            updateSettings({
+                              tenantPortalSettings: {
+                                ...settings.tenantPortalSettings,
+                                financeSettings: {
+                                  ...settings.tenantPortalSettings
+                                    ?.financeSettings,
+                                  paymentMethods: updatedMethods,
+                                },
+                              },
+                            });
+
+                            createIndependentFieldHandler(
+                              "financeSettings_paymentMethods",
+                              (v) =>
+                                updateSettings({
+                                  tenantPortalSettings: {
+                                    ...settings.tenantPortalSettings,
+                                    financeSettings: {
+                                      ...settings.tenantPortalSettings
+                                        ?.financeSettings,
+                                      paymentMethods: v,
+                                    },
+                                  },
+                                }),
+                            )(updatedMethods);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Features Tab (placeholder) */}
+          <TabsContent value="features" className="p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                System Features
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Enable or disable platform-wide features.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Map
+                </label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.systemFeatures?.map ?? true}
+                    onCheckedChange={(checked) => {
                       updateSettings({
-                        companyInfo: {
-                          ...settings.companyInfo,
-                          licenseNumber: e.target.value,
+                        systemFeatures: {
+                          ...(settings.systemFeatures || {}),
+                          map: checked,
                         },
-                      })
-                    }
+                      });
+
+                      createIndependentFieldHandler("systemFeatures_map", (v) =>
+                        updateSettings({
+                          systemFeatures: {
+                            ...(settings.systemFeatures || {}),
+                            map: v,
+                          },
+                        }),
+                      )(checked);
+                    }}
+                  />
+                  <FieldSaveIndicator
+                    status={fieldStatus["systemFeatures_map"] || "idle"}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Messaging
+                </label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.systemFeatures?.messaging ?? true}
+                    onCheckedChange={(checked) => {
+                      updateSettings({
+                        systemFeatures: {
+                          ...(settings.systemFeatures || {}),
+                          messaging: checked,
+                        },
+                      });
+
+                      createIndependentFieldHandler(
+                        "systemFeatures_messaging",
+                        (v) =>
+                          updateSettings({
+                            systemFeatures: {
+                              ...(settings.systemFeatures || {}),
+                              messaging: v,
+                            },
+                          }),
+                      )(checked);
+                    }}
+                  />
+                  <FieldSaveIndicator
+                    status={fieldStatus["systemFeatures_messaging"] || "idle"}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Analytics
+                </label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.systemFeatures?.analytics ?? false}
+                    onCheckedChange={(checked) => {
+                      updateSettings({
+                        systemFeatures: {
+                          ...(settings.systemFeatures || {}),
+                          analytics: checked,
+                        },
+                      });
+
+                      createIndependentFieldHandler(
+                        "systemFeatures_analytics",
+                        (v) =>
+                          updateSettings({
+                            systemFeatures: {
+                              ...(settings.systemFeatures || {}),
+                              analytics: v,
+                            },
+                          }),
+                      )(checked);
+                    }}
+                  />
+                  <FieldSaveIndicator
+                    status={fieldStatus["systemFeatures_analytics"] || "idle"}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Reporting
+                </label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.systemFeatures?.reporting ?? false}
+                    onCheckedChange={(checked) => {
+                      updateSettings({
+                        systemFeatures: {
+                          ...(settings.systemFeatures || {}),
+                          reporting: checked,
+                        },
+                      });
+
+                      createIndependentFieldHandler(
+                        "systemFeatures_reporting",
+                        (v) =>
+                          updateSettings({
+                            systemFeatures: {
+                              ...(settings.systemFeatures || {}),
+                              reporting: v,
+                            },
+                          }),
+                      )(checked);
+                    }}
+                  />
+                  <FieldSaveIndicator
+                    status={fieldStatus["systemFeatures_reporting"] || "idle"}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">
+                  Auditing
+                </label>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={settings.systemFeatures?.auditing ?? false}
+                    onCheckedChange={(checked) => {
+                      updateSettings({
+                        systemFeatures: {
+                          ...(settings.systemFeatures || {}),
+                          auditing: checked,
+                        },
+                      });
+
+                      createIndependentFieldHandler(
+                        "systemFeatures_auditing",
+                        (v) =>
+                          updateSettings({
+                            systemFeatures: {
+                              ...(settings.systemFeatures || {}),
+                              auditing: v,
+                            },
+                          }),
+                      )(checked);
+                    }}
+                  />
+                  <FieldSaveIndicator
+                    status={fieldStatus["systemFeatures_auditing"] || "idle"}
                   />
                 </div>
               </div>
             </div>
+          </TabsContent>
 
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Company Settings"}
-              </Button>
+          {/* Security Tab (placeholder) */}
+          <TabsContent value="security" className="p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-foreground mb-4">
+                Security Settings
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Admin password, auto-logout, account lockout and deletion.
+              </p>
+            </div>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4 border border-border">
+                  <h4 className="font-semibold mb-2">Admin Password</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Change the administrator password (local only).
+                  </p>
+                  <PasswordChangeForm
+                    settings={settings}
+                    updateSettings={updateSettings}
+                  />
+                </Card>
+
+                <Card className="p-4 border border-border">
+                  <h4 className="font-semibold mb-2">Auto Logout</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Automatically log out tenants after inactivity.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          !!settings.tenantPortalSettings?.securitySettings
+                            ?.autoLogoutInactivityMinutes
+                        }
+                        onCheckedChange={(checked) => {
+                          const newVal = checked
+                            ? settings.tenantPortalSettings?.securitySettings
+                                ?.autoLogoutInactivityMinutes || 30
+                            : undefined;
+
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              securitySettings: {
+                                ...settings.tenantPortalSettings
+                                  ?.securitySettings,
+                                autoLogoutInactivityMinutes: newVal,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalSecurity_autoLogoutInactivityMinutes",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  securitySettings: {
+                                    ...settings.tenantPortalSettings
+                                      ?.securitySettings,
+                                    autoLogoutInactivityMinutes: v,
+                                  },
+                                },
+                              }),
+                          )(newVal);
+                        }}
+                      />
+                      <label className="text-sm">Enable Auto Logout</label>
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus[
+                            "tenantPortalSecurity_autoLogoutInactivityMinutes"
+                          ] || "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                  {settings.tenantPortalSettings?.securitySettings
+                    ?.autoLogoutInactivityMinutes !== undefined && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Inactivity (minutes)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={
+                            settings.tenantPortalSettings?.securitySettings
+                              ?.autoLogoutInactivityMinutes || 30
+                          }
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            updateSettings({
+                              tenantPortalSettings: {
+                                ...settings.tenantPortalSettings,
+                                securitySettings: {
+                                  ...settings.tenantPortalSettings
+                                    ?.securitySettings,
+                                  autoLogoutInactivityMinutes: value,
+                                },
+                              },
+                            });
+
+                            createIndependentFieldHandler(
+                              "tenantPortalSecurity_autoLogoutInactivityMinutes",
+                              (v) =>
+                                updateSettings({
+                                  tenantPortalSettings: {
+                                    ...settings.tenantPortalSettings,
+                                    securitySettings: {
+                                      ...settings.tenantPortalSettings
+                                        ?.securitySettings,
+                                      autoLogoutInactivityMinutes: v,
+                                    },
+                                  },
+                                }),
+                            )(value);
+                          }}
+                        />
+                        <FieldSaveIndicator
+                          status={
+                            fieldStatus[
+                              "tenantPortalSecurity_autoLogoutInactivityMinutes"
+                            ] || "idle"
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="p-4 border border-border">
+                  <h4 className="font-semibold mb-2">Tenant Account Lockout</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Automatically lock tenant accounts after repeated failed
+                    login attempts.
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm">Enable Auto Lock</label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          !!settings.tenantPortalSettings?.securitySettings
+                            ?.autoLockEnabled
+                        }
+                        onCheckedChange={(checked) => {
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              securitySettings: {
+                                ...settings.tenantPortalSettings
+                                  ?.securitySettings,
+                                autoLockEnabled: checked,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalSecurity_autoLockEnabled",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  securitySettings: {
+                                    ...settings.tenantPortalSettings
+                                      ?.securitySettings,
+                                    autoLockEnabled: v,
+                                  },
+                                },
+                              }),
+                          )(checked);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus["tenantPortalSecurity_autoLockEnabled"] ||
+                          "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                  {settings.tenantPortalSettings?.securitySettings
+                    ?.autoLockEnabled && (
+                    <div className="mt-3">
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Failed Login Threshold
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={
+                            settings.tenantPortalSettings?.securitySettings
+                              ?.failedLoginThreshold || 5
+                          }
+                          onChange={(e) => {
+                            const value = Number(e.target.value);
+                            updateSettings({
+                              tenantPortalSettings: {
+                                ...settings.tenantPortalSettings,
+                                securitySettings: {
+                                  ...settings.tenantPortalSettings
+                                    ?.securitySettings,
+                                  failedLoginThreshold: value,
+                                },
+                              },
+                            });
+
+                            createIndependentFieldHandler(
+                              "tenantPortalSecurity_failedLoginThreshold",
+                              (v) =>
+                                updateSettings({
+                                  tenantPortalSettings: {
+                                    ...settings.tenantPortalSettings,
+                                    securitySettings: {
+                                      ...settings.tenantPortalSettings
+                                        ?.securitySettings,
+                                      failedLoginThreshold: v,
+                                    },
+                                  },
+                                }),
+                            )(value);
+                          }}
+                        />
+                        <FieldSaveIndicator
+                          status={
+                            fieldStatus[
+                              "tenantPortalSecurity_failedLoginThreshold"
+                            ] || "idle"
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Card>
+
+                <Card className="p-4 border border-red-400 bg-red-50">
+                  <h4 className="font-semibold mb-2 text-red-700">
+                    Account Deletion
+                  </h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Permanently delete all local data. This action cannot be
+                    undone.
+                  </p>
+                  <AccountDeletionCard />
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
@@ -353,16 +1525,6 @@ export default function SettingsPage() {
                 ),
               )}
             </div>
-
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Property Settings"}
-              </Button>
-            </div>
           </TabsContent>
 
           {/* Tenants Tab */}
@@ -438,16 +1600,6 @@ export default function SettingsPage() {
                   </Card>
                 ),
               )}
-            </div>
-
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Tenant Settings"}
-              </Button>
             </div>
           </TabsContent>
 
@@ -547,16 +1699,6 @@ export default function SettingsPage() {
                 </div>
               </Card>
             </div>
-
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Compliance Settings"}
-              </Button>
-            </div>
           </TabsContent>
 
           {/* Notifications Tab */}
@@ -565,604 +1707,204 @@ export default function SettingsPage() {
               <h3 className="text-lg font-bold text-foreground mb-4">
                 Notification Templates
               </h3>
-              {settings.notifications?.templates &&
-                Object.entries(settings.notifications.templates).map(
-                  ([key, template]: [string, any]) => (
-                    <Card key={key} className="border border-border p-4 mb-4">
-                      <h4 className="font-semibold text-foreground mb-3 capitalize">
-                        {key.replace(/([A-Z])/g, " $1")}
-                      </h4>
-                      <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    key: "rentDue",
+                    title: "Rent Due",
+                    description: "Notify tenants when rent is due.",
+                  },
+                  {
+                    key: "messages",
+                    title: "Messages",
+                    description: "Notify users of new messages.",
+                  },
+                  {
+                    key: "failedLogin",
+                    title: "Failed Login Attempt",
+                    description:
+                      "Alert admins/tenants on failed login attempts.",
+                  },
+                  {
+                    key: "rentPayments",
+                    title: "Rent Payments",
+                    description:
+                      "Notify when rent payments are received or fail.",
+                  },
+                  {
+                    key: "tenantProfile",
+                    title: "Tenant Profile Change",
+                    description: "Tenant creation, update & deletion events.",
+                  },
+                  {
+                    key: "propertyProfile",
+                    title: "Property Profile Update",
+                    description: "Property creation, update & deletion events.",
+                  },
+                  {
+                    key: "maintenance",
+                    title: "Maintenance",
+                    description: "Maintenance request creation and approvals.",
+                  },
+                  {
+                    key: "expenses",
+                    title: "Expenses",
+                    description: "Expense records created or updated.",
+                  },
+                ].map((n) => {
+                  const channelPref = settings.notifications?.templates?.[
+                    n.key
+                  ] ?? { channels: ["email", "in_app"] };
+                  const emailEnabled = (channelPref.channels || []).includes(
+                    "email",
+                  );
+                  const inAppEnabled = (channelPref.channels || []).includes(
+                    "in_app",
+                  );
+                  return (
+                    <Card key={n.key} className="border border-border p-4">
+                      <div className="flex items-start justify-between">
                         <div>
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            Subject
-                          </label>
-                          <Input
-                            value={template.subject}
-                            onChange={(e) =>
-                              updateSettings({
-                                notifications: {
-                                  ...settings.notifications,
-                                  templates: {
-                                    ...settings.notifications?.templates,
-                                    [key]: {
-                                      ...template,
-                                      subject: e.target.value,
-                                    },
-                                  },
-                                },
-                              })
-                            }
-                          />
+                          <h4 className="font-semibold text-foreground mb-2">
+                            {n.title}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {n.description}
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            Body
-                          </label>
-                          <textarea
-                            value={template.body}
-                            onChange={(e) =>
-                              updateSettings({
-                                notifications: {
-                                  ...settings.notifications,
-                                  templates: {
-                                    ...settings.notifications?.templates,
-                                    [key]: {
-                                      ...template,
-                                      body: e.target.value,
+                        <div className="flex flex-col items-end gap-3">
+                          <div className="flex items-center gap-3">
+                            <label className="text-sm">Email</label>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={emailEnabled}
+                                onCheckedChange={(checked) => {
+                                  const existing =
+                                    settings.notifications?.templates || {};
+                                  const tmpl = existing[n.key] || {
+                                    subject: "",
+                                    body: "",
+                                    channels: [],
+                                  };
+                                  const channels = new Set(tmpl.channels || []);
+                                  if (checked) channels.add("email");
+                                  else channels.delete("email");
+                                  const updated = {
+                                    ...existing,
+                                    [n.key]: {
+                                      ...tmpl,
+                                      channels: Array.from(channels),
                                     },
-                                  },
-                                },
-                              })
-                            }
-                            className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                            rows={3}
-                          />
+                                  };
+                                  updateSettings({
+                                    notifications: {
+                                      ...settings.notifications,
+                                      templates: updated,
+                                    },
+                                  });
+
+                                  createIndependentFieldHandler(
+                                    `notifications_templates_${n.key}`,
+                                    (v) =>
+                                      updateSettings({
+                                        notifications: {
+                                          ...settings.notifications,
+                                          templates: v,
+                                        },
+                                      }),
+                                  )(updated);
+                                }}
+                              />
+                              <FieldSaveIndicator
+                                status={
+                                  fieldStatus[
+                                    `notifications_templates_${n.key}`
+                                  ] || "idle"
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <label className="text-sm">In-app</label>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={inAppEnabled}
+                                onCheckedChange={(checked) => {
+                                  const existing =
+                                    settings.notifications?.templates || {};
+                                  const tmpl = existing[n.key] || {
+                                    subject: "",
+                                    body: "",
+                                    channels: [],
+                                  };
+                                  const channels = new Set(tmpl.channels || []);
+                                  if (checked) channels.add("in_app");
+                                  else channels.delete("in_app");
+                                  const updated = {
+                                    ...existing,
+                                    [n.key]: {
+                                      ...tmpl,
+                                      channels: Array.from(channels),
+                                    },
+                                  };
+                                  updateSettings({
+                                    notifications: {
+                                      ...settings.notifications,
+                                      templates: updated,
+                                    },
+                                  });
+
+                                  createIndependentFieldHandler(
+                                    `notifications_templates_${n.key}`,
+                                    (v) =>
+                                      updateSettings({
+                                        notifications: {
+                                          ...settings.notifications,
+                                          templates: v,
+                                        },
+                                      }),
+                                  )(updated);
+                                }}
+                              />
+                              <FieldSaveIndicator
+                                status={
+                                  fieldStatus[
+                                    `notifications_templates_${n.key}`
+                                  ] || "idle"
+                                }
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </Card>
-                  ),
-                )}
-            </div>
-
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Notification Settings"}
-              </Button>
+                  );
+                })}
+              </div>
             </div>
           </TabsContent>
 
-          {/* Portal Tab with Collapsible Sections */}
+          {/* Portal Tab with simplified sections per text.txt */}
           <TabsContent value="portal" className="p-6 space-y-4">
             <div>
               <h3 className="text-lg font-bold text-foreground mb-2">
                 Tenant Portal Settings
               </h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Configure portal features, security, and notification
-                preferences for tenants
+                Configure portal features and security for tenants
               </p>
             </div>
 
-            {/* Notification Preferences Collapsible */}
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-blue-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <Bell className="w-4 h-4" />
-                    <span>Notification Preferences</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Email Notifications
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.notificationPreferences
-                          ?.email ?? true
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            notificationPreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.notificationPreferences,
-                              email: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      SMS Notifications
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.notificationPreferences
-                          ?.sms ?? false
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            notificationPreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.notificationPreferences,
-                              sms: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      In-App Notifications
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.notificationPreferences
-                          ?.inApp ?? true
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            notificationPreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.notificationPreferences,
-                              inApp: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Payment Settings Collapsible */}
+            {/* Portal Features Collapsible */}
             <Collapsible>
               <CollapsibleTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full justify-between border-l-4 border-l-green-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <DollarSign className="w-4 h-4" />
-                    <span>Payment Settings</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Enable Autopay
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.paymentSettings
-                          ?.enableAutopay ?? false
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            paymentSettings: {
-                              ...settings.tenantPortalSettings?.paymentSettings,
-                              enableAutopay: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  {settings.tenantPortalSettings?.paymentSettings
-                    ?.enableAutopay && (
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Autopay Threshold ($)
-                      </label>
-                      <Input
-                        type="number"
-                        value={
-                          settings.tenantPortalSettings?.paymentSettings
-                            ?.autopayThreshold || 0
-                        }
-                        onChange={(e) =>
-                          updateSettings({
-                            tenantPortalSettings: {
-                              ...settings.tenantPortalSettings,
-                              paymentSettings: {
-                                ...settings.tenantPortalSettings
-                                  ?.paymentSettings,
-                                autopayThreshold: Number(e.target.value),
-                              },
-                            },
-                          })
-                        }
-                      />
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground">
-                      Accepted Payment Methods
-                    </label>
-                    {settings.tenantPortalSettings?.paymentSettings?.acceptedMethods?.map(
-                      (method, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between bg-muted p-2 rounded"
-                        >
-                          <span className="text-sm capitalize">
-                            {method.type}
-                          </span>
-                          <Switch
-                            checked={method.enabled}
-                            onCheckedChange={(checked) =>
-                              updateSettings({
-                                tenantPortalSettings: {
-                                  ...settings.tenantPortalSettings,
-                                  paymentSettings: {
-                                    ...settings.tenantPortalSettings
-                                      ?.paymentSettings,
-                                    acceptedMethods: [
-                                      ...(
-                                        settings.tenantPortalSettings
-                                          ?.paymentSettings?.acceptedMethods ??
-                                        []
-                                      ).slice(0, idx),
-                                      { ...method, enabled: checked },
-                                      ...(
-                                        settings.tenantPortalSettings
-                                          ?.paymentSettings?.acceptedMethods ??
-                                        []
-                                      ).slice(idx + 1),
-                                    ],
-                                  },
-                                },
-                              })
-                            }
-                          />
-                        </div>
-                      ),
-                    )}
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Document Access Collapsible */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-purple-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-4 h-4" />
-                    <span>Document Access</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Allow Document Uploads
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.documentAccess
-                          ?.allowUploads ?? true
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            documentAccess: {
-                              ...settings.tenantPortalSettings?.documentAccess,
-                              allowUploads: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Require Approval
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.documentAccess
-                          ?.requireApproval ?? false
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            documentAccess: {
-                              ...settings.tenantPortalSettings?.documentAccess,
-                              requireApproval: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Retention Days
-                    </label>
-                    <Input
-                      type="number"
-                      value={
-                        settings.tenantPortalSettings?.documentAccess
-                          ?.retentionDays || 365
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            documentAccess: {
-                              ...settings.tenantPortalSettings?.documentAccess,
-                              retentionDays: Number(e.target.value),
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Maintenance Preferences Collapsible */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-orange-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <Wrench className="w-4 h-4" />
-                    <span>Maintenance Preferences</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Enable Maintenance Requests
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.maintenancePreferences
-                          ?.enableRequests ?? true
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            maintenancePreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.maintenancePreferences,
-                              enableRequests: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium text-foreground">
-                      Allow Emergency After Hours
-                    </label>
-                    <Switch
-                      checked={
-                        settings.tenantPortalSettings?.maintenancePreferences
-                          ?.allowEmergencyAfterHours ?? true
-                      }
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            maintenancePreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.maintenancePreferences,
-                              allowEmergencyAfterHours: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Estimated Response Time (hours)
-                    </label>
-                    <Input
-                      type="number"
-                      value={
-                        settings.tenantPortalSettings?.maintenancePreferences
-                          ?.estimatedResponseTime || 48
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            maintenancePreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.maintenancePreferences,
-                              estimatedResponseTime: Number(e.target.value),
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Feature Toggles Collapsible */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-yellow-500 hover:bg-accent"
+                  className="w-full justify-between border-l-4 border-l-teal-500 hover:bg-accent"
                 >
                   <div className="flex items-center gap-3">
                     <ToggleLeft className="w-4 h-4" />
-                    <span>Feature Toggles</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  {Object.entries(
-                    settings.tenantPortalSettings?.featureToggles || {},
-                  ).length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No tenant portal feature toggles are configured.
-                    </div>
-                  ) : (
-                    Object.entries(
-                      settings.tenantPortalSettings?.featureToggles || {},
-                    ).map(([feature, enabled]) => (
-                      <div
-                        key={feature}
-                        className="flex items-center justify-between"
-                      >
-                        <label className="text-sm font-medium text-foreground capitalize">
-                          {feature.replace(/([A-Z])/g, " $1").trim()}
-                        </label>
-                        <Switch
-                          checked={enabled as boolean}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              tenantPortalSettings: {
-                                ...settings.tenantPortalSettings,
-                                featureToggles: {
-                                  ...settings.tenantPortalSettings
-                                    ?.featureToggles,
-                                  [feature]: checked,
-                                },
-                              },
-                            })
-                          }
-                        />
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Communication Preferences Collapsible */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-cyan-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Communication Preferences</span>
-                  </div>
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Preferred Contact Method
-                    </label>
-                    <select
-                      value={
-                        settings.tenantPortalSettings?.communicationPreferences
-                          ?.preferredContactMethod || "email"
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            communicationPreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.communicationPreferences,
-                              preferredContactMethod: e.target.value as any,
-                            },
-                          },
-                        })
-                      }
-                      className="w-full px-4 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
-                    >
-                      <option value="email">Email</option>
-                      <option value="sms">SMS</option>
-                      <option value="in-app">In-App</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Timezone
-                    </label>
-                    <Input
-                      value={
-                        settings.tenantPortalSettings?.communicationPreferences
-                          ?.timezone || "UTC"
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            communicationPreferences: {
-                              ...settings.tenantPortalSettings
-                                ?.communicationPreferences,
-                              timezone: e.target.value,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Security Settings Collapsible */}
-            <Collapsible>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between border-l-4 border-l-red-500 hover:bg-accent"
-                >
-                  <div className="flex items-center gap-3">
-                    <LockIcon className="w-4 h-4" />
-                    <span>Security Settings</span>
+                    <span>Portal Features</span>
                   </div>
                   <ChevronDown className="w-4 h-4" />
                 </Button>
@@ -1171,7 +1913,211 @@ export default function SettingsPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-foreground">
-                      Allow Password Change
+                      Rent Payment
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          settings.tenantPortalSettings?.featureToggles
+                            ?.paymentPortal ?? true
+                        }
+                        onCheckedChange={(checked) => {
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              featureToggles: {
+                                ...settings.tenantPortalSettings
+                                  ?.featureToggles,
+                                paymentPortal: checked,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalFeatures_rentPayment",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  featureToggles: {
+                                    ...settings.tenantPortalSettings
+                                      ?.featureToggles,
+                                    paymentPortal: v,
+                                  },
+                                },
+                              }),
+                          )(checked);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus["tenantPortalFeatures_rentPayment"] ||
+                          "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Messaging
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          settings.tenantPortalSettings?.featureToggles
+                            ?.messages ?? true
+                        }
+                        onCheckedChange={(checked) => {
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              featureToggles: {
+                                ...settings.tenantPortalSettings
+                                  ?.featureToggles,
+                                messages: checked,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalFeatures_messages",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  featureToggles: {
+                                    ...settings.tenantPortalSettings
+                                      ?.featureToggles,
+                                    messages: v,
+                                  },
+                                },
+                              }),
+                          )(checked);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus["tenantPortalFeatures_messages"] || "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Maintenance Requests
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          settings.tenantPortalSettings?.featureToggles
+                            ?.maintenanceRequests ?? true
+                        }
+                        onCheckedChange={(checked) => {
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              featureToggles: {
+                                ...settings.tenantPortalSettings
+                                  ?.featureToggles,
+                                maintenanceRequests: checked,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalFeatures_maintenanceRequests",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  featureToggles: {
+                                    ...settings.tenantPortalSettings
+                                      ?.featureToggles,
+                                    maintenanceRequests: v,
+                                  },
+                                },
+                              }),
+                          )(checked);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus[
+                            "tenantPortalFeatures_maintenanceRequests"
+                          ] || "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Enable Eviction Notice
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={
+                          settings.tenantPortalSettings?.featureToggles
+                            ?.evictionNotice ?? false
+                        }
+                        onCheckedChange={(checked) => {
+                          updateSettings({
+                            tenantPortalSettings: {
+                              ...settings.tenantPortalSettings,
+                              featureToggles: {
+                                ...settings.tenantPortalSettings
+                                  ?.featureToggles,
+                                evictionNotice: checked,
+                              },
+                            },
+                          });
+
+                          createIndependentFieldHandler(
+                            "tenantPortalFeatures_evictionNotice",
+                            (v) =>
+                              updateSettings({
+                                tenantPortalSettings: {
+                                  ...settings.tenantPortalSettings,
+                                  featureToggles: {
+                                    ...settings.tenantPortalSettings
+                                      ?.featureToggles,
+                                    evictionNotice: v,
+                                  },
+                                },
+                              }),
+                          )(checked);
+                        }}
+                      />
+                      <FieldSaveIndicator
+                        status={
+                          fieldStatus["tenantPortalFeatures_evictionNotice"] ||
+                          "idle"
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Portal Security Collapsible */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between border-l-4 border-l-slate-500 hover:bg-accent"
+                >
+                  <div className="flex items-center gap-3">
+                    <LockIcon className="w-4 h-4" />
+                    <span>Portal Security</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 pl-4 border-l-2 border-border space-y-4 py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-foreground">
+                      Enable Password Change
                     </label>
                     <Switch
                       checked={
@@ -1192,40 +2138,14 @@ export default function SettingsPage() {
                       }
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Auto-Logout Inactivity (minutes)
-                    </label>
-                    <Input
-                      type="number"
-                      value={
-                        settings.tenantPortalSettings?.securitySettings
-                          ?.autoLogoutInactivityMinutes || 30
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            securitySettings: {
-                              ...settings.tenantPortalSettings
-                                ?.securitySettings,
-                              autoLogoutInactivityMinutes: Number(
-                                e.target.value,
-                              ),
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium text-foreground">
-                      Allow Account Deletion
+                      Enable Profile Editing
                     </label>
                     <Switch
                       checked={
                         settings.tenantPortalSettings?.securitySettings
-                          ?.allowAccountDeletion ?? false
+                          ?.allowProfileEditing ?? true
                       }
                       onCheckedChange={(checked) =>
                         updateSettings({
@@ -1234,31 +2154,7 @@ export default function SettingsPage() {
                             securitySettings: {
                               ...settings.tenantPortalSettings
                                 ?.securitySettings,
-                              allowAccountDeletion: checked,
-                            },
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Password Expiration (days)
-                    </label>
-                    <Input
-                      type="number"
-                      value={
-                        settings.tenantPortalSettings?.securitySettings
-                          ?.passwordExpirationDays || 90
-                      }
-                      onChange={(e) =>
-                        updateSettings({
-                          tenantPortalSettings: {
-                            ...settings.tenantPortalSettings,
-                            securitySettings: {
-                              ...settings.tenantPortalSettings
-                                ?.securitySettings,
-                              passwordExpirationDays: Number(e.target.value),
+                              allowProfileEditing: checked,
                             },
                           },
                         })
@@ -1268,16 +2164,6 @@ export default function SettingsPage() {
                 </div>
               </CollapsibleContent>
             </Collapsible>
-
-            <div className="border-t border-border pt-6 flex justify-end gap-3">
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                {saving ? "Saving..." : "Save Portal Settings"}
-              </Button>
-            </div>
           </TabsContent>
         </Tabs>
       </Card>

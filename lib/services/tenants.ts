@@ -72,6 +72,7 @@ export interface TenantRecord {
   documentDelivery?: 'email' | 'in-app' | 'both'
   moveOutNotice?: MoveOutNotice
   avatar?: { url?: string; public_id?: string }
+  isBlocked?: boolean
 }
 
 export function normalizeTenantRecord(tenant: any): TenantRecord {

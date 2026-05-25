@@ -34,7 +34,7 @@ import {
 import { createTransaction } from "@/app/lib/transactions-client";
 import { listPayments } from "@/lib/services/payments";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
-
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -43,10 +43,12 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [activeCurrency, setActiveCurrency] = useState("USD");
 
   // Load real data on mount
   useEffect(() => {
     setIsHydrated(true);
+    setActiveCurrency(getActiveCurrency());
     setPayments(listPayments());
     const onPaymentsUpdated = () => setPayments(listPayments());
     if (typeof window !== "undefined")
@@ -303,7 +305,7 @@ export default function DashboardPage() {
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 {isHydrated
-                  ? `$${(metrics.totalMonthlyRevenue / 1000).toFixed(1)}K`
+                  ? formatCurrency(metrics.totalMonthlyRevenue, activeCurrency)
                   : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
@@ -365,7 +367,7 @@ export default function DashboardPage() {
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 {isHydrated
-                  ? `$${(metrics.ytdProfit / 1000).toFixed(0)}K`
+                  ? formatCurrency(metrics.ytdProfit, activeCurrency)
                   : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">

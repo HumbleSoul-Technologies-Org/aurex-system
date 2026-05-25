@@ -1,7 +1,8 @@
-import { apiRequest, queryClient } from '@/lib/query-client'
+import { apiRequest } from '@/lib/query-client'
 
 export interface ExpenseRecord {
   id: string
+  type?: 'expense' | 'rent' | string
   category?: string
   expenseType?: 'residential' | 'commercial' | 'both'
   amount: number
@@ -32,6 +33,14 @@ export interface ExpenseRecord {
   updatedAt?: string
 }
 
+function normalizeExpenseRecord(expense: any): ExpenseRecord {
+  return {
+    ...expense,
+    id: expense.id || expense._id,
+    type: expense.type || 'expense',
+  } as ExpenseRecord
+}
+
 export async function createExpenseApi(
   payload: Partial<ExpenseRecord>,
   token?: string,
@@ -39,10 +48,7 @@ export async function createExpenseApi(
   const res = await apiRequest('POST', '/expenses/create', payload, token)
   const json = await res.json()
   const exp = json.expense || json
-  return {
-    ...exp,
-    id: exp.id || exp._id,
-  } as ExpenseRecord
+  return normalizeExpenseRecord(exp)
 }
 
 export async function getExpensesByProperty(
@@ -51,7 +57,7 @@ export async function getExpensesByProperty(
 ): Promise<ExpenseRecord[]> {
   const res = await apiRequest('GET', `/expenses/property/${propertyId}/all`, undefined, token)
   const json = await res.json()
-  return (json || []).map((e: any) => ({ ...e, id: e.id || e._id })) as ExpenseRecord[]
+  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
 }
 
 export async function getExpensesByTenant(
@@ -60,13 +66,13 @@ export async function getExpensesByTenant(
 ): Promise<ExpenseRecord[]> {
   const res = await apiRequest('GET', `/expenses/tenant/${tenantId}/all`, undefined, token)
   const json = await res.json()
-  return (json || []).map((e: any) => ({ ...e, id: e.id || e._id })) as ExpenseRecord[]
+  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
 }
 
 export async function getAllExpenses(token?: string): Promise<ExpenseRecord[]> {
   const res = await apiRequest('GET', `/expenses/all`, undefined, token)
   const json = await res.json()
-  return (json || []).map((e: any) => ({ ...e, id: e.id || e._id })) as ExpenseRecord[]
+  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
 }
 
 export async function updateExpenseApi(
@@ -76,7 +82,8 @@ export async function updateExpenseApi(
 ): Promise<ExpenseRecord> {
   const res = await apiRequest('PUT', `/expenses/${id}/update`, patch, token)
   const json = await res.json()
-  return json.expense as ExpenseRecord
+  const exp = json.expense || json
+  return normalizeExpenseRecord(exp)
 }
 
 export async function deleteExpenseApi(id: string, token?: string): Promise<boolean> {

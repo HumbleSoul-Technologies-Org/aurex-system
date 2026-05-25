@@ -7,10 +7,18 @@ export interface SystemSettings {
   version: string
   companyInfo?: {
     name?: string
-    address?: string
+    address?: {
+      address?: string
+      estate?: string
+      city?: string
+      country?: string
+    }
     phone?: string
     email?: string
-    logoUrl?: string
+    logo?: {
+      url?: string
+      public_id?: string
+    }
     licenseNumber?: string
   }
   propertyTypeDefaults: {
@@ -72,6 +80,13 @@ export interface SystemSettings {
     >
   }
   tenantPortalSettings?: Partial<TenantPortalSettings>
+  systemFeatures?: {
+    map?: boolean
+    messaging?: boolean
+    analytics?: boolean
+    reporting?: boolean
+    auditing?: boolean
+  }
   createdAt?: string
   updatedAt?: string
   lastMigrationDate?: string
@@ -127,6 +142,7 @@ export interface TenantPortalSettings {
     messages: boolean
     announcements: boolean
     leaseInfo: boolean
+    evictionNotice?: boolean
   }
   communicationPreferences: {
     preferredContactMethod: 'email' | 'sms' | 'in-app'
@@ -138,12 +154,24 @@ export interface TenantPortalSettings {
       endTime?: string
     }
   }
+  financeSettings?: {
+    currency: string
+    exchangeRates: Record<string, number>
+    paymentMethods: Array<{
+      type: string
+      enabled: boolean
+      processingFee: number
+    }>
+  }
   securitySettings: {
     allowPasswordChange: boolean
     autoLogoutInactivityMinutes?: number
     allowAccountDeletion: boolean
     requirePasswordReset?: boolean
     passwordExpirationDays?: number
+    allowProfileEditing?: boolean
+    autoLockEnabled?: boolean
+    failedLoginThreshold?: number
   }
 }
 

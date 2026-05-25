@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Trash2,
 } from "lucide-react";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 import {
   Dialog,
   DialogContent,
@@ -55,10 +56,15 @@ interface MaintenanceRequestDisplay {
 
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [rawRequests, setRawRequests] = useState<MaintenanceRequest[]>([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const { tenants: allTenants, properties: allProperties } = useAppData();
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   const loadMaintenanceRequests = useCallback(async () => {
     setIsLoadingRequests(true);
@@ -124,14 +130,18 @@ export default function MaintenancePage() {
     setExpenseDialogOpen(true);
   };
 
-  const handleExpenseSubmit = async (formData: any) => {
+  const handleExpenseSubmit = async (expense: {
+    id: string;
+    amount: number;
+  }) => {
     if (!selectedRequestId) return;
 
     try {
-      // Update maintenance request to "assigned" status with the expense transaction ID
+      // Update maintenance request to "assigned" status with the expense transaction ID and cost
       await updateMaintenanceRequestById(selectedRequestId, {
         status: "assigned",
-        transactionId: formData.transactionId, // This will be set by AddExpenseForm
+        transactionId: expense.id,
+        cost: expense.amount,
       });
 
       // Close dialog and refresh
@@ -264,7 +274,8 @@ export default function MaintenancePage() {
           {(request.status === "assigned" ||
             request.status === "completed") && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              Mantainance costs: ${request.cost}
+              Mantainance costs:{" "}
+              {formatCurrency(request.cost ?? 0, activeCurrency)}
             </div>
           )}
 
@@ -372,10 +383,10 @@ export default function MaintenancePage() {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Total Cost</p>
               <p className="text-2xl font-bold text-foreground">
-                $
-                {enrichedRequests
-                  .reduce((sum, r) => sum + (r.cost || 0), 0)
-                  .toLocaleString()}
+                {formatCurrency(
+                  enrichedRequests.reduce((sum, r) => sum + (r.cost || 0), 0),
+                  activeCurrency,
+                )}
               </p>
             </div>
             <DollarSign className="w-8 h-8 text-primary/60" />
@@ -544,7 +555,7 @@ export default function MaintenancePage() {
                     </td>
                     <td className="px-6 py-4 font-semibold text-foreground">
                       {request.cost !== null && request.cost !== undefined
-                        ? `$${request.cost.toLocaleString()}`
+                        ? formatCurrency(request.cost, activeCurrency)
                         : "—"}
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">

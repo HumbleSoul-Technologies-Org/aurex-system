@@ -64,6 +64,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 
 interface TenantDetailPageProps {
   params: Promise<{
@@ -74,6 +75,7 @@ interface TenantDetailPageProps {
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const { id } = use(params);
   const { properties, tenants } = useAppData();
+  const [activeCurrency, setActiveCurrency] = useState("USD");
   const [tenant, setTenant] = useState<any | null>(null);
   const [property, setProperty] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -112,6 +114,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
     return sorted[0]?.date || "";
   };
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   useEffect(() => {
     const t = tenants.find((item) => item.id === id || item._id === id);
@@ -562,7 +568,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     Monthly Rent
                   </p>
                   <p className="text-lg font-semibold text-foreground">
-                    ${(tenant.rentAmount ?? 0).toLocaleString()}
+                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
                   </p>
                 </div>
                 <div>
@@ -823,7 +829,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     Monthly Rent
                   </p>
                   <p className="text-2xl font-bold text-foreground">
-                    ${(tenant.rentAmount ?? 0).toLocaleString()}
+                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -831,7 +837,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     Annual Rent
                   </p>
                   <p className="text-2xl font-bold text-foreground">
-                    ${((tenant.rentAmount ?? 0) * 12).toLocaleString()}
+                    {formatCurrency(
+                      (tenant.rentAmount ?? 0) * 12,
+                      activeCurrency,
+                    )}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -839,13 +848,15 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     Total Paid
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    $
-                    {payments
-                      .filter(
-                        (p) => p.status === "completed" || p.status === "paid",
-                      )
-                      .reduce((s, p) => s + (p.amount || 0), 0)
-                      .toLocaleString()}
+                    {formatCurrency(
+                      payments
+                        .filter(
+                          (p) =>
+                            p.status === "completed" || p.status === "paid",
+                        )
+                        .reduce((s, p) => s + (p.amount || 0), 0),
+                      activeCurrency,
+                    )}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -936,7 +947,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span className="font-semibold text-green-600 dark:text-green-400">
-                              ${(payment.amount || 0).toLocaleString()}
+                              {formatCurrency(
+                                payment.amount || 0,
+                                activeCurrency,
+                              )}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -998,7 +1012,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                                 <DropdownMenuItem
                                   onClick={async () => {
                                     try {
-                                      const text = `Payment ${payment.transId || payment.id}: $${(payment.amount || 0).toFixed(2)}`;
+                                      const text = `Payment ${payment.transId || payment.id}: ${formatCurrency(
+                                        payment.amount || 0,
+                                        activeCurrency,
+                                      )}`;
                                       if (navigator.share) {
                                         await navigator.share({
                                           title: "Payment",
@@ -1061,7 +1078,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                           </td>
                           <td className="px-4 py-3 text-sm">
                             <span className="font-semibold text-green-600 dark:text-green-400">
-                              ${transaction.amount.toLocaleString()}
+                              {formatCurrency(
+                                transaction.amount,
+                                activeCurrency,
+                              )}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">

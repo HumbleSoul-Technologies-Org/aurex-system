@@ -43,6 +43,7 @@ import {
   initializeSystemSettings,
   updateFeatureToggles,
 } from "@/lib/services/settings";
+import Link from "next/link";
 
 const featureToggleMap: Record<string, string> = {
   "rent-payment": "paymentPortal",
@@ -160,7 +161,7 @@ export default function TenantPortalPage() {
   }, [tenants, properties]);
 
   const handleTenantAction = (
-    tenant: TenantRecord & {
+    tenant: any & {
       propertyName: string;
       lastActive: string;
       portalStatus: string;
@@ -283,30 +284,6 @@ export default function TenantPortalPage() {
           Manage tenant access and portal features
         </p>
       </div>
-
-      {/* Portal Info */}
-      <Card className="border border-border p-4 md:p-6 bg-primary/5">
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-bold text-foreground mb-2">Portal Link</h3>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                value="https://tenant-erp-system.vercel.app/auth/login"
-                readOnly
-                className="flex-1 border-border bg-background text-foreground text-sm"
-              />
-              <Button className="bg-primary hover:bg-primary/90 text-white w-full sm:w-auto">
-                <Copy className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Copy</span>
-              </Button>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Share this link with your tenants to access the portal. They can pay
-            rent, submit requests, and view documents.
-          </p>
-        </div>
-      </Card>
 
       {/* Portal Features */}
       <div>
@@ -432,13 +409,14 @@ export default function TenantPortalPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() =>
-                              handleTenantAction(tenant, "message")
-                            }
-                          >
-                            <Mail className="mr-2 h-4 w-4" />
-                            Message
+                          <DropdownMenuItem>
+                            <Link
+                              href={`/dashboard/communications`}
+                              className="flex items-center"
+                            >
+                              <Mail className="mr-2 h-4 w-4" />
+                              Message
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() =>

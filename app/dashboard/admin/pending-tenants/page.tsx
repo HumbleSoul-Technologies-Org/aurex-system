@@ -47,6 +47,7 @@ import {
   Download,
   MoreVertical,
 } from "lucide-react";
+import { formatCurrency, getActiveCurrency } from "@/lib/currency";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -72,6 +73,7 @@ export default function PendingTenantsPage() {
     "all" | "pending" | "approved" | "rejected"
   >("pending");
   const [showActionsDialog, setShowActionsDialog] = useState(false);
+  const [activeCurrency, setActiveCurrency] = useState("USD");
 
   // Check authorization
   useEffect(() => {
@@ -79,6 +81,10 @@ export default function PendingTenantsPage() {
       router.push("/dashboard");
     }
   }, [user, router]);
+
+  useEffect(() => {
+    setActiveCurrency(getActiveCurrency());
+  }, []);
 
   // Fetch pending tenants
   useEffect(() => {
@@ -397,7 +403,10 @@ export default function PendingTenantsPage() {
                           Monthly Rent
                         </Label>
                         <p className="font-medium">
-                          ${selectedTenant.rentAmount}
+                          {formatCurrency(
+                            selectedTenant.rentAmount ?? 0,
+                            activeCurrency,
+                          )}
                         </p>
                       </div>
                     )}
