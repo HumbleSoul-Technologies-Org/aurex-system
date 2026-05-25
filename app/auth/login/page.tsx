@@ -200,18 +200,6 @@ export default function LoginPage() {
                 </Link>
               </p>
             </div>
-            {/* Demo credentials */}
-            <div className="mt-4 text-xs text-muted-foreground">
-              <p className="mb-1">Demo credentials:</p>
-              <p>
-                Admin: <span className="font-medium">admin@example.com</span> /{" "}
-                <span className="font-medium">adminpass</span>
-              </p>
-              <p>
-                Tenant: <span className="font-medium">tenant@example.com</span>{" "}
-                / <span className="font-medium">tenantpass</span>
-              </p>
-            </div>
           </div>
         </Card>
 
