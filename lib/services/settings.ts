@@ -321,6 +321,26 @@ export function getSystemSettings(): SystemSettings | null {
   return settings.length > 0 ? ensureTenantPortalSettings(settings[0]) : null
 }
 
+/**
+ * Load settings from API for a specific user (by settingsId)
+ * Used when admin has their own settings record linked to their user account
+ */
+export async function getAdminSettingsByUserId(userId?: string): Promise<SettingsPayload | null> {
+  if (!userId) {
+    return await fetchSettingsFromApi() // Fall back to default (authenticated user's settings)
+  }
+  
+  // Get the user to access their settingsId
+  const user = (await getCurrentUser()) as any
+  if (!user?.settingsId) {
+    // User doesn't have a linked settings record, use default
+    return await fetchSettingsFromApi()
+  }
+  
+  // Fetch the user's specific settings by settingsId
+  return await fetchSettingsByIdFromApi(user.settingsId)
+}
+
 export function createDefaultSystemSettings(): SystemSettings {
   const defaultSettings: SystemSettings = {
     id: generateId('settings'),
@@ -686,6 +706,87 @@ export function updateSecuritySettings(updates: Partial<SecuritySettings>): Syst
 // API Integration - Server Persistence Layer
 // ============================================================================
 
+// ============================================================================
+// API Payload Types - Nested Schema (v2)
+// ============================================================================
+
+export interface SettingsPayload {
+  _id?: string
+  ownerId?: string
+  schemaVersion?: number
+  companyInfo?: {
+    name?: string
+    address?: {
+      street?: string
+      city?: string
+      state?: string
+      country?: string
+    }
+    phone?: string
+    email?: string
+    logo?: {
+      url?: string
+      public_id?: string
+    }
+    licenseNumber?: string
+  }
+  tenantPortal?: {
+    portalFeatures?: {
+      rentPayment?: boolean
+      maintenanceRequests?: boolean
+      documentAccess?: boolean
+      messages?: boolean
+      announcements?: boolean
+      evictionNotice?: boolean
+    }
+  }
+  finance?: {
+    currency?: {
+      code?: string
+      country?: string
+      symbol?: string
+    }
+  }
+  notifications?: {
+    rentDue?: {
+      email?: boolean
+      inApp?: boolean
+      sms?: boolean
+    }
+    maintenanceRequest?: {
+      email?: boolean
+      inApp?: boolean
+      sms?: boolean
+    }
+    announcements?: {
+      email?: boolean
+      inApp?: boolean
+      sms?: boolean
+    }
+  }
+  features?: {
+    map?: boolean
+    messaging?: boolean
+    analytics?: boolean
+    reporting?: boolean
+    auditing?: boolean
+  }
+  security?: {
+    autoLogout?: {
+      enabled?: boolean
+      durationMinutes?: number
+    }
+    autoLockout?: {
+      enabled?: boolean
+      threshold?: number
+    }
+    allowProfileEditing?: boolean
+  }
+  createdAt?: string
+  updatedAt?: string
+}
+
+// Legacy flat format (for backwards compatibility during migration)
 interface FlatSettingsData {
   ownerId?: string
   _id?: string
@@ -718,40 +819,147 @@ interface FlatSettingsData {
 }
 
 /**
- * Convert nested settings structure to flat API format
- * Used when persisting to server
+ * Convert settings to nested API payload format
+ * Used when sending updates to server
  */
-export function convertToFlatSettings(settings: Partial<TenantPortalSettings> & any): FlatSettingsData {
+export function convertToSettingsPayload(settings: Partial<TenantPortalSettings> & any): Partial<SettingsPayload> {
   return {
-    companyInfo_name: settings.companyInfo?.name || settings.companyInfo_name,
-    companyInfo_address: settings.companyInfo?.address || settings.companyInfo_address,
-    companyInfo_city: settings.companyInfo?.city || settings.companyInfo_city,
-    companyInfo_country: settings.companyInfo?.country || settings.companyInfo_country,
-    companyInfo_phone: settings.companyInfo?.phone || settings.companyInfo_phone,
-    companyInfo_email: settings.companyInfo?.email || settings.companyInfo_email,
-    tenantPortalFeatures_rentPayment: settings.featureToggles?.paymentPortal ?? settings.tenantPortalFeatures_rentPayment,
-    tenantPortalFeatures_maintenanceRequests: settings.featureToggles?.maintenanceRequests ?? settings.tenantPortalFeatures_maintenanceRequests,
-    tenantPortalFeatures_documentAccess: settings.featureToggles?.documentAccess ?? settings.tenantPortalFeatures_documentAccess,
-    tenantPortalFeatures_messages: settings.featureToggles?.messages ?? settings.tenantPortalFeatures_messages,
-    tenantPortalFeatures_announcements: settings.featureToggles?.announcements ?? settings.tenantPortalFeatures_announcements,
-    tenantPortalFeatures_evictionNotice: settings.featureToggles?.evictionNotice ?? settings.tenantPortalFeatures_evictionNotice,
-    financeSettings_currency: settings.financeSettings?.currency || settings.financeSettings_currency || 'USD',
-    notificationSettings_emailNotifications: settings.notificationPreferences?.email ?? settings.notificationSettings_emailNotifications ?? true,
-    notificationSettings_smsNotifications: settings.notificationPreferences?.sms ?? settings.notificationSettings_smsNotifications ?? false,
-    systemFeatures_map: settings.systemFeatures?.map ?? settings.systemFeatures_map ?? true,
-    systemFeatures_messaging: settings.systemFeatures?.messaging ?? settings.systemFeatures_messaging ?? true,
-    systemFeatures_analytics: settings.systemFeatures?.analytics ?? settings.systemFeatures_analytics ?? false,
-    systemFeatures_reporting: settings.systemFeatures?.reporting ?? settings.systemFeatures_reporting ?? true,
-    systemFeatures_auditing: settings.systemFeatures?.auditing ?? settings.systemFeatures_auditing ?? false,
-    tenantPortalSecurity_autoLogoutInactivityMinutes: settings.securitySettings?.autoLogoutInactivityMinutes ?? settings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
-    tenantPortalSecurity_allowProfileEditing: settings.securitySettings?.allowProfileEditing ?? settings.tenantPortalSecurity_allowProfileEditing ?? true,
-    tenantPortalSecurity_autoLockEnabled: settings.securitySettings?.autoLockEnabled ?? settings.tenantPortalSecurity_autoLockEnabled ?? false,
-    tenantPortalSecurity_failedLoginThreshold: settings.securitySettings?.failedLoginThreshold ?? settings.tenantPortalSecurity_failedLoginThreshold ?? 5,
+    companyInfo: {
+      name: settings.companyInfo?.name,
+      address: settings.companyInfo?.address,
+      phone: settings.companyInfo?.phone,
+      email: settings.companyInfo?.email,
+      logo: settings.companyInfo?.logo,
+      licenseNumber: settings.companyInfo?.licenseNumber,
+    },
+    tenantPortal: {
+      portalFeatures: {
+        rentPayment: settings.featureToggles?.paymentPortal,
+        maintenanceRequests: settings.featureToggles?.maintenanceRequests,
+        documentAccess: settings.featureToggles?.documentAccess,
+        messages: settings.featureToggles?.messages,
+        announcements: settings.featureToggles?.announcements,
+        evictionNotice: settings.featureToggles?.evictionNotice,
+      },
+    },
+    finance: {
+      currency: settings.financeSettings?.currency,
+    },
+    notifications: {
+      rentDue: {
+        email: settings.notificationPreferences?.email ?? true,
+        inApp: settings.notificationPreferences?.inApp ?? true,
+        sms: settings.notificationPreferences?.sms ?? false,
+      },
+      maintenanceRequest: {
+        email: settings.notificationPreferences?.email ?? true,
+        inApp: settings.notificationPreferences?.inApp ?? true,
+        sms: settings.notificationPreferences?.sms ?? false,
+      },
+      announcements: {
+        email: settings.notificationPreferences?.email ?? true,
+        inApp: settings.notificationPreferences?.inApp ?? true,
+        sms: settings.notificationPreferences?.sms ?? false,
+      },
+    },
+    features: {
+      map: settings.systemFeatures?.map ?? true,
+      messaging: settings.systemFeatures?.messaging ?? true,
+      analytics: settings.systemFeatures?.analytics ?? false,
+      reporting: settings.systemFeatures?.reporting ?? true,
+      auditing: settings.systemFeatures?.auditing ?? false,
+    },
+    security: {
+      autoLogout: {
+        enabled: true,
+        durationMinutes: settings.securitySettings?.autoLogoutInactivityMinutes ?? 30,
+      },
+      autoLockout: {
+        enabled: settings.securitySettings?.autoLockEnabled ?? false,
+        threshold: settings.securitySettings?.failedLoginThreshold ?? 5,
+      },
+      allowProfileEditing: settings.securitySettings?.allowProfileEditing ?? true,
+    },
   }
 }
 
 /**
- * Convert flat API settings to nested structure for frontend
+ * Convert API nested payload to internal TenantPortalSettings format
+ * The API now returns nested structure, this ensures compatibility with UI components
+ */
+export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): TenantPortalSettings {
+  return {
+    notificationPreferences: {
+      email: payload.notifications?.rentDue?.email ?? true,
+      sms: payload.notifications?.rentDue?.sms ?? false,
+      inApp: payload.notifications?.rentDue?.inApp ?? true,
+      smsProvider: '',
+      emailTemplate: '',
+    },
+    paymentSettings: {
+      enableAutopay: false,
+      autopayThreshold: 0,
+      acceptedMethods: [],
+      paymentProviders: [],
+    },
+    documentAccess: {
+      allowUploads: true,
+      maxFileSize: 10485760,
+      allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+      requireApproval: false,
+      retentionDays: 365,
+    },
+    maintenancePreferences: {
+      enableRequests: true,
+      requireTenantApproval: false,
+      estimatedResponseTime: 48,
+      allowEmergencyAfterHours: true,
+      priorityLevels: [],
+    },
+    featureToggles: {
+      paymentPortal: payload.tenantPortal?.portalFeatures?.rentPayment ?? true,
+      maintenanceRequests: payload.tenantPortal?.portalFeatures?.maintenanceRequests ?? true,
+      documentAccess: payload.tenantPortal?.portalFeatures?.documentAccess ?? true,
+      messages: payload.tenantPortal?.portalFeatures?.messages ?? true,
+      announcements: payload.tenantPortal?.portalFeatures?.announcements ?? true,
+      evictionNotice: payload.tenantPortal?.portalFeatures?.evictionNotice ?? false,
+    },
+    communicationPreferences: {
+      preferredContactMethod: 'email',
+      languages: ['en'],
+      timezone: 'UTC',
+      doNotDisturb: {
+        enabled: false,
+        startTime: '',
+        endTime: '',
+      },
+    },
+    securitySettings: {
+      allowPasswordChange: true,
+      autoLogoutInactivityMinutes: payload.security?.autoLogout?.durationMinutes ?? 30,
+      allowAccountDeletion: false,
+      allowProfileEditing: payload.security?.allowProfileEditing ?? true,
+      autoLockEnabled: payload.security?.autoLockout?.enabled ?? false,
+      failedLoginThreshold: payload.security?.autoLockout?.threshold ?? 5,
+      requirePasswordReset: false,
+      passwordExpirationDays: 90,
+    },
+    financeSettings: {
+      currency: payload.finance?.currency?.code || 'USD',
+      exchangeRates: {
+        USD: 1,
+        EUR: 0.92,
+        GBP: 0.79,
+        KES: 140,
+      },
+      paymentMethods: [],
+    },
+  }
+}
+
+/**
+ * Legacy conversion function - kept for backwards compatibility
+ * DEPRECATED: Use convertPayloadToTenantPortalSettings instead
  */
 export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantPortalSettings {
   return {
@@ -806,6 +1014,8 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
       allowProfileEditing: flatSettings.tenantPortalSecurity_allowProfileEditing ?? true,
       autoLockEnabled: flatSettings.tenantPortalSecurity_autoLockEnabled ?? false,
       failedLoginThreshold: flatSettings.tenantPortalSecurity_failedLoginThreshold ?? 5,
+      requirePasswordReset: false,
+      passwordExpirationDays: 90,
     },
     financeSettings: {
       currency: flatSettings.financeSettings_currency || 'USD',
@@ -823,7 +1033,7 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
 /**
  * Fetch settings from API - fetch admin's own settings
  */
-export async function fetchSettingsFromApi(): Promise<FlatSettingsData | null> {
+export async function fetchSettingsFromApi(): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest('GET', '/settings')
     const data = await res.json()
@@ -837,7 +1047,7 @@ export async function fetchSettingsFromApi(): Promise<FlatSettingsData | null> {
 /**
  * Fetch settings by ID from API
  */
-export async function fetchSettingsByIdFromApi(id: string): Promise<FlatSettingsData | null> {
+export async function fetchSettingsByIdFromApi(id: string): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest('GET', `/settings/${id}`)
     const data = await res.json()
@@ -851,7 +1061,7 @@ export async function fetchSettingsByIdFromApi(id: string): Promise<FlatSettings
 /**
  * Create settings on API
  */
-export async function createSettingsOnApi(settingsData: Partial<FlatSettingsData>): Promise<FlatSettingsData | null> {
+export async function createSettingsOnApi(settingsData: Partial<SettingsPayload>): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest('POST', '/settings', settingsData)
     const data = await res.json()
@@ -865,7 +1075,7 @@ export async function createSettingsOnApi(settingsData: Partial<FlatSettingsData
 /**
  * Update settings on API
  */
-export async function updateSettingsOnApi(id: string, settingsData: Partial<FlatSettingsData>): Promise<FlatSettingsData | null> {
+export async function updateSettingsOnApi(id: string, settingsData: Partial<SettingsPayload>): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest('PUT', `/settings/${id}`, settingsData)
     const data = await res.json()

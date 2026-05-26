@@ -24,11 +24,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { currentTenant } from "@/app/lib/tenant-data";
-import {
-  formatCurrency,
-  getActiveCurrency,
-  getCurrencySymbol,
-} from "@/lib/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
   listPayments,
   createPayment,
@@ -41,12 +38,8 @@ import { useAppData } from "@/lib/data-context";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
   const { properties } = useAppData();
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
 
   // Make Payment state
   const [step, setStep] = useState<
@@ -405,7 +398,8 @@ export default function PaymentsPage() {
                         >
                           <div className="flex flex-col items-start">
                             <span className="font-semibold">
-                              {formatCurrency(option.value, activeCurrency)}
+                              {getCurrencySymbol(activeCurrency)}
+                              {option.value.toFixed(2)}
                             </span>
                             {option.label !== "Custom" && (
                               <span className="text-xs opacity-70">

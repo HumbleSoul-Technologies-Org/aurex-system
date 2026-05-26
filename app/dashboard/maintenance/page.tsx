@@ -24,7 +24,8 @@ import {
   ChevronRight,
   Trash2,
 } from "lucide-react";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
   Dialog,
   DialogContent,
@@ -56,15 +57,11 @@ interface MaintenanceRequestDisplay {
 
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [rawRequests, setRawRequests] = useState<MaintenanceRequest[]>([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
   const { tenants: allTenants, properties: allProperties } = useAppData();
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
 
   const loadMaintenanceRequests = useCallback(async () => {
     setIsLoadingRequests(true);

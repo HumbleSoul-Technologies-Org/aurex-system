@@ -24,20 +24,17 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
   const { properties } = useAppData();
-
-  useState(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
 
   const filteredProperties = properties.filter((prop) => {
     const matchesSearch =

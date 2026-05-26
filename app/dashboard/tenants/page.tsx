@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,19 +23,17 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
-import { useEffect } from "react";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCurrency, setActiveCurrency] = useState("USD");
   const [filterStatus, setFilterStatus] = useState<
     "all" | "paid" | "due" | "moving-out"
   >("all");
 
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
+  const activeCurrency = useActiveCurrency();
+
   const [showAddForm, setShowAddForm] = useState(false);
 
   const { tenants, properties } = useAppData();

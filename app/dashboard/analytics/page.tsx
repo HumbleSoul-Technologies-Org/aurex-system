@@ -18,15 +18,12 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, Calendar, Share2 } from "lucide-react";
 import { chartData } from "@/app/lib/sample-data";
-import { useState, useEffect } from "react";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { useState } from "react";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function AnalyticsPage() {
-  const [activeCurrency, setActiveCurrency] = useState("USD");
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
+  const activeCurrency = useActiveCurrency();
 
   return (
     <div className="space-y-6">

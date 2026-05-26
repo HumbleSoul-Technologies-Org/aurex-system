@@ -42,6 +42,8 @@ import {
   submitMaintenanceRequest,
   deleteMaintenanceRequestById,
 } from "@/lib/services/maintenance";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function MaintenancePage() {
   const { user } = useAuth();
@@ -58,6 +60,7 @@ export default function MaintenancePage() {
     maintenanceRequests: contextMaintenanceRequests,
     refetch,
   } = useTenantContext();
+  const activeCurrency = useActiveCurrency();
 
   const tenantUnitNumber =
     tenant?.unitNumber ||
@@ -527,6 +530,7 @@ export default function MaintenancePage() {
                     {request.description}
                   </p>
                 </div>
+
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">
                     Submitted:{" "}
@@ -544,7 +548,8 @@ export default function MaintenancePage() {
                   )}
                   {request.status === "assigned" && request.cost && (
                     <p className="text-xs text-green-600 dark:text-green-400">
-                      Mantainance cost: ${request.cost}
+                      Mantainance cost:{" "}
+                      {formatCurrency(request.cost, activeCurrency)}
                     </p>
                   )}
                 </div>

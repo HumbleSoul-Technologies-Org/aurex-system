@@ -34,7 +34,8 @@ import {
 import { createTransaction } from "@/app/lib/transactions-client";
 import { listPayments } from "@/lib/services/payments";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -43,12 +44,11 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
 
   // Load real data on mount
   useEffect(() => {
     setIsHydrated(true);
-    setActiveCurrency(getActiveCurrency());
     setPayments(listPayments());
     const onPaymentsUpdated = () => setPayments(listPayments());
     if (typeof window !== "undefined")
@@ -604,7 +604,9 @@ export default function DashboardPage() {
                 <p
                   className={`font-bold ${activity.type === "payment" ? "text-green-600" : "text-red-600"}`}
                 >
-                  {activity.type === "payment" ? "+" : "-"}${activity.amount}
+                  {activity.type === "payment" ? "+" : "-"}
+                  {getCurrencySymbol(activeCurrency)}
+                  {activity.amount}
                 </p>
                 <p className="text-xs text-muted-foreground">{activity.date}</p>
               </div>

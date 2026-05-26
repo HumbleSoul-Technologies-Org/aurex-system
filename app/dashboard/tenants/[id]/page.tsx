@@ -64,7 +64,8 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 interface TenantDetailPageProps {
   params: Promise<{
@@ -75,7 +76,7 @@ interface TenantDetailPageProps {
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const { id } = use(params);
   const { properties, tenants } = useAppData();
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
   const [tenant, setTenant] = useState<any | null>(null);
   const [property, setProperty] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -114,10 +115,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
     return sorted[0]?.date || "";
   };
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
 
   useEffect(() => {
     const t = tenants.find((item) => item.id === id || item._id === id);

@@ -15,10 +15,12 @@ interface User {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string;
   role: string;
   status: string;
   emailVerified: boolean;
   createdAt: string;
+  settingsId?: string;
 }
 
 interface AuthContextType {

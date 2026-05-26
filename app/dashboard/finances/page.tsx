@@ -28,7 +28,8 @@ import {
   deleteExpenseApi,
 } from "@/lib/services/expenses";
 import { listPayments } from "@/lib/services/payments";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
   BarChart,
   Bar,
@@ -80,7 +81,7 @@ export default function FinancesPage() {
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
 
   useEffect(() => {
     // load server-backed expenses for display
@@ -94,7 +95,6 @@ export default function FinancesPage() {
       }
     })();
 
-    setActiveCurrency(getActiveCurrency());
     setPayments(listPayments());
     const onTxUpdate = () => refreshTransactions();
     const onPaymentsUpdated = () => setPayments(listPayments());

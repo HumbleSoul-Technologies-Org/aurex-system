@@ -17,17 +17,14 @@ import { useAuth } from "@/lib/auth-context";
 import { useAppData } from "@/lib/data-context";
 import { listTransactions } from "@/app/lib/transactions-client";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useState, useEffect } from "react";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function TenantDashboard() {
   const { user } = useAuth();
   const { tenants, properties } = useAppData();
-  const [activeCurrency, setActiveCurrency] = useState("USD");
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
+  const activeCurrency = useActiveCurrency();
 
   // Find the tenant record for the current user
   const tenant = user ? tenants.find((t) => t.email === user.email) : null;
@@ -279,7 +276,8 @@ export default function TenantDashboard() {
                   </div>
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-bold text-foreground">
-                      ${payment.amount}
+                      {getCurrencySymbol(activeCurrency)}
+                      {payment.amount}
                     </p>
                     <Badge
                       className={

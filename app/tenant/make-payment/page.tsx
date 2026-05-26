@@ -9,22 +9,15 @@ import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { createPayment, PaymentRecord } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
-import {
-  formatCurrency,
-  getActiveCurrency,
-  getCurrencySymbol,
-} from "@/lib/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useEffect } from "react";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function MakePaymentPage() {
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">(
     "amount",
   );
-  const [activeCurrency, setActiveCurrency] = useState("USD");
-
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
+  const activeCurrency = useActiveCurrency();
 
   const user = useMemo(() => getCurrentUser(), []);
   const tenant = useMemo(

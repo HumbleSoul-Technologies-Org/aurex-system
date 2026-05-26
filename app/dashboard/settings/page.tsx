@@ -34,20 +34,15 @@ import {
 import {
   getSystemSettings,
   initializeSystemSettings,
-  updateSystemSettings,
-  getTenantPortalSettings,
-  updateTenantPortalSettings,
-  fetchSettingsFromApi,
-  fetchSettingsByIdFromApi,
   createSettingsOnApi,
   updateSettingsOnApi,
-  convertToFlatSettings,
-  convertToNestedSettings,
-  createFieldUpdateHandler,
+  convertPayloadToTenantPortalSettings,
   FieldStatus,
   debounce,
 } from "@/lib/services/settings";
 import { SystemSettings, clearDB } from "@/lib/local-store";
+import { useAuth } from "@/lib/auth-context";
+import { useSettings } from "@/lib/settings-context";
 import { currencies } from "@/lib/data/currencies";
 import {
   Command,
@@ -61,6 +56,21 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
   const [current, setCurrent] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirm, setConfirm] = useState("");
+  const { user } = useAuth();
+
+  const [localProfile, setLocalProfile] = useState({
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    phone: user?.phone || "",
+  });
+
+  useEffect(() => {
+    setLocalProfile({
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      phone: user?.phone || "",
+    });
+  }, [user]);
 
   const handleChange = () => {
     if (!newPw || newPw !== confirm) {
@@ -194,11 +204,161 @@ function FieldSaveIndicator({ status }: { status: FieldStatus }) {
 }
 
 export default function SettingsPage() {
+  const {
+    user,
+    updateProfile,
+    isLoading: authLoading,
+    error: authError,
+  } = useAuth();
+  const {
+    settings: apiSettings,
+    settingsId,
+    isLoading: settingsLoading,
+    error: settingsError,
+    refresh: refreshSettings,
+  } = useSettings();
   const [activeTab, setActiveTab] = useState("profile");
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [settingsId, setSettingsId] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // Profile edit state
+  const [localProfile, setLocalProfile] = useState({
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    phone: user?.phone || "",
+  });
+
+  type LocalCompanyInfo = {
+    name: string;
+    address: {
+      street: string;
+      state: string;
+      city: string;
+      country: string;
+    };
+    phone: string;
+    email: string;
+    logo: {
+      url: string;
+      public_id: string;
+    };
+    licenseNumber: string;
+  };
+
+  const defaultLocalCompanyInfo: LocalCompanyInfo = {
+    name: "",
+    address: { street: "", state: "", city: "", country: "" },
+    phone: "",
+    email: "",
+    logo: { url: "", public_id: "" },
+    licenseNumber: "",
+  };
+
+  // Company info edit state
+  const [localCompanyInfo, setLocalCompanyInfo] = useState<LocalCompanyInfo>(
+    defaultLocalCompanyInfo,
+  );
+
+  const [companyInfoSaving, setCompanyInfoSaving] = useState(false);
+  const [companyInfoError, setCompanyInfoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLocalProfile({
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      phone: user?.phone || "",
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (settings?.companyInfo) {
+      const companyAddress = settings.companyInfo.address ?? {
+        address: "",
+        estate: "",
+        city: "",
+        country: "",
+      };
+      const companyLogo = settings.companyInfo.logo ?? {
+        url: "",
+        public_id: "",
+      };
+
+      setLocalCompanyInfo({
+        name: settings.companyInfo.name || "",
+        address: {
+          street: companyAddress.address || "",
+          state: companyAddress.estate || "",
+          city: companyAddress.city || "",
+          country: companyAddress.country || "",
+        },
+        phone: settings.companyInfo.phone || "",
+        email: settings.companyInfo.email || "",
+        logo: {
+          url: companyLogo.url || "",
+          public_id: companyLogo.public_id || "",
+        },
+        licenseNumber: settings.companyInfo.licenseNumber || "",
+      });
+    }
+  }, [settings?.companyInfo]);
+
+  const buildPayloadForField = (flatKey: string, value: any) => {
+    switch (flatKey) {
+      case "companyInfo_name":
+        return { companyInfo: { name: value } };
+      case "companyInfo_phone":
+        return { companyInfo: { phone: value } };
+      case "companyInfo_email":
+        return { companyInfo: { email: value } };
+      case "companyInfo_licenseNumber":
+        return { companyInfo: { licenseNumber: value } };
+      case "tenantPortalFeatures_rentPayment":
+        return { tenantPortal: { portalFeatures: { rentPayment: value } } };
+      case "tenantPortalFeatures_maintenanceRequests":
+        return {
+          tenantPortal: { portalFeatures: { maintenanceRequests: value } },
+        };
+      case "tenantPortalFeatures_documentAccess":
+        return {
+          tenantPortal: { portalFeatures: { documentAccess: value } },
+        };
+      case "tenantPortalFeatures_messages":
+        return { tenantPortal: { portalFeatures: { messages: value } } };
+      case "tenantPortalFeatures_announcements":
+        return {
+          tenantPortal: { portalFeatures: { announcements: value } },
+        };
+      case "tenantPortalFeatures_evictionNotice":
+        return {
+          tenantPortal: { portalFeatures: { evictionNotice: value } },
+        };
+      case "financeSettings_currency":
+        return { finance: { currency: { code: value } } };
+      case "systemFeatures_map":
+        return { features: { map: value } };
+      case "systemFeatures_messaging":
+        return { features: { messaging: value } };
+      case "systemFeatures_analytics":
+        return { features: { analytics: value } };
+      case "systemFeatures_reporting":
+        return { features: { reporting: value } };
+      case "systemFeatures_auditing":
+        return { features: { auditing: value } };
+      case "tenantPortalSecurity_autoLogoutInactivityMinutes":
+        return {
+          security: { autoLogout: { enabled: true, durationMinutes: value } },
+        };
+      case "tenantPortalSecurity_allowProfileEditing":
+        return { security: { allowProfileEditing: value } };
+      case "tenantPortalSecurity_autoLockEnabled":
+        return { security: { autoLockout: { enabled: value } } };
+      case "tenantPortalSecurity_failedLoginThreshold":
+        return { security: { autoLockout: { threshold: value } } };
+      default:
+        return undefined;
+    }
+  };
 
   // Per-field status tracking: { 'companyInfo_name': 'saving', ... }
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>(
@@ -226,6 +386,7 @@ export default function SettingsPage() {
   const createIndependentFieldHandler = (
     flatKey: string,
     setter: (value: any) => void,
+    payload?: Record<string, any>,
   ) => {
     const debouncedUpdate = debounce(
       async (value: any) => {
@@ -233,19 +394,25 @@ export default function SettingsPage() {
         markFieldStatus(flatKey, "saving");
 
         try {
-          // Auto-create settings on first change
-          if (!settingsId) {
-            const created = await createSettingsOnApi({ [flatKey]: value });
-            if (created?._id) {
-              setSettingsId(created._id);
-            }
-          } else {
-            // Update existing settings
-            const updated = await updateSettingsOnApi(settingsId, {
-              [flatKey]: value,
-            });
-            if (!updated) {
-              throw new Error("Failed to save to server");
+          const payloadToSend = payload ?? buildPayloadForField(flatKey, value);
+
+          if (payloadToSend) {
+            if (!settingsId) {
+              const created = await createSettingsOnApi(payloadToSend);
+              // After creating settings, refresh the context to pick up the new settingsId
+              if (created?._id) {
+                await refreshSettings();
+              }
+            } else {
+              const updated = await updateSettingsOnApi(
+                settingsId,
+                payloadToSend,
+              );
+              if (!updated) {
+                throw new Error("Failed to save to server");
+              }
+              // Refresh shared settings so other pages use the updated currency value
+              await refreshSettings();
             }
           }
 
@@ -282,31 +449,35 @@ export default function SettingsPage() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // Try to load from API first
-        const apiSettings = await fetchSettingsFromApi();
-
+        // Settings now come from SettingsContext (apiSettings)
         if (apiSettings) {
-          // Successfully loaded from API
-          setSettingsId(apiSettings._id || null);
-          const nestedSettings = convertToNestedSettings(apiSettings);
+          // Convert API settings to TenantPortalSettings format
+          const nestedSettings =
+            convertPayloadToTenantPortalSettings(apiSettings);
           const localSettings =
             getSystemSettings() ?? initializeSystemSettings();
           // Merge API settings with local defaults
           const merged = {
             ...localSettings,
             tenantPortalSettings: nestedSettings,
+            companyInfo: apiSettings.companyInfo,
           };
           setSettings(merged);
+          setApiError(null);
+        } else if (settingsLoading) {
+          // Still loading from context
+          setApiError(null);
         } else {
           // Fallback to localStorage
           const localSettings =
             getSystemSettings() ?? initializeSystemSettings();
           setSettings(localSettings);
-          setApiError("Using local storage - API unavailable");
+          if (settingsError) {
+            setApiError(settingsError);
+          }
         }
       } catch (error) {
         console.error("Error loading settings:", error);
-        // Fallback to localStorage on any error
         const localSettings = getSystemSettings() ?? initializeSystemSettings();
         setSettings(localSettings);
         setApiError("Error loading from API, using local storage");
@@ -314,8 +485,9 @@ export default function SettingsPage() {
         setLoading(false);
       }
     };
+
     loadSettings();
-  }, []);
+  }, [apiSettings, settingsLoading, settingsError]);
 
   const updateSettings = (updates: any) => {
     setSettings((prev: SystemSettings | null) => {
@@ -433,30 +605,17 @@ export default function SettingsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Name
+                      First Name
                     </label>
                     <div className="flex items-center gap-2">
                       <Input
-                        value={(settings as any).adminProfile?.name || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            adminProfile: {
-                              ...((settings as any).adminProfile || {}),
-                              name: value,
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_adminName",
-                            (v) =>
-                              updateSettings({
-                                adminProfile: {
-                                  ...((settings as any).adminProfile || {}),
-                                  name: v,
-                                },
-                              }),
-                          )(value);
-                        }}
+                        value={localProfile.firstName}
+                        onChange={(e) =>
+                          setLocalProfile((p) => ({
+                            ...p,
+                            firstName: e.target.value,
+                          }))
+                        }
                       />
                       <FieldSaveIndicator
                         status={fieldStatus["companyInfo_adminName"] || "idle"}
@@ -465,35 +624,43 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Phone
+                      Last Name
                     </label>
                     <div className="flex items-center gap-2">
                       <Input
-                        value={(settings as any).adminProfile?.phone || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            adminProfile: {
-                              ...((settings as any).adminProfile || {}),
-                              phone: value,
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_adminPhone",
-                            (v) =>
-                              updateSettings({
-                                adminProfile: {
-                                  ...((settings as any).adminProfile || {}),
-                                  phone: v,
-                                },
-                              }),
-                          )(value);
-                        }}
+                        value={localProfile.lastName}
+                        onChange={(e) =>
+                          setLocalProfile((p) => ({
+                            ...p,
+                            lastName: e.target.value,
+                          }))
+                        }
                       />
                       <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_adminPhone"] || "idle"}
+                        status={
+                          fieldStatus["companyInfo_adminLastName"] || "idle"
+                        }
                       />
                     </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Phone
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={localProfile.phone}
+                      onChange={(e) =>
+                        setLocalProfile((p) => ({
+                          ...p,
+                          phone: e.target.value,
+                        }))
+                      }
+                    />
+                    <FieldSaveIndicator
+                      status={fieldStatus["companyInfo_adminPhone"] || "idle"}
+                    />
                   </div>
                 </div>
                 <div>
@@ -501,32 +668,28 @@ export default function SettingsPage() {
                     Email
                   </label>
                   <div className="flex items-center gap-2">
-                    <Input
-                      type="email"
-                      value={(settings as any).adminProfile?.email || ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        updateSettings({
-                          adminProfile: {
-                            ...((settings as any).adminProfile || {}),
-                            email: value,
-                          },
-                        });
-                        createIndependentFieldHandler(
-                          "companyInfo_adminEmail",
-                          (v) =>
-                            updateSettings({
-                              adminProfile: {
-                                ...((settings as any).adminProfile || {}),
-                                email: v,
-                              },
-                            }),
-                        )(value);
+                    <Input type="email" value={user?.email || ""} readOnly />
+                    <Button
+                      onClick={async () => {
+                        try {
+                          await updateProfile({
+                            firstName: localProfile.firstName,
+                            lastName: localProfile.lastName,
+                            phone: localProfile.phone,
+                          });
+                          alert("Profile updated successfully");
+                        } catch (err) {
+                          console.error("Failed to update profile", err);
+                          alert("Failed to update profile");
+                        }
                       }}
-                    />
-                    <FieldSaveIndicator
-                      status={fieldStatus["companyInfo_adminEmail"] || "idle"}
-                    />
+                      disabled={authLoading}
+                    >
+                      {authLoading ? "Saving..." : "Save"}
+                    </Button>
+                    {authError && (
+                      <AlertCircle className="w-4 h-4 text-red-600" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -539,175 +702,75 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Company Name
                   </label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={settings.companyInfo?.name || ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        updateSettings({
-                          companyInfo: {
-                            ...settings.companyInfo,
-                            name: value,
-                          },
-                        });
-                        createIndependentFieldHandler("companyInfo_name", (v) =>
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              name: v,
-                            },
-                          }),
-                        )(value);
-                      }}
-                    />
-                    <FieldSaveIndicator
-                      status={fieldStatus["companyInfo_name"] || "idle"}
-                    />
-                  </div>
+                  <Input
+                    value={localCompanyInfo.name}
+                    onChange={(e) =>
+                      setLocalCompanyInfo((p) => ({
+                        ...p,
+                        name: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Address
                   </label>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="Street / Address"
-                        value={settings.companyInfo?.address?.address || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              address: {
-                                ...(settings.companyInfo?.address || {}),
-                                address: value,
-                              },
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_address",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  address: {
-                                    ...(settings.companyInfo?.address || {}),
-                                    address: v,
-                                  },
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_address"] || "idle"}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="Estate / Area"
-                        value={settings.companyInfo?.address?.estate || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              address: {
-                                ...(settings.companyInfo?.address || {}),
-                                estate: value,
-                              },
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_estate",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  address: {
-                                    ...(settings.companyInfo?.address || {}),
-                                    estate: v,
-                                  },
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_estate"] || "idle"}
-                      />
-                    </div>
+                    <Input
+                      placeholder="Street / Address"
+                      value={localCompanyInfo.address.street}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          address: {
+                            ...p.address,
+                            street: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                    <Input
+                      placeholder="State / Province"
+                      value={localCompanyInfo.address.state}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          address: {
+                            ...p.address,
+                            state: e.target.value,
+                          },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-3">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="City"
-                        value={settings.companyInfo?.address?.city || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              address: {
-                                ...(settings.companyInfo?.address || {}),
-                                city: value,
-                              },
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_city",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  address: {
-                                    ...(settings.companyInfo?.address || {}),
-                                    city: v,
-                                  },
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_city"] || "idle"}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="Country"
-                        value={settings.companyInfo?.address?.country || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              address: {
-                                ...(settings.companyInfo?.address || {}),
-                                country: value,
-                              },
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_country",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  address: {
-                                    ...(settings.companyInfo?.address || {}),
-                                    country: v,
-                                  },
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_country"] || "idle"}
-                      />
-                    </div>
+                    <Input
+                      placeholder="City"
+                      value={localCompanyInfo.address.city}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          address: {
+                            ...p.address,
+                            city: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                    <Input
+                      placeholder="Country"
+                      value={localCompanyInfo.address.country}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          address: {
+                            ...p.address,
+                            country: e.target.value,
+                          },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -715,110 +778,53 @@ export default function SettingsPage() {
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Phone
                     </label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={settings.companyInfo?.phone || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              phone: value,
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_phone",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  phone: v,
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_phone"] || "idle"}
-                      />
-                    </div>
+                    <Input
+                      value={localCompanyInfo.phone}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          phone: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Email
                     </label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="email"
-                        value={settings.companyInfo?.email || ""}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          updateSettings({
-                            companyInfo: {
-                              ...settings.companyInfo,
-                              email: value,
-                            },
-                          });
-                          createIndependentFieldHandler(
-                            "companyInfo_email",
-                            (v) =>
-                              updateSettings({
-                                companyInfo: {
-                                  ...settings.companyInfo,
-                                  email: v,
-                                },
-                              }),
-                          )(value);
-                        }}
-                      />
-                      <FieldSaveIndicator
-                        status={fieldStatus["companyInfo_email"] || "idle"}
-                      />
-                    </div>
+                    <Input
+                      type="email"
+                      value={localCompanyInfo.email}
+                      onChange={(e) =>
+                        setLocalCompanyInfo((p) => ({
+                          ...p,
+                          email: e.target.value,
+                        }))
+                      }
+                    />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Company Logo URL
                   </label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      placeholder="https://.../logo.png"
-                      value={settings.companyInfo?.logo?.url || ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        updateSettings({
-                          companyInfo: {
-                            ...settings.companyInfo,
-                            logo: {
-                              ...(settings.companyInfo?.logo || {}),
-                              url: value,
-                            },
-                          },
-                        });
-                        createIndependentFieldHandler(
-                          "companyInfo_logoUrl",
-                          (v) =>
-                            updateSettings({
-                              companyInfo: {
-                                ...settings.companyInfo,
-                                logo: {
-                                  ...(settings.companyInfo?.logo || {}),
-                                  url: v,
-                                },
-                              },
-                            }),
-                        )(value);
-                      }}
-                    />
-                    <FieldSaveIndicator
-                      status={fieldStatus["companyInfo_logoUrl"] || "idle"}
-                    />
-                  </div>
-                  {settings.companyInfo?.logo?.url && (
+                  <Input
+                    placeholder="https://.../logo.png"
+                    value={localCompanyInfo.logo.url}
+                    onChange={(e) =>
+                      setLocalCompanyInfo((p) => ({
+                        ...p,
+                        logo: {
+                          ...p.logo,
+                          url: e.target.value,
+                        },
+                      }))
+                    }
+                  />
+                  {localCompanyInfo.logo.url && (
                     <div className="mt-3">
                       <img
-                        src={settings.companyInfo.logo.url}
+                        src={localCompanyInfo.logo.url}
                         alt="Company logo preview"
                         className="h-16 w-16 object-contain rounded"
                       />
@@ -829,36 +835,64 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     License Number
                   </label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={settings.companyInfo?.licenseNumber || ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        updateSettings({
-                          companyInfo: {
-                            ...settings.companyInfo,
-                            licenseNumber: value,
-                          },
-                        });
-                        createIndependentFieldHandler(
-                          "companyInfo_licenseNumber",
-                          (v) =>
-                            updateSettings({
-                              companyInfo: {
-                                ...settings.companyInfo,
-                                licenseNumber: v,
-                              },
-                            }),
-                        )(value);
-                      }}
-                    />
-                    <FieldSaveIndicator
-                      status={
-                        fieldStatus["companyInfo_licenseNumber"] || "idle"
-                      }
-                    />
-                  </div>
+                  <Input
+                    value={localCompanyInfo.licenseNumber}
+                    onChange={(e) =>
+                      setLocalCompanyInfo((p) => ({
+                        ...p,
+                        licenseNumber: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
+                <Button
+                  onClick={async () => {
+                    setCompanyInfoSaving(true);
+                    setCompanyInfoError(null);
+                    try {
+                      if (!settingsId) {
+                        alert(
+                          "Settings not initialized. Please refresh and try again.",
+                        );
+                        return;
+                      }
+                      await updateSettingsOnApi(settingsId, {
+                        companyInfo: {
+                          ...localCompanyInfo,
+                          address: {
+                            street: localCompanyInfo.address.street,
+                            state: localCompanyInfo.address.state,
+                            city: localCompanyInfo.address.city,
+                            country: localCompanyInfo.address.country,
+                          },
+                        },
+                      });
+                      setSettings((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              companyInfo: localCompanyInfo,
+                            }
+                          : null,
+                      );
+                      alert("Company information saved successfully");
+                    } catch (err) {
+                      console.error("Failed to save company info", err);
+                      setCompanyInfoError(
+                        err instanceof Error ? err.message : "Save failed",
+                      );
+                      alert("Failed to save company information");
+                    } finally {
+                      setCompanyInfoSaving(false);
+                    }
+                  }}
+                  disabled={companyInfoSaving}
+                >
+                  {companyInfoSaving ? "Saving..." : "Save Company Info"}
+                </Button>
+                {companyInfoError && (
+                  <div className="text-sm text-red-600">{companyInfoError}</div>
+                )}
               </div>
             </div>
           </TabsContent>
@@ -914,6 +948,13 @@ export default function SettingsPage() {
                                     },
                                   },
                                 }),
+                              {
+                                finance: {
+                                  currency: {
+                                    code: value,
+                                  },
+                                },
+                              },
                             )(value);
                           }}
                         >
@@ -1041,13 +1082,20 @@ export default function SettingsPage() {
                         },
                       });
 
-                      createIndependentFieldHandler("systemFeatures_map", (v) =>
-                        updateSettings({
-                          systemFeatures: {
-                            ...(settings.systemFeatures || {}),
-                            map: v,
+                      createIndependentFieldHandler(
+                        "systemFeatures_map",
+                        (v) =>
+                          updateSettings({
+                            systemFeatures: {
+                              ...(settings.systemFeatures || {}),
+                              map: v,
+                            },
+                          }),
+                        {
+                          features: {
+                            map: checked,
                           },
-                        }),
+                        },
                       )(checked);
                     }}
                   />
@@ -1080,6 +1128,11 @@ export default function SettingsPage() {
                               messaging: v,
                             },
                           }),
+                        {
+                          features: {
+                            messaging: checked,
+                          },
+                        },
                       )(checked);
                     }}
                   />
@@ -1112,6 +1165,11 @@ export default function SettingsPage() {
                               analytics: v,
                             },
                           }),
+                        {
+                          features: {
+                            analytics: checked,
+                          },
+                        },
                       )(checked);
                     }}
                   />
@@ -1144,6 +1202,11 @@ export default function SettingsPage() {
                               reporting: v,
                             },
                           }),
+                        {
+                          features: {
+                            reporting: checked,
+                          },
+                        },
                       )(checked);
                     }}
                   />
@@ -1176,6 +1239,11 @@ export default function SettingsPage() {
                               auditing: v,
                             },
                           }),
+                        {
+                          features: {
+                            auditing: checked,
+                          },
+                        },
                       )(checked);
                     }}
                   />
@@ -1252,6 +1320,14 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              security: {
+                                autoLogout: {
+                                  enabled: true,
+                                  durationMinutes: newVal,
+                                },
+                              },
+                            },
                           )(newVal);
                         }}
                       />
@@ -1360,6 +1436,13 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              security: {
+                                autoLockout: {
+                                  enabled: checked,
+                                },
+                              },
+                            },
                           )(checked);
                         }}
                       />
@@ -1410,6 +1493,13 @@ export default function SettingsPage() {
                                     },
                                   },
                                 }),
+                              {
+                                security: {
+                                  autoLockout: {
+                                    threshold: value,
+                                  },
+                                },
+                              },
                             )(value);
                           }}
                         />
@@ -1946,6 +2036,13 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              tenantPortal: {
+                                portalFeatures: {
+                                  rentPayment: checked,
+                                },
+                              },
+                            },
                           )(checked);
                         }}
                       />
@@ -1992,6 +2089,13 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              tenantPortal: {
+                                portalFeatures: {
+                                  messages: checked,
+                                },
+                              },
+                            },
                           )(checked);
                         }}
                       />
@@ -2037,6 +2141,13 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              tenantPortal: {
+                                portalFeatures: {
+                                  maintenanceRequests: checked,
+                                },
+                              },
+                            },
                           )(checked);
                         }}
                       />
@@ -2084,6 +2195,13 @@ export default function SettingsPage() {
                                   },
                                 },
                               }),
+                            {
+                              tenantPortal: {
+                                portalFeatures: {
+                                  evictionNotice: checked,
+                                },
+                              },
+                            },
                           )(checked);
                         }}
                       />

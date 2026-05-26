@@ -56,7 +56,8 @@ import { deleteProperty } from "@/lib/services/properties";
 import { apiRequest } from "@/lib/query-client";
 import { url } from "inspector";
 import { useAuth } from "@/lib/auth-context";
-import { formatCurrency, getActiveCurrency } from "@/lib/currency";
+import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 interface SpecificationRow {
   title: string;
@@ -74,15 +75,12 @@ export default function PropertyDetailPage({
 }: PropertyDetailPageProps) {
   const { id } = use(params);
   const { properties, tenants } = useAppData();
-  const [activeCurrency, setActiveCurrency] = useState("USD");
+  const activeCurrency = useActiveCurrency();
   const [property, setProperty] = useState<any>(() =>
     properties.find((item) => item.id === id),
   );
   const { token } = useAuth();
 
-  useEffect(() => {
-    setActiveCurrency(getActiveCurrency());
-  }, []);
   const refreshProperty = () => {
     const updated = properties.find((item) => item.id === id);
     setProperty(updated);
@@ -814,7 +812,8 @@ export default function PropertyDetailPage({
                       Monthly Income
                     </p>
                     <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      ${formatCompactNumber(totalMonthlyIncome)}
+                      {getCurrencySymbol(activeCurrency)}
+                      {formatCompactNumber(totalMonthlyIncome)}
                     </p>
                   </div>
                   <div>
@@ -822,7 +821,8 @@ export default function PropertyDetailPage({
                       Annual Income
                     </p>
                     <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      ${formatCompactNumber(totalAnnualIncome)}
+                      {getCurrencySymbol(activeCurrency)}
+                      {formatCompactNumber(totalAnnualIncome)}
                     </p>
                   </div>
                 </div>
