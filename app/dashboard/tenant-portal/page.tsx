@@ -41,8 +41,11 @@ import { listPayments } from "@/lib/services/payments";
 import {
   getTenantPortalSettings,
   initializeSystemSettings,
-  updateFeatureToggles,
+  convertPayloadToTenantPortalSettings,
+  createSettingsOnApi,
+  updateSettingsOnApi,
 } from "@/lib/services/settings";
+import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import Link from "next/link";
@@ -88,10 +91,26 @@ export default function TenantPortalPage() {
   ]);
 
   const { tenants, properties } = useAppData();
+  const {
+    settings: apiSettings,
+    settingsId,
+    refresh: refreshSettings,
+  } = useSettings();
   const [payments, setPayments] = useState<any[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const getTenantSettingsForPortal = () => {
+    if (apiSettings) {
+      return convertPayloadToTenantPortalSettings(apiSettings);
+    }
+    return (
+      getTenantPortalSettings() ??
+      initializeSystemSettings().tenantPortalSettings
+    );
+  };
 
   // Load tenants, properties, and payments data on mount
   useEffect(() => {
@@ -201,9 +220,7 @@ export default function TenantPortalPage() {
   };
 
   const updatePortalFeaturesFromSettings = () => {
-    const tenantSettings =
-      getTenantPortalSettings() ??
-      initializeSystemSettings().tenantPortalSettings;
+    const tenantSettings = getTenantSettingsForPortal();
 
     if (tenantSettings?.featureToggles) {
       setPortalFeatures((prev) =>
@@ -244,7 +261,16 @@ export default function TenantPortalPage() {
         handleSettingsChanged as EventListener,
       );
     };
-  }, []);
+  }, [apiSettings]);
+
+  const dispatchSystemSettingsChange = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event("system-settings-changed"));
+    localStorage.setItem(
+      "propman:v1",
+      JSON.stringify({ updatedAt: Date.now() }),
+    );
+  };
 
   const handleFeatureToggle = (featureId: string) => {
     setPortalFeatures((prev) =>
@@ -256,7 +282,7 @@ export default function TenantPortalPage() {
     );
   };
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     const settingsUpdates = portalFeatures.reduce(
       (acc, feature) => {
         const settingKey = featureToggleMap[feature.id];
@@ -268,11 +294,40 @@ export default function TenantPortalPage() {
       {} as Record<string, boolean>,
     );
 
-    const updatedSettings = updateFeatureToggles(settingsUpdates);
-    if (updatedSettings) {
+    const payload = {
+      tenantPortal: {
+        portalFeatures: settingsUpdates,
+      },
+    };
+
+    setIsSaving(true);
+
+    try {
+      let result = null;
+
+      if (settingsId) {
+        result = await updateSettingsOnApi(settingsId, payload);
+      } else {
+        result = await createSettingsOnApi(payload);
+      }
+
+      if (!result) {
+        throw new Error("Failed to save tenant portal settings to backend");
+      }
+
+      await refreshSettings();
+      dispatchSystemSettingsChange();
+      updatePortalFeaturesFromSettings();
       alert("Settings saved successfully!");
-    } else {
-      alert("Failed to save tenant portal settings.");
+    } catch (error) {
+      console.error("Failed to save tenant portal settings:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to save tenant portal settings.",
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -296,10 +351,11 @@ export default function TenantPortalPage() {
           </h2>
           <Button
             onClick={handleSaveSettings}
+            disabled={isSaving}
             className="bg-primary hover:bg-primary/90 text-white"
           >
             <CheckCircle className="w-4 h-4 mr-2" />
-            Save Settings
+            {isSaving ? "Saving..." : "Save Settings"}
           </Button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -382,6 +382,88 @@ export default function SettingsPage() {
     setFieldErrors((prev) => ({ ...prev, [flatKey]: "" }));
   };
 
+  const dispatchSystemSettingsChange = () => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event("system-settings-changed"));
+    localStorage.setItem(
+      "propman:v1",
+      JSON.stringify({ updatedAt: Date.now() }),
+    );
+  };
+
+  const portalFeatureFieldKeys = [
+    "tenantPortalFeatures_rentPayment",
+    "tenantPortalFeatures_messages",
+    "tenantPortalFeatures_maintenanceRequests",
+    "tenantPortalFeatures_evictionNotice",
+  ];
+
+  const isAnyPortalFeatureSaving = () =>
+    portalFeatureFieldKeys.some((key) => fieldStatus[key] === "saving");
+
+  const buildTenantPortalFeaturePayload = (
+    localFeatureKey: string,
+    checked: boolean,
+  ) => {
+    const current = settings?.tenantPortalSettings?.featureToggles || {};
+
+    return {
+      tenantPortal: {
+        portalFeatures: {
+          rentPayment:
+            localFeatureKey === "paymentPortal"
+              ? checked
+              : (current.paymentPortal ?? true),
+          messages:
+            localFeatureKey === "messages"
+              ? checked
+              : (current.messages ?? true),
+          maintenanceRequests:
+            localFeatureKey === "maintenanceRequests"
+              ? checked
+              : (current.maintenanceRequests ?? true),
+          evictionNotice:
+            localFeatureKey === "evictionNotice"
+              ? checked
+              : (current.evictionNotice ?? false),
+        },
+      },
+    };
+  };
+
+  const updateTenantPortalToggle = (
+    fieldKey: string,
+    featureKey: string,
+    checked: boolean,
+  ) => {
+    updateSettings((prev) => ({
+      ...prev,
+      tenantPortalSettings: {
+        ...prev?.tenantPortalSettings,
+        featureToggles: {
+          ...prev?.tenantPortalSettings?.featureToggles,
+          [featureKey]: checked,
+        },
+      },
+    }));
+
+    createIndependentFieldHandler(
+      fieldKey,
+      (v) =>
+        updateSettings((prev) => ({
+          ...prev,
+          tenantPortalSettings: {
+            ...prev?.tenantPortalSettings,
+            featureToggles: {
+              ...prev?.tenantPortalSettings?.featureToggles,
+              [featureKey]: v,
+            },
+          },
+        })),
+      buildTenantPortalFeaturePayload(featureKey, checked),
+    )(checked);
+  };
+
   // Factory to create debounced field update handlers
   const createIndependentFieldHandler = (
     flatKey: string,
@@ -402,6 +484,7 @@ export default function SettingsPage() {
               // After creating settings, refresh the context to pick up the new settingsId
               if (created?._id) {
                 await refreshSettings();
+                dispatchSystemSettingsChange();
               }
             } else {
               const updated = await updateSettingsOnApi(
@@ -413,6 +496,7 @@ export default function SettingsPage() {
               }
               // Refresh shared settings so other pages use the updated currency value
               await refreshSettings();
+              dispatchSystemSettingsChange();
             }
           }
 
@@ -489,10 +573,14 @@ export default function SettingsPage() {
     loadSettings();
   }, [apiSettings, settingsLoading, settingsError]);
 
-  const updateSettings = (updates: any) => {
+  const updateSettings = (
+    updates: any | ((prev: SystemSettings | null) => SystemSettings | null),
+  ) => {
     setSettings((prev: SystemSettings | null) => {
       if (!prev) return null;
-      return { ...prev, ...updates };
+      return typeof updates === "function"
+        ? updates(prev)
+        : { ...prev, ...updates };
     });
   };
 
@@ -2011,39 +2099,17 @@ export default function SettingsPage() {
                           settings.tenantPortalSettings?.featureToggles
                             ?.paymentPortal ?? true
                         }
+                        disabled={
+                          isAnyPortalFeatureSaving() ||
+                          fieldStatus["tenantPortalFeatures_rentPayment"] ===
+                            "saving"
+                        }
                         onCheckedChange={(checked) => {
-                          updateSettings({
-                            tenantPortalSettings: {
-                              ...settings.tenantPortalSettings,
-                              featureToggles: {
-                                ...settings.tenantPortalSettings
-                                  ?.featureToggles,
-                                paymentPortal: checked,
-                              },
-                            },
-                          });
-
-                          createIndependentFieldHandler(
+                          updateTenantPortalToggle(
                             "tenantPortalFeatures_rentPayment",
-                            (v) =>
-                              updateSettings({
-                                tenantPortalSettings: {
-                                  ...settings.tenantPortalSettings,
-                                  featureToggles: {
-                                    ...settings.tenantPortalSettings
-                                      ?.featureToggles,
-                                    paymentPortal: v,
-                                  },
-                                },
-                              }),
-                            {
-                              tenantPortal: {
-                                portalFeatures: {
-                                  rentPayment: checked,
-                                },
-                              },
-                            },
-                          )(checked);
+                            "paymentPortal",
+                            checked,
+                          );
                         }}
                       />
                       <FieldSaveIndicator
@@ -2064,39 +2130,17 @@ export default function SettingsPage() {
                           settings.tenantPortalSettings?.featureToggles
                             ?.messages ?? true
                         }
+                        disabled={
+                          isAnyPortalFeatureSaving() ||
+                          fieldStatus["tenantPortalFeatures_messages"] ===
+                            "saving"
+                        }
                         onCheckedChange={(checked) => {
-                          updateSettings({
-                            tenantPortalSettings: {
-                              ...settings.tenantPortalSettings,
-                              featureToggles: {
-                                ...settings.tenantPortalSettings
-                                  ?.featureToggles,
-                                messages: checked,
-                              },
-                            },
-                          });
-
-                          createIndependentFieldHandler(
+                          updateTenantPortalToggle(
                             "tenantPortalFeatures_messages",
-                            (v) =>
-                              updateSettings({
-                                tenantPortalSettings: {
-                                  ...settings.tenantPortalSettings,
-                                  featureToggles: {
-                                    ...settings.tenantPortalSettings
-                                      ?.featureToggles,
-                                    messages: v,
-                                  },
-                                },
-                              }),
-                            {
-                              tenantPortal: {
-                                portalFeatures: {
-                                  messages: checked,
-                                },
-                              },
-                            },
-                          )(checked);
+                            "messages",
+                            checked,
+                          );
                         }}
                       />
                       <FieldSaveIndicator
@@ -2116,39 +2160,18 @@ export default function SettingsPage() {
                           settings.tenantPortalSettings?.featureToggles
                             ?.maintenanceRequests ?? true
                         }
+                        disabled={
+                          isAnyPortalFeatureSaving() ||
+                          fieldStatus[
+                            "tenantPortalFeatures_maintenanceRequests"
+                          ] === "saving"
+                        }
                         onCheckedChange={(checked) => {
-                          updateSettings({
-                            tenantPortalSettings: {
-                              ...settings.tenantPortalSettings,
-                              featureToggles: {
-                                ...settings.tenantPortalSettings
-                                  ?.featureToggles,
-                                maintenanceRequests: checked,
-                              },
-                            },
-                          });
-
-                          createIndependentFieldHandler(
+                          updateTenantPortalToggle(
                             "tenantPortalFeatures_maintenanceRequests",
-                            (v) =>
-                              updateSettings({
-                                tenantPortalSettings: {
-                                  ...settings.tenantPortalSettings,
-                                  featureToggles: {
-                                    ...settings.tenantPortalSettings
-                                      ?.featureToggles,
-                                    maintenanceRequests: v,
-                                  },
-                                },
-                              }),
-                            {
-                              tenantPortal: {
-                                portalFeatures: {
-                                  maintenanceRequests: checked,
-                                },
-                              },
-                            },
-                          )(checked);
+                            "maintenanceRequests",
+                            checked,
+                          );
                         }}
                       />
                       <FieldSaveIndicator
@@ -2170,39 +2193,17 @@ export default function SettingsPage() {
                           settings.tenantPortalSettings?.featureToggles
                             ?.evictionNotice ?? false
                         }
+                        disabled={
+                          isAnyPortalFeatureSaving() ||
+                          fieldStatus["tenantPortalFeatures_evictionNotice"] ===
+                            "saving"
+                        }
                         onCheckedChange={(checked) => {
-                          updateSettings({
-                            tenantPortalSettings: {
-                              ...settings.tenantPortalSettings,
-                              featureToggles: {
-                                ...settings.tenantPortalSettings
-                                  ?.featureToggles,
-                                evictionNotice: checked,
-                              },
-                            },
-                          });
-
-                          createIndependentFieldHandler(
+                          updateTenantPortalToggle(
                             "tenantPortalFeatures_evictionNotice",
-                            (v) =>
-                              updateSettings({
-                                tenantPortalSettings: {
-                                  ...settings.tenantPortalSettings,
-                                  featureToggles: {
-                                    ...settings.tenantPortalSettings
-                                      ?.featureToggles,
-                                    evictionNotice: v,
-                                  },
-                                },
-                              }),
-                            {
-                              tenantPortal: {
-                                portalFeatures: {
-                                  evictionNotice: checked,
-                                },
-                              },
-                            },
-                          )(checked);
+                            "evictionNotice",
+                            checked,
+                          );
                         }}
                       />
                       <FieldSaveIndicator
