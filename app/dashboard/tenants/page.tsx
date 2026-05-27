@@ -20,7 +20,15 @@ import {
   ArrowRight,
   MoreVertical,
   Eye,
+  DollarSign,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -42,6 +50,8 @@ export default function TenantsPage() {
   const [showAddForm, setShowAddForm] = useState(false);
 
   const { tenants, properties, isLoading } = useAppData();
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
 
   if (isLoading) {
     return (
@@ -335,17 +345,37 @@ export default function TenantsPage() {
                         : "--"}
                   </td>
                   <td className="px-6 py-4">
-                    <Link
-                      href={`/dashboard/tenants/${tenant.id || tenant._id}`}
-                    >
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-border bg-transparent"
-                      >
-                        View
-                      </Button>
-                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-border bg-transparent"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link
+                            href={`/dashboard/tenants/${tenant.id || tenant._id}`}
+                            className="flex items-center"
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setSelectedTenant(tenant);
+                            setShowRecordPayment(true);
+                          }}
+                        >
+                          <DollarSign className="mr-2 h-4 w-4" />
+                          Record Payment
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -353,6 +383,16 @@ export default function TenantsPage() {
           </table>
         </div>
       </Card>
+
+      <RecordPaymentModal
+        open={showRecordPayment}
+        onOpenChange={(v) => {
+          setShowRecordPayment(v);
+          if (!v) setSelectedTenant(null);
+        }}
+        tenantId={selectedTenant?.id}
+        propertyId={selectedTenant?.propertyId}
+      />
 
       {/* Empty State */}
       {filteredTenants.length === 0 && (

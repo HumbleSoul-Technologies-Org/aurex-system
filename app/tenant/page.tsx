@@ -242,17 +242,28 @@ export default function TenantDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         {/* Recent Payments */}
         <Card className="border border-border p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 md:mb-6">
             <h2 className="text-lg md:text-xl font-bold text-foreground">
               Recent Payments
             </h2>
-            <Button
-              variant="ghost"
-              asChild
-              className="text-primary hover:text-primary/90"
-            >
-              <Link href="/tenant/payments">View All</Link>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" asChild className="h-10">
+                <Link
+                  href="/tenant/make-payment"
+                  className="flex items-center gap-2"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Pay Rent
+                </Link>
+              </Button>
+              <Button
+                variant="ghost"
+                asChild
+                className="text-primary hover:text-primary/90 h-10"
+              >
+                <Link href="/tenant/payments">View All</Link>
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">

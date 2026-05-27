@@ -75,6 +75,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { deletePayment } from "@/lib/services/payments";
 import AddExpenseForm from "@/components/forms/add-expense-form";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
 export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState("rent-collection");
@@ -217,6 +218,7 @@ export default function FinancesPage() {
   const isPageLoading = isLoading || isExpensesLoading;
 
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
 
   // dialog for viewing/editing a transaction
   const [selectedTx, setSelectedTx] = useState<any | null>(null);
@@ -262,10 +264,6 @@ export default function FinancesPage() {
             Manage rent collection, expenses, and financial reports
           </p>
         </div>
-        {/* <Button className="bg-primary hover:bg-primary/90 text-white">
-          <Download className="w-4 h-4 mr-2" />
-          Export Report
-        </Button> */}
       </div>
 
       {/* Key Metrics */}
@@ -320,6 +318,10 @@ export default function FinancesPage() {
       {/* Tabs */}
 
       {/* transaction detail dialog */}
+      <RecordPaymentModal
+        open={showRecordPayment}
+        onOpenChange={setShowRecordPayment}
+      />
       <Dialog open={isTxDialogOpen} onOpenChange={setIsTxDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -624,20 +626,16 @@ export default function FinancesPage() {
               <option value="completed">Paid</option>
               <option value="pending">Pending</option>
             </select>
-            {/* <Button size="sm" onClick={async () => {
-              const tenantId = prompt('Tenant ID (optional)') || undefined
-              const amtStr = prompt('Payment amount')
-              if (!amtStr) return
-              const amount = Number(amtStr)
-              if (Number.isNaN(amount)) return alert('Invalid amount')
-              const desc = prompt('Description (optional)') || 'Manual payment'
-              const created = await createTransaction({ tenantId, amount, type: 'rent', description: desc })
-              if (created) alert('Payment recorded')
-              else alert('Failed to record payment')
-            }}>
-              <Plus className="w-4 h-4 mr-2" />
-              Record Payment
-            </Button> */}
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setShowRecordPayment(true)}
+                className="bg-primary hover:bg-primary/90 text-white"
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                Record Payment
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">

@@ -27,9 +27,9 @@ import { currentTenant } from "@/app/lib/tenant-data";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
-  listPayments,
-  createPayment,
-  PaymentRecord,
+  getPaymentsForTenant,
+  createManualPayment,
+  RentPayment,
 } from "@/lib/services/payments";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
@@ -48,7 +48,7 @@ export default function PaymentsPage() {
   const [amount, setAmount] = useState<number>(0);
   const [method, setMethod] = useState("bank-transfer");
   const [processing, setProcessing] = useState(false);
-  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null);
+  const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
   const user = useMemo(() => getCurrentUser(), []);
   const tenant = useMemo(
@@ -71,16 +71,28 @@ export default function PaymentsPage() {
   }, [defaultRent]);
 
   useEffect(() => {
-    setPayments(listPayments());
+    const loadPayments = async () => {
+      if (tenant?.id) {
+        const paid = await getPaymentsForTenant(tenant.id);
+        setPayments(paid);
+      } else {
+        setPayments([]);
+      }
+    };
 
-    const onPaymentsUpdated = () => setPayments(listPayments());
+    loadPayments();
+
+    const onPaymentsUpdated = () => {
+      loadPayments();
+    };
+
     if (typeof window !== "undefined")
       window.addEventListener("paymentsUpdated", onPaymentsUpdated);
     return () => {
       if (typeof window !== "undefined")
         window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
     };
-  }, []);
+  }, [tenant?.id]);
 
   const tenantPayments = payments.filter(
     (p) => !currentTenant || p.tenantId === currentTenant.id,
@@ -95,20 +107,18 @@ export default function PaymentsPage() {
     else if (step === "confirm") {
       setProcessing(true);
       try {
-        const payload: Partial<PaymentRecord> = {
+        const payload: Partial<RentPayment> = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
-          unit: tenant?.unit,
           amount,
-          price_per_unit: property?.price_per_unit,
-          lease_start: tenant?.leaseStartDate,
-          lease_type: tenant?.leaseType,
-          balance:
-            (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
-          method,
-          date: new Date().toISOString(),
+          currency: "USD",
+          monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
+          paymentMethod: method as any,
+          paymentDate: new Date().toISOString(),
+          status: "recorded",
+          notes: "Tenant payment created from payments page",
         };
-        const rec = createPayment(payload);
+        const rec = await createManualPayment(payload);
         setSavedPayment(rec);
         if (typeof window !== "undefined")
           window.dispatchEvent(new CustomEvent("paymentsUpdated"));

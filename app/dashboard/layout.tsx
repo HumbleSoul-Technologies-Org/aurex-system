@@ -41,8 +41,8 @@ import {
   getUnreadCount,
   deleteNotification,
 } from "@/lib/services/notifications";
-import { getAllExpenses } from '@/lib/services/expenses'
-import { listTenants } from '@/lib/services/tenants'
+import { getAllExpenses } from "@/lib/services/expenses";
+import { listTenants } from "@/lib/services/tenants";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -117,7 +117,12 @@ export default function DashboardLayout({
     // Pending tenant approvals
     try {
       const tenants = listTenants();
-      const pendingTenants = tenants.filter((t) => t.status === 'pending' || t.status === undefined || t.status === 'awaiting').length;
+      const pendingTenants = tenants.filter(
+        (t) =>
+          t.status === "pending" ||
+          t.status === undefined ||
+          t.status === "awaiting",
+      ).length;
       setPendingApprovalsCount(pendingTenants);
     } catch (e) {
       setPendingApprovalsCount(0);
@@ -127,7 +132,9 @@ export default function DashboardLayout({
     (async () => {
       try {
         const all = await getAllExpenses();
-        const pendingExpenses = all.filter((ex) => ex.status === 'pending').length;
+        const pendingExpenses = all.filter(
+          (ex) => ex.status === "pending",
+        ).length;
         setPendingExpensesCount(pendingExpenses);
       } catch (e) {
         setPendingExpensesCount(0);

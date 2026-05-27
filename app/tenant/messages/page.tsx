@@ -19,6 +19,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import MessagesSkeleton from "@/components/ui/messages-skeleton";
 import { useToast } from "@/hooks/use-toast";
 import AnnouncementCard from "@/components/announcement-card";
 
@@ -85,6 +87,7 @@ export default function TenantMessagesPage() {
   const [modalAnimateIn, setModalAnimateIn] = useState(false);
   const isMobile = useIsMobile();
   const [showDetailsOnMobile, setShowDetailsOnMobile] = useState(false);
+  const [showInitialSkeleton, setShowInitialSkeleton] = useState(true);
 
   // Drag-to-scroll for filter chips
   const chipsRef = useRef<HTMLDivElement | null>(null);
@@ -180,6 +183,11 @@ export default function TenantMessagesPage() {
     if (!currentTenant?.id || !currentProperty?.id) return;
     loadMessages();
   }, [currentTenant?.id, currentProperty?.id, loadMessages]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setShowInitialSkeleton(false), 700);
+    return () => window.clearTimeout(t);
+  }, []);
 
   // Reset selection when filter changes
   useEffect(() => {
@@ -618,9 +626,11 @@ export default function TenantMessagesPage() {
 
           {/* Messages list */}
           <div className="flex-1 overflow-auto p-3 space-y-3">
-            {loading.messages && (
+            {loading.messages && showInitialSkeleton ? (
+              <MessagesSkeleton />
+            ) : loading.messages && !showInitialSkeleton ? (
               <div className="text-gray-500 text-center py-8">Loading...</div>
-            )}
+            ) : null}
             {!loading.messages && combinedForRender.length === 0 && (
               <div className="text-gray-500 flex flex-col items-center justify-center pt-16 text-center">
                 <span>No messages.</span>

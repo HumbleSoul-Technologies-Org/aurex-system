@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -73,6 +74,7 @@ export default function PendingTenantsPage() {
   );
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [approvalFilter, setApprovalFilter] = useState<
@@ -532,9 +534,25 @@ export default function PendingTenantsPage() {
                 </Button>
               </>
             )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowRecordPayment(true);
+                setShowActionsDialog(false);
+              }}
+            >
+              Record Payment
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Record Payment Modal */}
+      <RecordPaymentModal
+        open={showRecordPayment}
+        onOpenChange={setShowRecordPayment}
+        propertyId={selectedTenant?.propertyId}
+      />
 
       {/* Reject Dialog */}
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>

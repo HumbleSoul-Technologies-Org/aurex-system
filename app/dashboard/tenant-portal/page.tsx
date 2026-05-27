@@ -37,6 +37,7 @@ import {
   User,
 } from "lucide-react";
 import { useAppData } from "@/lib/data-context";
+import { Skeleton } from "@/components/ui/skeleton";
 import { listPayments } from "@/lib/services/payments";
 import {
   getTenantPortalSettings,
@@ -49,6 +50,7 @@ import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import Link from "next/link";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
 const featureToggleMap: Record<string, string> = {
   "rent-payment": "paymentPortal",
@@ -90,7 +92,15 @@ export default function TenantPortalPage() {
     },
   ]);
 
-  const { tenants, properties } = useAppData();
+  const { tenants, properties, isLoading } = useAppData();
+  const [showInitialSkeleton, setShowInitialSkeleton] = useState(true);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setShowInitialSkeleton(false), 700);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const showTenantPortalSkeleton = isLoading && showInitialSkeleton;
   const {
     settings: apiSettings,
     settingsId,
@@ -98,6 +108,7 @@ export default function TenantPortalPage() {
   } = useSettings();
   const [payments, setPayments] = useState<any[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
@@ -344,55 +355,77 @@ export default function TenantPortalPage() {
       </div>
 
       {/* Portal Features */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-foreground">
-            Available Features
-          </h2>
-          <Button
-            onClick={handleSaveSettings}
-            disabled={isSaving}
-            className="bg-primary hover:bg-primary/90 text-white"
-          >
-            <CheckCircle className="w-4 h-4 mr-2" />
-            {isSaving ? "Saving..." : "Save Settings"}
-          </Button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {portalFeatures.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <Card
-                key={feature.id}
-                className={`border p-4 ${
-                  feature.enabled
-                    ? "border-primary/30 bg-primary/5"
-                    : "border-border opacity-50"
-                }`}
-              >
-                <Icon className="w-8 h-8 text-primary mb-3" />
-                <h3 className="font-bold text-foreground text-sm md:text-base">
-                  {feature.title}
-                </h3>
-                <p className="text-xs md:text-sm text-muted-foreground mt-2">
-                  {feature.description}
-                </p>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-foreground">
-                      {feature.enabled ? "Enabled" : "Disabled"}
-                    </span>
-                    <Switch
-                      checked={feature.enabled}
-                      onCheckedChange={() => handleFeatureToggle(feature.id)}
-                    />
-                  </div>
+      {showTenantPortalSkeleton ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between mb-4">
+            <Skeleton className="h-8 w-1/4 rounded-md" />
+            <Skeleton className="h-10 w-24 rounded-md" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="border p-4">
+                <Skeleton className="h-8 w-8 mb-3 rounded-full" />
+                <Skeleton className="h-4 w-3/4 mb-2 rounded-md" />
+                <Skeleton className="h-3 w-full mb-4 rounded-md" />
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-1/4 rounded-md" />
+                  <Skeleton className="h-6 w-12 rounded-md" />
                 </div>
-              </Card>
-            );
-          })}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-foreground">
+              Available Features
+            </h2>
+            <Button
+              onClick={handleSaveSettings}
+              disabled={isSaving}
+              className="bg-primary hover:bg-primary/90 text-white"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              {isSaving ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {portalFeatures.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <Card
+                  key={feature.id}
+                  className={`border p-4 ${
+                    feature.enabled
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-border opacity-50"
+                  }`}
+                >
+                  <Icon className="w-8 h-8 text-primary mb-3" />
+                  <h3 className="font-bold text-foreground text-sm md:text-base">
+                    {feature.title}
+                  </h3>
+                  <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                    {feature.description}
+                  </p>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-foreground">
+                        {feature.enabled ? "Enabled" : "Disabled"}
+                      </span>
+                      <Switch
+                        checked={feature.enabled}
+                        onCheckedChange={() => handleFeatureToggle(feature.id)}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Active Tenants */}
       <Card className="border border-border p-4 md:p-6">
@@ -478,6 +511,15 @@ export default function TenantPortalPage() {
                             </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedTenant(tenant);
+                              setShowRecordPayment(true);
+                            }}
+                          >
+                            <DollarSign className="mr-2 h-4 w-4" />
+                            Record Payment
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onClick={() =>
                               handleTenantAction(tenant, "profile")
                             }
@@ -502,6 +544,16 @@ export default function TenantPortalPage() {
           </table>
         </div>
       </Card>
+
+      <RecordPaymentModal
+        open={showRecordPayment}
+        onOpenChange={(v) => {
+          setShowRecordPayment(v);
+          if (!v) setSelectedTenant(null);
+        }}
+        tenantId={selectedTenant?.id}
+        propertyId={selectedTenant?.propertyId}
+      />
 
       {/* Portal Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

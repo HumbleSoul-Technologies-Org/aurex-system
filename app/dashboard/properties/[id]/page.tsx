@@ -1,5 +1,13 @@
 "use client";
 
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
+
 import { useState, useRef, useEffect } from "react";
 import { use } from "react";
 import Image from "next/image";
@@ -43,6 +51,8 @@ import {
   Trash,
   X,
   MapPinOff,
+  MoreHorizontal,
+  Eye,
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { listTransactions } from "@/app/lib/transactions-client";
@@ -131,6 +141,8 @@ export default function PropertyDetailPage({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingProperty, setIsUpdatingProperty] = useState(false);
 
@@ -1221,12 +1233,37 @@ export default function PropertyDetailPage({
                                 {tenant.leaseType}
                               </td>
                               <td className="px-4 py-3">
-                                <Link
-                                  href={`/dashboard/tenants/${tenant.id}`}
-                                  className="text-blue-600 hover:text-blue-700 text-sm"
-                                >
-                                  View
-                                </Link>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="border-border bg-transparent"
+                                    >
+                                      <MoreHorizontal className="w-4 h-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem asChild>
+                                      <Link
+                                        href={`/dashboard/tenants/${tenant.id}`}
+                                        className="flex items-center"
+                                      >
+                                        <Eye className="mr-2 h-4 w-4" />
+                                        View
+                                      </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setShowRecordPayment(true);
+                                        setSelectedTenant(tenant);
+                                      }}
+                                    >
+                                      <DollarSign className="mr-2 h-4 w-4" />
+                                      Record Payment
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </td>
                             </tr>
                           ))}
@@ -1440,6 +1477,15 @@ export default function PropertyDetailPage({
           {/* <Button onClick={() => router.push('/dashboard/properties')}>Back to Properties</Button>   */}
         </div>
       )}
+      <RecordPaymentModal
+        open={showRecordPayment}
+        onOpenChange={(v) => {
+          setShowRecordPayment(v);
+          if (!v) setSelectedTenant(null);
+        }}
+        tenantId={selectedTenant?.id}
+        propertyId={property?.id}
+      />
     </div>
   );
 }

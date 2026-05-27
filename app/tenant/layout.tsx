@@ -24,6 +24,7 @@ import { BottomNavigation } from "@/components/ui/bottom-navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTenantContext } from "@/lib/tenant-context";
 import { TenantContextProvider } from "@/lib/tenant-context-provider";
+import { fetchMaintenanceRequestsByTenant } from "@/lib/services/maintenance";
 
 interface NavItem {
   label: string;
@@ -37,6 +38,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [completedMaintenanceCount, setCompletedMaintenanceCount] = useState(0);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -66,6 +68,20 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
     setUnreadCount(notifications.filter((n) => !n.read).length);
   }, [mounted]);
 
+  React.useEffect(() => {
+    if (!mounted) return;
+    if (!currentTenant?.id) return;
+    (async () => {
+      try {
+        const list = await fetchMaintenanceRequestsByTenant(currentTenant.id);
+        const completed = list.filter((m) => m.status === "completed").length;
+        setCompletedMaintenanceCount(completed);
+      } catch (e) {
+        setCompletedMaintenanceCount(0);
+      }
+    })();
+  }, [mounted, currentTenant?.id]);
+
   const unreadNotifications = mounted ? unreadCount : 0;
 
   const handleLogout = async () => {
@@ -93,11 +109,13 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       label: "Report Maintenance",
       href: "/tenant/maintenance",
       icon: <Wrench className="w-4 h-4" />,
+      badge: completedMaintenanceCount,
     },
     {
       label: "Messages",
       href: "/tenant/messages",
       icon: <MessageSquare className="w-4 h-4" />,
+      badge: unreadNotifications > 0 ? unreadNotifications : undefined,
     },
     {
       label: "Settings",
@@ -117,6 +135,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       label: "Maintenance",
       href: "/tenant/maintenance",
       icon: <Wrench className="w-4 h-4" />,
+      badge: completedMaintenanceCount,
     },
     {
       label: "Messages",
@@ -221,7 +240,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                     isActive
                       ? "bg-primary text-white"
                       : "text-foreground hover:bg-background"
-                  }  ${item.label === "Payments" ? "hidden" : ""}`}
+                  }`}
                 >
                   {item.icon}
                   <span className="flex-1 text-sm font-medium">

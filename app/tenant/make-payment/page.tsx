@@ -7,7 +7,7 @@ import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { paymentHistory } from "@/app/lib/tenant-data";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
-import { createPayment, PaymentRecord } from "@/lib/services/payments";
+import { createManualPayment, RentPayment } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useEffect } from "react";
@@ -37,7 +37,7 @@ export default function MakePaymentPage() {
   const [amount, setAmount] = useState<number>(defaultRent);
   const [method, setMethod] = useState("bank-transfer");
   const [processing, setProcessing] = useState(false);
-  const [savedPayment, setSavedPayment] = useState<PaymentRecord | null>(null);
+  const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
   const nextPayment = paymentHistory.find((p) => p.status === "pending");
 
@@ -47,20 +47,18 @@ export default function MakePaymentPage() {
     else if (step === "confirm") {
       setProcessing(true);
       try {
-        const payload: Partial<PaymentRecord> = {
+        const payload: Partial<RentPayment> = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
-          unit: tenant?.unit,
           amount,
-          price_per_unit: property?.price_per_unit,
-          lease_start: tenant?.leaseStartDate,
-          lease_type: tenant?.leaseType,
-          balance:
-            (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
-          method,
-          date: new Date().toISOString(),
+          currency: "USD",
+          monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
+          paymentMethod: method as any,
+          paymentDate: new Date().toISOString(),
+          status: "recorded",
+          notes: "Tenant-initiated rent payment",
         };
-        const rec = createPayment(payload);
+        const rec = await createManualPayment(payload);
         setSavedPayment(rec);
         if (typeof window !== "undefined")
           window.dispatchEvent(new CustomEvent("paymentsUpdated"));

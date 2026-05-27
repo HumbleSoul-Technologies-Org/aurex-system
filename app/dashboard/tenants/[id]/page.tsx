@@ -26,6 +26,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import RecordPaymentModal from "@/components/modals/record-payment-modal";
 import {
   Dialog,
   DialogContent,
@@ -91,6 +92,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
   // Edit form state
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
 
   const getLatestRentPaymentDate = (tenantPayments: any[]) => {
     const completedRentPayments = tenantPayments
@@ -165,6 +167,20 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     return () => {
       mounted = false;
     };
+  }, [tenant?.id]);
+
+  useEffect(() => {
+    const onPaymentsUpdated = () => {
+      try {
+        const all = listPayments();
+        setPayments(all.filter((p: any) => p.tenantId === tenant?.id));
+      } catch (e) {
+        setPayments([]);
+      }
+    };
+    window.addEventListener("paymentsUpdated", onPaymentsUpdated);
+    return () =>
+      window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
   }, [tenant?.id]);
 
   const generatePassword = async (length = 8) => {
@@ -866,47 +882,16 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     {getStatusLabel(tenant.status ?? "")}
                   </span>
                 </Card>
+                <RecordPaymentModal
+                  open={showRecordPayment}
+                  onOpenChange={(v) => setShowRecordPayment(v)}
+                  tenantId={tenant?.id}
+                  propertyId={tenant?.propertyId}
+                />
               </div>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-foreground">Payment History</h3>
-                <Button
-                  size="sm"
-                  onClick={async () => {
-                    const amtStr = prompt("Enter payment amount");
-                    if (!amtStr) return;
-                    const amount = Number(amtStr);
-                    if (Number.isNaN(amount)) return alert("Invalid amount");
-                    const desc =
-                      prompt("Description (optional)") || "Rent payment";
-                    try {
-                      const created = createPayment({
-                        tenantId: tenant.id,
-                        propertyId: tenant.propertyId,
-                        amount,
-                        date: new Date().toISOString(),
-                        status: "completed",
-                        method: "offline",
-                        note: desc,
-                      });
-                      if (created) {
-                        const all = listPayments();
-                        setPayments(
-                          all.filter((p: any) => p.tenantId === tenant.id),
-                        );
-                        // notify other pages
-                        if (typeof window !== "undefined")
-                          window.dispatchEvent(
-                            new CustomEvent("paymentsUpdated"),
-                          );
-                      } else {
-                        alert("Failed to record payment");
-                      }
-                    } catch (e) {
-                      console.error("createPayment failed", e);
-                      alert("Failed to record payment");
-                    }
-                  }}
-                >
+                <Button size="sm" onClick={() => setShowRecordPayment(true)}>
                   Record Payment
                 </Button>
               </div>
