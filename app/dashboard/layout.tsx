@@ -41,6 +41,8 @@ import {
   getUnreadCount,
   deleteNotification,
 } from "@/lib/services/notifications";
+import { getAllExpenses } from '@/lib/services/expenses'
+import { listTenants } from '@/lib/services/tenants'
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -63,6 +65,8 @@ export default function DashboardLayout({
   const [notifications, setNotifications] = useState<any[]>([]);
   const [pendingMaintenanceCount, setPendingMaintenanceCount] = useState(0);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
+  const [pendingExpensesCount, setPendingExpensesCount] = useState(0);
   const router = useRouter();
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
@@ -107,9 +111,28 @@ export default function DashboardLayout({
       (req) => req.status === "pending",
     ).length;
     setPendingMaintenanceCount(pendingCount);
+    // Messages unread count from notifications service
+    setUnreadMessagesCount(getUnreadCount());
 
-    // Messages are now fetched from API; unread count loaded dynamically in Communications page
-    setUnreadMessagesCount(0);
+    // Pending tenant approvals
+    try {
+      const tenants = listTenants();
+      const pendingTenants = tenants.filter((t) => t.status === 'pending' || t.status === undefined || t.status === 'awaiting').length;
+      setPendingApprovalsCount(pendingTenants);
+    } catch (e) {
+      setPendingApprovalsCount(0);
+    }
+
+    // Pending expenses (server-backed)
+    (async () => {
+      try {
+        const all = await getAllExpenses();
+        const pendingExpenses = all.filter((ex) => ex.status === 'pending').length;
+        setPendingExpensesCount(pendingExpenses);
+      } catch (e) {
+        setPendingExpensesCount(0);
+      }
+    })();
   }, []);
 
   const refreshNotifications = () => {
@@ -167,6 +190,7 @@ export default function DashboardLayout({
           label: "Pending Approvals",
           href: "/dashboard/admin/pending-tenants",
           icon: <Bell className="w-4 h-4" />,
+          badge: pendingApprovalsCount,
         },
         {
           label: "Maintenance",
@@ -188,7 +212,7 @@ export default function DashboardLayout({
           label: "Finances",
           href: "/dashboard/finances",
           icon: <DollarSign className="w-4 h-4" />,
-          badge: 0,
+          badge: pendingExpensesCount,
         },
       ],
     },
@@ -328,11 +352,11 @@ export default function DashboardLayout({
                           <span className="flex-1 text-sm font-medium">
                             {item.label}
                           </span>
-                          {/* {item?.badge > 0 && (
+                          {item?.badge > 0 && (
                             <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
                               {item.badge}
                             </span>
-                          )} */}
+                          )}
                         </Link>
                       );
                     })}
