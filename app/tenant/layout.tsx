@@ -221,7 +221,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                     isActive
                       ? "bg-primary text-white"
                       : "text-foreground hover:bg-background"
-                  }`}
+                  }  ${item.label === "Payments" ? "hidden" : ""}`}
                 >
                   {item.icon}
                   <span className="flex-1 text-sm font-medium">

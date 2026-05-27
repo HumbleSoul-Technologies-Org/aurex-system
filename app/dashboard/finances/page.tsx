@@ -63,6 +63,11 @@ import {
   Share2,
 } from "lucide-react";
 import {
+  AdminSkeletonHeader,
+  AdminTableSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -77,10 +82,15 @@ export default function FinancesPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "paid" | "pending">(
     "all",
   );
-  const { tenants: allTenants, properties: allProperties } = useAppData();
+  const {
+    tenants: allTenants,
+    properties: allProperties,
+    isLoading,
+  } = useAppData();
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [isExpensesLoading, setIsExpensesLoading] = useState(true);
   const activeCurrency = useActiveCurrency();
 
   useEffect(() => {
@@ -92,6 +102,8 @@ export default function FinancesPage() {
       } catch (e) {
         // fallback to empty list if API fails
         setTransactions([]);
+      } finally {
+        setIsExpensesLoading(false);
       }
     })();
 
@@ -202,6 +214,8 @@ export default function FinancesPage() {
     setPayments(listPayments());
   };
 
+  const isPageLoading = isLoading || isExpensesLoading;
+
   const [showAddExpense, setShowAddExpense] = useState(false);
 
   // dialog for viewing/editing a transaction
@@ -209,6 +223,34 @@ export default function FinancesPage() {
   const [isTxDialogOpen, setIsTxDialogOpen] = useState(false);
   const [isEditingTx, setIsEditingTx] = useState(false);
   const [txFormData, setTxFormData] = useState<any>({});
+
+  if (isPageLoading) {
+    return (
+      <div className="space-y-6">
+        <AdminSkeletonHeader />
+
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="border border-border p-4 sm:p-6">
+              <Skeleton className="h-5 w-1/3 mb-4 rounded-full" />
+              <Skeleton className="h-10 w-2/3 rounded-xl" />
+              <Skeleton className="h-4 w-1/2 rounded-xl mt-4" />
+            </Card>
+          ))}
+        </div>
+
+        <Card className="border border-border p-6">
+          <Skeleton className="h-6 w-1/3 rounded-xl mb-4" />
+          <Skeleton className="h-72 rounded-3xl" />
+        </Card>
+
+        <Card className="border border-border p-6">
+          <Skeleton className="h-6 w-1/3 rounded-xl mb-4" />
+          <AdminTableSkeleton rowCount={5} />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

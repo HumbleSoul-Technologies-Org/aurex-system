@@ -159,6 +159,7 @@ export interface CommunicationPreferences {
 
 export interface SecuritySettings {
   allowPasswordChange: boolean
+  autoLogoutEnabled?: boolean
   autoLogoutInactivityMinutes?: number
   allowAccountDeletion: boolean
   requirePasswordReset?: boolean
@@ -532,6 +533,7 @@ export function createDefaultSystemSettings(): SystemSettings {
       },
       securitySettings: {
         allowPasswordChange: true,
+        autoLogoutEnabled: true,
         autoLogoutInactivityMinutes: 30,
         allowAccountDeletion: false,
         requirePasswordReset: false,
@@ -871,7 +873,9 @@ export function convertToSettingsPayload(settings: Partial<TenantPortalSettings>
     },
     security: {
       autoLogout: {
-        enabled: true,
+        enabled:
+          settings.securitySettings?.autoLogoutEnabled ??
+          settings.securitySettings?.autoLogoutInactivityMinutes !== undefined,
         durationMinutes: settings.securitySettings?.autoLogoutInactivityMinutes ?? 30,
       },
       autoLockout: {
@@ -936,6 +940,7 @@ export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): 
     },
     securitySettings: {
       allowPasswordChange: true,
+      autoLogoutEnabled: payload.security?.autoLogout?.enabled ?? true,
       autoLogoutInactivityMinutes: payload.security?.autoLogout?.durationMinutes ?? 30,
       allowAccountDeletion: false,
       allowProfileEditing: payload.security?.allowProfileEditing ?? true,
@@ -1009,6 +1014,8 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
     },
     securitySettings: {
       allowPasswordChange: true,
+      autoLogoutEnabled:
+        flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes !== undefined,
       autoLogoutInactivityMinutes: flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
       allowAccountDeletion: false,
       allowProfileEditing: flatSettings.tenantPortalSecurity_allowProfileEditing ?? true,

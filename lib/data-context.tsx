@@ -12,6 +12,7 @@ interface DataContextValue {
   properties: PropertyRecord[];
   tenants: TenantRecord[];
   isLoading: boolean;
+  isFetching: boolean;
   isError: boolean;
   refetch: () => void;
 }
@@ -74,6 +75,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     properties: propertiesQuery.data ?? listProperties(),
     tenants: tenantsDerived ?? listTenants(),
     isLoading: propertiesQuery.isLoading,
+    isFetching: propertiesQuery.isFetching,
     isError: propertiesQuery.isError,
     refetch: () => {
       propertiesQuery.refetch();

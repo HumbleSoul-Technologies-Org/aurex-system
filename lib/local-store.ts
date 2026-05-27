@@ -165,6 +165,7 @@ export interface TenantPortalSettings {
   }
   securitySettings: {
     allowPasswordChange: boolean
+    autoLogoutEnabled?: boolean
     autoLogoutInactivityMinutes?: number
     allowAccountDeletion: boolean
     requirePasswordReset?: boolean

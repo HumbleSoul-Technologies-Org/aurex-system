@@ -38,6 +38,7 @@ import {
 } from "@/lib/services/announcements";
 import { useAppData } from "@/lib/data-context";
 import { useAuth } from "@/lib/auth-context";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   MessageSquare,
   Plus,
@@ -140,6 +141,16 @@ export default function CommunicationsPage() {
     AnnouncementRecord[]
   >([]);
   const [loading, setLoading] = useState(false);
+  const [showInitialSkeleton, setShowInitialSkeleton] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setShowInitialSkeleton(false);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const showConversationSkeleton = loading && showInitialSkeleton;
 
   // Load announcements on mount
   useEffect(() => {
@@ -633,340 +644,369 @@ export default function CommunicationsPage() {
 
       {/* Main Content */}
       <Card className="border border-border h-screen overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="border-b border-border rounded-none p-0 h-auto bg-transparent">
-            <TabsTrigger
-              value="conversations"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Conversations (
-              {conversations
-                ?.map((c) => c.conversations?.length || 0)
-                .reduce((a, b) => a + b, 0)}
-              )
-            </TabsTrigger>
-            <TabsTrigger
-              value="announcements"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
-            >
-              <Bell className="w-4 h-4 mr-2" />
-              Announcements ({announcementsData.length})
-            </TabsTrigger>
-          </TabsList>
+        {showConversationSkeleton ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_520px_360px] h-full p-4">
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-3/4 rounded-xl" />
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-24 rounded-3xl" />
+              ))}
+            </div>
 
-          {/* Conversations Tab */}
-          <TabsContent value="conversations" className="p-0">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_520px_360px] h-full">
-              {/* Property List */}
-              <div className="md:border-r border-border h-full">
-                <div className="p-4 border-b border-border flex items-center justify-between gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search properties..."
-                      className="pl-10"
-                    />
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-2/3 rounded-xl" />
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-28 rounded-3xl" />
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <Skeleton className="h-10 w-1/2 rounded-xl" />
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Skeleton key={index} className="h-16 rounded-3xl" />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
+            <TabsList className="border-b border-border rounded-none p-0 h-auto bg-transparent">
+              <TabsTrigger
+                value="conversations"
+                className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Conversations (
+                {conversations
+                  ?.map((c) => c.conversations?.length || 0)
+                  .reduce((a, b) => a + b, 0)}
+                )
+              </TabsTrigger>
+              <TabsTrigger
+                value="announcements"
+                className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+              >
+                <Bell className="w-4 h-4 mr-2" />
+                Announcements ({announcementsData.length})
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Conversations Tab */}
+            <TabsContent value="conversations" className="p-0">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_520px_360px] h-full">
+                {/* Property List */}
+                <div className="md:border-r border-border h-full">
+                  <div className="p-4 border-b border-border flex items-center justify-between gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search properties..."
+                        className="pl-10"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="overflow-y-auto space-y-2 p-2 h-full">
-                  {loading ? (
-                    <p className="text-xs text-muted-foreground text-center p-4">
-                      Loading...
-                    </p>
-                  ) : propertyConversations.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center p-4">
-                      No conversations yet
-                    </p>
-                  ) : (
-                    propertyConversations.map((conv) => {
-                      const propId = getPropertyRefId(conv.propertyId);
-                      return (
-                        <button
-                          key={propId}
-                          onClick={() => setSelectedPropertyId(propId)}
-                          className={`w-full text-left h-24 flex flex-col justify-center p-3 rounded-md transition-colors ${
-                            selectedPropertyId === propId
-                              ? "bg-primary text-white"
-                              : "hover:bg-secondary"
-                          }`}
-                        >
-                          <div className="font-medium text-sm truncate">
-                            {getPropertyName(conv?.propertyId)}
-                          </div>
-                          <div className="text-xs opacity-75 truncate">
-                            {getProperty(conv?.propertyId)?.tenants?.length ||
-                              0}{" "}
-                            Tenants
-                          </div>
-                          <div className="text-xs opacity-75 truncate">
-                            {conv.messages?.length || 0} Messages
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Message Area */}
-              {currentPropertyConversation ? (
-                <div className="flex flex-col h-full">
-                  {/* Header */}
-                  <div className="p-4 border-b border-border flex items-center justify-between gap-4">
-                    <div>
-                      <h2 className="font-bold text-lg text-foreground">
-                        {getPropertyName(
-                          currentPropertyConversation.propertyId,
-                        )}
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
-                        All messages of the conversation for this property.
-                        Select a message to view details and replies.
+                  <div className="overflow-y-auto space-y-2 p-2 h-full">
+                    {loading ? (
+                      <p className="text-xs text-muted-foreground text-center p-4">
+                        Loading...
                       </p>
-                    </div>
-                    <div>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          const pid = getPropertyRefId(
-                            currentPropertyConversation.propertyId,
-                          );
-                          setSendPropertyId(pid);
-                          setIsSendDialogOpen(true);
-                        }}
-                        className="rounded-full"
-                      >
-                        <MessageCirclePlus /> Create Message
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Message List */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {allMessages.length === 0 ? (
-                      <div className="flex h-full min-h-[240px] items-center justify-center text-muted-foreground">
-                        No messages yet. Send the first message!
-                      </div>
+                    ) : propertyConversations.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center p-4">
+                        No conversations yet
+                      </p>
                     ) : (
-                      allMessages?.map((msg, idx) => {
-                        const fromUserId = getUserRefId(msg.fromUserId);
-                        const toUserids = Array.isArray(msg.toUserId)
-                          ? msg.toUserId.map((u) => getUserRefId(u))
-                          : [getUserRefId(msg.toUserId)];
-                        const isFromCurrentUser = fromUserId === user?.id;
-                        const firstToUser = Array.isArray(msg.toUserId)
-                          ? msg.toUserId[0]
-                          : msg.toUserId;
-
+                      propertyConversations.map((conv) => {
+                        const propId = getPropertyRefId(conv.propertyId);
                         return (
-                          <div
-                            key={msg._id || idx}
-                            className={`p-4 border-b border-border rounded-md my-3 relative cursor-pointer ${
-                              selectedMessageId === (msg._id || msg.id)
-                                ? "bg-primary/10 text-white"
-                                : "hover:bg-muted/20"
+                          <button
+                            key={propId}
+                            onClick={() => setSelectedPropertyId(propId)}
+                            className={`w-full text-left h-24 flex flex-col justify-center p-3 rounded-md transition-colors ${
+                              selectedPropertyId === propId
+                                ? "bg-primary text-white"
+                                : "hover:bg-secondary"
                             }`}
-                            onClick={() =>
-                              setSelectedMessageId(msg._id || msg.id || null)
-                            }
                           >
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                              from:{" "}
-                              <b>
-                                {isFromCurrentUser
-                                  ? "You"
-                                  : getFromUserName(msg.fromUserId)}
-                              </b>{" "}
-                              to:
-                              <b>
-                                {toUserids.includes(user?.id || "")
-                                  ? "You"
-                                  : getToUserName(firstToUser)}{" "}
-                              </b>
-                            </p>
-
-                            <p className="text-sm mb-3 flex-wrap line-clamp-2 text-muted-foreground whitespace-pre-wrap">
-                              {msg.message}
-                            </p>
-                            <p className="text-xs absolute right-1 bottom-1 text-muted-foreground">
-                              {formatDateTime(msg.sentAt)}
-                            </p>
-                          </div>
+                            <div className="font-medium text-sm truncate">
+                              {getPropertyName(conv?.propertyId)}
+                            </div>
+                            <div className="text-xs opacity-75 truncate">
+                              {getProperty(conv?.propertyId)?.tenants?.length ||
+                                0}{" "}
+                              Tenants
+                            </div>
+                            <div className="text-xs opacity-75 truncate">
+                              {conv.messages?.length || 0} Messages
+                            </div>
+                          </button>
                         );
                       })
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="flex min-h-[320px] items-center justify-center p-8 text-muted-foreground">
-                  <MessageSquare className="w-12 h-12 opacity-50" />
-                </div>
-              )}
-              <div className="md:col-span-2 xl:col-span-1 border border-border rounded-xl bg-background p-4 min-h-[420px]">
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Message details
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Select a message to inspect its full details, recipients,
-                    and reply history.
-                  </p>
-                </div>
-                {selectedMessage ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-border bg-muted/50 p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                        From
-                      </p>
-                      <p className="font-semibold text-sm">
-                        {getUserRefId(selectedMessage.fromUserId) === user?.id
-                          ? "You"
-                          : getFromUserName(selectedMessage.fromUserId)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDateTime(selectedMessage.sentAt)}
-                      </p>
+
+                {/* Message Area */}
+                {currentPropertyConversation ? (
+                  <div className="flex flex-col h-full">
+                    {/* Header */}
+                    <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="font-bold text-lg text-foreground">
+                          {getPropertyName(
+                            currentPropertyConversation.propertyId,
+                          )}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                          All messages of the conversation for this property.
+                          Select a message to view details and replies.
+                        </p>
+                      </div>
+                      <div>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            const pid = getPropertyRefId(
+                              currentPropertyConversation.propertyId,
+                            );
+                            setSendPropertyId(pid);
+                            setIsSendDialogOpen(true);
+                          }}
+                          className="rounded-full"
+                        >
+                          <MessageCirclePlus /> Create Message
+                        </Button>
+                      </div>
                     </div>
-                    <div className="rounded-xl border border-border p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                        Recipients
-                      </p>
-                      <p className="text-sm">
-                        {selectedMessage.toUserId.length > 0
-                          ? selectedMessage.toUserId
-                              .map((toRef) =>
-                                getUserRefId(toRef) === user?.id
-                                  ? "You"
-                                  : getToUserName(toRef),
-                              )
-                              .join(", ")
-                          : "No recipients"}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                        Message
-                      </p>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {selectedMessage.message}
-                      </p>
-                    </div>
-                    <div className="rounded-xl border border-border p-4">
-                      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                        Seen by
-                      </p>
-                      <p className="text-sm">
-                        {selectedMessage.seenBy.length > 0
-                          ? selectedMessage.seenBy
-                              .map((seenRef) =>
-                                getUserRefId(seenRef) === user?.id
-                                  ? "You"
-                                  : getToUserName(seenRef),
-                              )
-                              .join(", ")
-                          : "No one yet"}
-                      </p>
-                    </div>
-                    {selectedMessage.replies &&
-                      selectedMessage.replies.length > 0 && (
-                        <div className="rounded-xl border border-border p-4">
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                            Replies
-                          </p>
-                          <div className="space-y-3">
-                            {selectedMessage.replies.map((reply) => (
-                              <div
-                                key={reply._id || reply.id}
-                                className="space-y-1"
-                              >
-                                <div className="font-semibold text-sm">
-                                  {getFromUserName(reply.fromUserId)}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatDateTime(reply.sentAt)}
-                                </p>
-                                <p className="text-sm whitespace-pre-wrap">
-                                  {reply.message}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
+
+                    {/* Message List */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {allMessages.length === 0 ? (
+                        <div className="flex h-full min-h-[240px] items-center justify-center text-muted-foreground">
+                          No messages yet. Send the first message!
                         </div>
+                      ) : (
+                        allMessages?.map((msg, idx) => {
+                          const fromUserId = getUserRefId(msg.fromUserId);
+                          const toUserids = Array.isArray(msg.toUserId)
+                            ? msg.toUserId.map((u) => getUserRefId(u))
+                            : [getUserRefId(msg.toUserId)];
+                          const isFromCurrentUser = fromUserId === user?.id;
+                          const firstToUser = Array.isArray(msg.toUserId)
+                            ? msg.toUserId[0]
+                            : msg.toUserId;
+
+                          return (
+                            <div
+                              key={msg._id || idx}
+                              className={`p-4 border-b border-border rounded-md my-3 relative cursor-pointer ${
+                                selectedMessageId === (msg._id || msg.id)
+                                  ? "bg-primary/10 text-white"
+                                  : "hover:bg-muted/20"
+                              }`}
+                              onClick={() =>
+                                setSelectedMessageId(msg._id || msg.id || null)
+                              }
+                            >
+                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                from:{" "}
+                                <b>
+                                  {isFromCurrentUser
+                                    ? "You"
+                                    : getFromUserName(msg.fromUserId)}
+                                </b>{" "}
+                                to:
+                                <b>
+                                  {toUserids.includes(user?.id || "")
+                                    ? "You"
+                                    : getToUserName(firstToUser)}{" "}
+                                </b>
+                              </p>
+
+                              <p className="text-sm mb-3 flex-wrap line-clamp-2 text-muted-foreground whitespace-pre-wrap">
+                                {msg.message}
+                              </p>
+                              <p className="text-xs absolute right-1 bottom-1 text-muted-foreground">
+                                {formatDateTime(msg.sentAt)}
+                              </p>
+                            </div>
+                          );
+                        })
                       )}
+                    </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-border h-full p-6 flex flex-col items-center justify-center text-center text-muted-foreground">
-                    <p className="font-semibold mb-2">Select a message</p>
-                    <p className="text-sm">
-                      Details about the selected message will appear here.
-                    </p>
+                  <div className="flex min-h-[320px] items-center justify-center p-8 text-muted-foreground">
+                    <MessageSquare className="w-12 h-12 opacity-50" />
                   </div>
                 )}
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Announcements Tab */}
-          <TabsContent value="announcements" className="p-6">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-bold text-foreground mb-4">
-                  Recent Announcements
-                </h3>
-                <div className="space-y-3">
-                  {announcementsData.length === 0 ? (
-                    <Card className="border border-border p-4">
-                      <p className="text-sm text-muted-foreground text-center">
-                        No announcements yet
-                      </p>
-                    </Card>
-                  ) : (
-                    announcementsData.map((announcement) => {
-                      const readTenants = tenants.filter((t) =>
-                        (announcement.readBy || []).includes(t.id),
-                      );
-                      return (
-                        <Card
-                          key={announcement.id}
-                          className="border border-border p-4"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <p className="font-semibold text-foreground">
-                              {announcement.title}
+                <div className="md:col-span-2 xl:col-span-1 border border-border rounded-xl bg-background p-4 min-h-[420px]">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Message details
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Select a message to inspect its full details, recipients,
+                      and reply history.
+                    </p>
+                  </div>
+                  {selectedMessage ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-border bg-muted/50 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                          From
+                        </p>
+                        <p className="font-semibold text-sm">
+                          {getUserRefId(selectedMessage.fromUserId) === user?.id
+                            ? "You"
+                            : getFromUserName(selectedMessage.fromUserId)}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDateTime(selectedMessage.sentAt)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                          Recipients
+                        </p>
+                        <p className="text-sm">
+                          {selectedMessage.toUserId.length > 0
+                            ? selectedMessage.toUserId
+                                .map((toRef) =>
+                                  getUserRefId(toRef) === user?.id
+                                    ? "You"
+                                    : getToUserName(toRef),
+                                )
+                                .join(", ")
+                            : "No recipients"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                          Message
+                        </p>
+                        <p className="text-sm whitespace-pre-wrap">
+                          {selectedMessage.message}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-border p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                          Seen by
+                        </p>
+                        <p className="text-sm">
+                          {selectedMessage.seenBy.length > 0
+                            ? selectedMessage.seenBy
+                                .map((seenRef) =>
+                                  getUserRefId(seenRef) === user?.id
+                                    ? "You"
+                                    : getToUserName(seenRef),
+                                )
+                                .join(", ")
+                            : "No one yet"}
+                        </p>
+                      </div>
+                      {selectedMessage.replies &&
+                        selectedMessage.replies.length > 0 && (
+                          <div className="rounded-xl border border-border p-4">
+                            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                              Replies
                             </p>
-                            <div className="flex items-center gap-2">
-                              <Eye className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">
-                                {readTenants.length} / {tenants.length}
-                              </span>
-                              <button
-                                onClick={() =>
-                                  deleteAnnouncement(announcement.id)
-                                }
-                                className="p-1 text-destructive hover:bg-destructive/10 rounded"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            <div className="space-y-3">
+                              {selectedMessage.replies.map((reply) => (
+                                <div
+                                  key={reply._id || reply.id}
+                                  className="space-y-1"
+                                >
+                                  <div className="font-semibold text-sm">
+                                    {getFromUserName(reply.fromUserId)}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatDateTime(reply.sentAt)}
+                                  </p>
+                                  <p className="text-sm whitespace-pre-wrap">
+                                    {reply.message}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
                           </div>
-
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
-                            {announcement.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-3">
-                            {formatDateTime(announcement.createdAt || "")}
-                          </p>
-                        </Card>
-                      );
-                    })
+                        )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border h-full p-6 flex flex-col items-center justify-center text-center text-muted-foreground">
+                      <p className="font-semibold mb-2">Select a message</p>
+                      <p className="text-sm">
+                        Details about the selected message will appear here.
+                      </p>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+
+            {/* Announcements Tab */}
+            <TabsContent value="announcements" className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground mb-4">
+                    Recent Announcements
+                  </h3>
+                  <div className="space-y-3">
+                    {announcementsData.length === 0 ? (
+                      <Card className="border border-border p-4">
+                        <p className="text-sm text-muted-foreground text-center">
+                          No announcements yet
+                        </p>
+                      </Card>
+                    ) : (
+                      announcementsData.map((announcement) => {
+                        const readTenants = tenants.filter((t) =>
+                          (announcement.readBy || []).includes(t.id),
+                        );
+                        return (
+                          <Card
+                            key={announcement.id}
+                            className="border border-border p-4"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <p className="font-semibold text-foreground">
+                                {announcement.title}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                  {readTenants.length} / {tenants.length}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    deleteAnnouncement(announcement.id)
+                                  }
+                                  className="p-1 text-destructive hover:bg-destructive/10 rounded"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
+                              {announcement.message}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-3">
+                              {formatDateTime(announcement.createdAt || "")}
+                            </p>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
       </Card>
     </div>
   );

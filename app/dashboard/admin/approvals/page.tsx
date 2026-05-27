@@ -21,6 +21,11 @@ import {
 } from "@/lib/services/admin-approval";
 import { createAdminUser } from "@/lib/services/adminApi";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import {
+  AdminCardListSkeleton,
+  AdminSkeletonHeader,
+  Skeleton,
+} from "@/components/ui/skeleton";
 
 export default function ApprovalsPage() {
   const { user } = useAuth();
@@ -147,10 +152,9 @@ export default function ApprovalsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
+        <div className="mx-auto max-w-6xl space-y-8">
+          <AdminSkeletonHeader />
+          <AdminCardListSkeleton count={3} />
         </div>
       </div>
     );

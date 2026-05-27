@@ -31,6 +31,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  AdminSkeletonHeader,
+  AdminTableSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
+import {
   getPendingTenants,
   approvePendingTenant,
   rejectPendingTenant,
@@ -164,10 +169,22 @@ export default function PendingTenantsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
-          <p className="text-muted-foreground">Loading pending tenants...</p>
+      <div className="min-h-screen bg-background p-8">
+        <div className="mx-auto max-w-6xl space-y-8">
+          <AdminSkeletonHeader />
+
+          <div className="rounded-3xl border border-border bg-card p-6 space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex flex-wrap gap-3">
+                <Skeleton className="h-10 w-24 rounded-full" />
+                <Skeleton className="h-10 w-24 rounded-full" />
+                <Skeleton className="h-10 w-24 rounded-full" />
+              </div>
+              <div className="flex-1" />
+              <Skeleton className="h-10 w-32 rounded-full" />
+            </div>
+            <AdminTableSkeleton rowCount={5} />
+          </div>
         </div>
       </div>
     );

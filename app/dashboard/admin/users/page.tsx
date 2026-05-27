@@ -36,6 +36,7 @@ import {
   CheckSquare,
   Square,
 } from "lucide-react";
+import { AdminTableSkeleton, Skeleton } from "@/components/ui/skeleton";
 import { listAdminUsers, AdminUser } from "@/lib/services/adminApi";
 import UserDetailModal from "./components/user-detail-modal";
 import CreateUserModal from "./components/create-user-modal";
@@ -260,9 +261,13 @@ export default function AdminUsersPage() {
       {/* Users Table */}
       <Card>
         {loading ? (
-          <div className="p-8 text-center">
-            <Loader2 className="w-8 h-8 animate-spin mx-auto text-muted-foreground" />
-            <p className="text-muted-foreground mt-2">Loading users...</p>
+          <div className="p-6 space-y-6">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Skeleton className="h-12 rounded-full w-full" />
+              <Skeleton className="h-12 rounded-full w-full" />
+              <Skeleton className="h-12 rounded-full w-full" />
+            </div>
+            <AdminTableSkeleton rowCount={6} />
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="p-8 text-center">

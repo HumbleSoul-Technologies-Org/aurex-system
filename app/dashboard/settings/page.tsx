@@ -364,9 +364,10 @@ export default function SettingsPage() {
     const securityPayload = {
       autoLogout: {
         enabled:
-          existingSecurity?.autoLogoutInactivityMinutes !== undefined
+          existingSecurity?.autoLogoutEnabled ??
+          (existingSecurity?.autoLogoutInactivityMinutes !== undefined
             ? existingSecurity.autoLogoutInactivityMinutes > 0
-            : true,
+            : true),
         durationMinutes:
           flatKey === "tenantPortalSecurity_autoLogoutInactivityMinutes"
             ? value
@@ -426,7 +427,7 @@ export default function SettingsPage() {
             ...securityPayload,
             autoLogout: {
               ...securityPayload.autoLogout,
-              enabled: true,
+              enabled: value !== undefined,
               durationMinutes: value,
             },
           },
@@ -1479,8 +1480,10 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={
-                          !!settings.tenantPortalSettings?.securitySettings
-                            ?.autoLogoutInactivityMinutes
+                          settings.tenantPortalSettings?.securitySettings
+                            ?.autoLogoutEnabled ??
+                          settings.tenantPortalSettings?.securitySettings
+                            ?.autoLogoutInactivityMinutes !== undefined
                         }
                         onCheckedChange={(checked) => {
                           const newVal = checked
@@ -1495,6 +1498,7 @@ export default function SettingsPage() {
                                 ...settings.tenantPortalSettings
                                   ?.securitySettings,
                                 autoLogoutInactivityMinutes: newVal,
+                                autoLogoutEnabled: checked,
                               },
                             },
                           });
@@ -1544,7 +1548,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   {settings.tenantPortalSettings?.securitySettings
-                    ?.autoLogoutInactivityMinutes !== undefined && (
+                    ?.autoLogoutEnabled && (
                     <div className="mt-3">
                       <label className="block text-sm font-medium text-foreground mb-2">
                         Inactivity Timeout
@@ -1553,7 +1557,7 @@ export default function SettingsPage() {
                         <Select
                           value={String(
                             settings.tenantPortalSettings?.securitySettings
-                              ?.autoLogoutInactivityMinutes || 30,
+                              ?.autoLogoutInactivityMinutes ?? 30,
                           )}
                           onValueChange={(value) => {
                             const numValue = Number(value);

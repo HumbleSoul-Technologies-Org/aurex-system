@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth-context";
+import {
+  AdminSkeletonHeader,
+  AdminTableSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
@@ -36,7 +41,26 @@ export default function TenantsPage() {
 
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const { tenants, properties } = useAppData();
+  const { tenants, properties, isLoading } = useAppData();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <AdminSkeletonHeader />
+
+        <Card className="border border-border p-4">
+          <Skeleton className="h-12 rounded-full w-full" />
+        </Card>
+
+        <Card className="border border-border overflow-hidden">
+          <div className="p-6 space-y-4">
+            <Skeleton className="h-10 w-1/4 rounded-xl" />
+            <AdminTableSkeleton rowCount={5} />
+          </div>
+        </Card>
+      </div>
+    );
+  }
   const { token } = useAuth();
 
   const enrichedTenants = tenants.map((tenant) => {

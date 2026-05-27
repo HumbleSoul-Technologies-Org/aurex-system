@@ -18,6 +18,11 @@ import {
   Cell,
 } from "recharts";
 import { useAppData } from "@/lib/data-context";
+import {
+  AdminSkeletonHeader,
+  AdminTableSkeleton,
+  Skeleton,
+} from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,11 +45,12 @@ export default function DashboardPage() {
   const router = useRouter();
 
   // State for real data
-  const { properties, tenants } = useAppData();
+  const { properties, tenants, isLoading } = useAppData();
   const [payments, setPayments] = useState<any[]>([]);
   const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
   const activeCurrency = useActiveCurrency();
+  const isPageLoading = !isHydrated || isLoading;
 
   // Load real data on mount
   useEffect(() => {
@@ -241,6 +247,37 @@ export default function DashboardPage() {
         };
       });
   }, [payments, tenants, properties]);
+
+  if (isPageLoading) {
+    return (
+      <div className="space-y-6 md:space-y-8">
+        <AdminSkeletonHeader />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="border border-border p-4 md:p-6">
+              <Skeleton className="h-5 w-1/2 mb-4 rounded-full" />
+              <div className="space-y-3">
+                <Skeleton className="h-7 w-3/4 rounded-xl" />
+                <Skeleton className="h-5 w-1/2 rounded-xl" />
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.7fr_1.3fr]">
+          <Card className="border border-border p-6">
+            <Skeleton className="h-6 w-1/3 rounded-xl mb-4" />
+            <Skeleton className="h-72 rounded-3xl" />
+          </Card>
+          <Card className="border border-border p-6">
+            <Skeleton className="h-6 w-1/3 rounded-xl mb-4" />
+            <AdminTableSkeleton rowCount={4} />
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 md:space-y-8">

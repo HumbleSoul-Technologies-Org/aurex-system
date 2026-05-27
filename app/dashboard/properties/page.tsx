@@ -23,6 +23,7 @@ import {
   DollarSign,
   User,
 } from "lucide-react";
+import { AdminSkeletonHeader, Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
@@ -34,7 +35,36 @@ export default function PropertiesPage() {
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
-  const { properties } = useAppData();
+  const { properties, isLoading } = useAppData();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <AdminSkeletonHeader />
+
+        <Card className="border border-border p-4">
+          <Skeleton className="h-12 rounded-full w-full" />
+        </Card>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Card
+              key={index}
+              className="border border-border overflow-hidden hover:shadow-lg transition-shadow cursor-pointer h-full"
+            >
+              <Skeleton className="h-48 rounded-3xl" />
+              <div className="p-4 space-y-3">
+                <Skeleton className="h-5 w-3/4 rounded-xl" />
+                <Skeleton className="h-4 w-2/3 rounded-xl" />
+                <Skeleton className="h-4 w-1/2 rounded-xl" />
+                <Skeleton className="h-10 w-24 rounded-full" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const filteredProperties = properties.filter((prop) => {
     const matchesSearch =
