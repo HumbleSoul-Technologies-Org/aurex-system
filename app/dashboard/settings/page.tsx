@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -56,7 +63,10 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
   const [current, setCurrent] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirm, setConfirm] = useState("");
-  const { user } = useAuth();
+  const { user, changePassword } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const [localProfile, setLocalProfile] = useState({
     firstName: user?.firstName || "",
@@ -72,42 +82,88 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
     });
   }, [user]);
 
-  const handleChange = () => {
-    if (!newPw || newPw !== confirm) {
-      alert("New password and confirmation must match");
+  const handleChange = async () => {
+    setError(null);
+    setSuccess(false);
+
+    // Validation
+    if (!current || !newPw || !confirm) {
+      setError("All fields are required");
       return;
     }
-    // Note: real deployments should send this to the server. We store locally for development convenience.
-    updateSettings({ adminAuth: { password: newPw } });
-    setCurrent("");
-    setNewPw("");
-    setConfirm("");
-    alert("Admin password updated (local only)");
+
+    if (newPw.length < 6) {
+      setError("New password must be at least 6 characters");
+      return;
+    }
+
+    if (newPw !== confirm) {
+      setError("New password and confirmation do not match");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await changePassword(current, newPw);
+      setSuccess(true);
+      setCurrent("");
+      setNewPw("");
+      setConfirm("");
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      const errorMsg =
+        err.message ||
+        err.response?.data?.message ||
+        "Failed to change password. Please check your current password.";
+      setError(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="space-y-3">
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded border border-red-200">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="text-sm text-green-600 bg-green-50 px-3 py-2 rounded border border-green-200">
+          ✓ Password changed successfully!
+        </div>
+      )}
       <Input
         type="password"
         placeholder="Current password"
         value={current}
         onChange={(e) => setCurrent(e.target.value)}
+        disabled={isLoading}
       />
       <Input
         type="password"
         placeholder="New password"
         value={newPw}
         onChange={(e) => setNewPw(e.target.value)}
+        disabled={isLoading}
       />
       <Input
         type="password"
         placeholder="Confirm new password"
         value={confirm}
         onChange={(e) => setConfirm(e.target.value)}
+        disabled={isLoading}
       />
       <div className="flex justify-end">
-        <Button onClick={handleChange} className="bg-primary text-white">
-          Change Password
+        <Button
+          onClick={handleChange}
+          disabled={isLoading}
+          className="bg-primary text-white"
+        >
+          {isLoading ? "Changing..." : "Change Password"}
         </Button>
       </div>
     </div>
@@ -304,6 +360,25 @@ export default function SettingsPage() {
   }, [settings?.companyInfo]);
 
   const buildPayloadForField = (flatKey: string, value: any) => {
+    const existingSecurity = settings?.tenantPortalSettings?.securitySettings;
+    const securityPayload = {
+      autoLogout: {
+        enabled:
+          existingSecurity?.autoLogoutInactivityMinutes !== undefined
+            ? existingSecurity.autoLogoutInactivityMinutes > 0
+            : true,
+        durationMinutes:
+          flatKey === "tenantPortalSecurity_autoLogoutInactivityMinutes"
+            ? value
+            : (existingSecurity?.autoLogoutInactivityMinutes ?? 30),
+      },
+      autoLockout: {
+        enabled: existingSecurity?.autoLockEnabled ?? false,
+        threshold: existingSecurity?.failedLoginThreshold ?? 5,
+      },
+      allowProfileEditing: existingSecurity?.allowProfileEditing ?? true,
+    };
+
     switch (flatKey) {
       case "companyInfo_name":
         return { companyInfo: { name: value } };
@@ -347,14 +422,42 @@ export default function SettingsPage() {
         return { features: { auditing: value } };
       case "tenantPortalSecurity_autoLogoutInactivityMinutes":
         return {
-          security: { autoLogout: { enabled: true, durationMinutes: value } },
+          security: {
+            ...securityPayload,
+            autoLogout: {
+              ...securityPayload.autoLogout,
+              enabled: true,
+              durationMinutes: value,
+            },
+          },
         };
       case "tenantPortalSecurity_allowProfileEditing":
-        return { security: { allowProfileEditing: value } };
+        return {
+          security: {
+            ...securityPayload,
+            allowProfileEditing: value,
+          },
+        };
       case "tenantPortalSecurity_autoLockEnabled":
-        return { security: { autoLockout: { enabled: value } } };
+        return {
+          security: {
+            ...securityPayload,
+            autoLockout: {
+              ...securityPayload.autoLockout,
+              enabled: value,
+            },
+          },
+        };
       case "tenantPortalSecurity_failedLoginThreshold":
-        return { security: { autoLockout: { threshold: value } } };
+        return {
+          security: {
+            ...securityPayload,
+            autoLockout: {
+              ...securityPayload.autoLockout,
+              threshold: value,
+            },
+          },
+        };
       default:
         return undefined;
     }
@@ -405,7 +508,8 @@ export default function SettingsPage() {
     localFeatureKey: string,
     checked: boolean,
   ) => {
-    const current = settings?.tenantPortalSettings?.featureToggles || {};
+    const current =
+      (settings?.tenantPortalSettings?.featureToggles as any) || {};
 
     return {
       tenantPortal: {
@@ -436,7 +540,7 @@ export default function SettingsPage() {
     featureKey: string,
     checked: boolean,
   ) => {
-    updateSettings((prev) => ({
+    updateSettings((prev: SystemSettings | null) => ({
       ...prev,
       tenantPortalSettings: {
         ...prev?.tenantPortalSettings,
@@ -449,8 +553,8 @@ export default function SettingsPage() {
 
     createIndependentFieldHandler(
       fieldKey,
-      (v) =>
-        updateSettings((prev) => ({
+      (v: any) =>
+        updateSettings((prev: SystemSettings | null) => ({
           ...prev,
           tenantPortalSettings: {
             ...prev?.tenantPortalSettings,
@@ -1395,6 +1499,8 @@ export default function SettingsPage() {
                             },
                           });
 
+                          const existingSecurity =
+                            settings.tenantPortalSettings?.securitySettings;
                           createIndependentFieldHandler(
                             "tenantPortalSecurity_autoLogoutInactivityMinutes",
                             (v) =>
@@ -1411,9 +1517,17 @@ export default function SettingsPage() {
                             {
                               security: {
                                 autoLogout: {
-                                  enabled: true,
+                                  enabled: checked,
                                   durationMinutes: newVal,
                                 },
+                                autoLockout: {
+                                  enabled:
+                                    existingSecurity?.autoLockEnabled ?? false,
+                                  threshold:
+                                    existingSecurity?.failedLoginThreshold ?? 5,
+                                },
+                                allowProfileEditing:
+                                  existingSecurity?.allowProfileEditing ?? true,
                               },
                             },
                           )(newVal);
@@ -1433,24 +1547,23 @@ export default function SettingsPage() {
                     ?.autoLogoutInactivityMinutes !== undefined && (
                     <div className="mt-3">
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        Inactivity (minutes)
+                        Inactivity Timeout
                       </label>
                       <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={
+                        <Select
+                          value={String(
                             settings.tenantPortalSettings?.securitySettings
-                              ?.autoLogoutInactivityMinutes || 30
-                          }
-                          onChange={(e) => {
-                            const value = Number(e.target.value);
+                              ?.autoLogoutInactivityMinutes || 30,
+                          )}
+                          onValueChange={(value) => {
+                            const numValue = Number(value);
                             updateSettings({
                               tenantPortalSettings: {
                                 ...settings.tenantPortalSettings,
                                 securitySettings: {
                                   ...settings.tenantPortalSettings
                                     ?.securitySettings,
-                                  autoLogoutInactivityMinutes: value,
+                                  autoLogoutInactivityMinutes: numValue,
                                 },
                               },
                             });
@@ -1468,9 +1581,20 @@ export default function SettingsPage() {
                                     },
                                   },
                                 }),
-                            )(value);
+                            )(numValue);
                           }}
-                        />
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 minute</SelectItem>
+                            <SelectItem value="5">5 minutes</SelectItem>
+                            <SelectItem value="10">10 minutes</SelectItem>
+                            <SelectItem value="30">30 minutes</SelectItem>
+                            <SelectItem value="60">1 hour</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FieldSaveIndicator
                           status={
                             fieldStatus[

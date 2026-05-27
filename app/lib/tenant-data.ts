@@ -7,7 +7,7 @@ export const currentTenant: any = ((): any => {
 	try {
 		if (typeof window === 'undefined') return null
 		const user = getCurrentUser()
-		if (user?.role === 'tenant') return getTenant(user.id)
+		if (user?.role !== 'admin') return getTenant(user?.id)
 		return null
 	} catch (e) {
 		return null

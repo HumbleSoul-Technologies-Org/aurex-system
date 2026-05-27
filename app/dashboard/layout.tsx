@@ -3,12 +3,14 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-import React, { Suspense } from "react";
+import React, { Suspense, useCallback } from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useSettings } from "@/lib/settings-context";
+import { useAdminInactivity } from "@/lib/hooks/use-admin-inactivity";
 import {
   LayoutDashboard,
   Building2,
@@ -65,7 +67,23 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
 
-  const { user: authUser, isAuthenticated, isLoading } = useAuth();
+  const { user: authUser, isAuthenticated, isLoading, logout } = useAuth();
+  const { settings } = useSettings();
+
+  // Read timeout minutes from settings (stored as minutes)
+  const timeoutMinutes = settings?.security?.autoLogout?.durationMinutes;
+  const timeoutSeconds = timeoutMinutes ? timeoutMinutes * 60 : undefined;
+
+  const handleAutoLogout = useCallback(async () => {
+    try {
+      await logout();
+    } catch (e) {
+      // ignore logout errors
+    }
+    router.push("/auth/login");
+  }, [logout, router]);
+
+  useAdminInactivity(timeoutSeconds, handleAutoLogout);
 
   // Load notifications
   React.useEffect(() => {

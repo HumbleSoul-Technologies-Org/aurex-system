@@ -204,13 +204,13 @@ export default function TenantSettingsPage() {
     }
   };
 
-  if (!tenant) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Tenant profile not available. Please log in again.
-      </div>
-    );
-  }
+  // if (!tenant) {
+  //   return (
+  //     <div className="p-6 text-center text-muted-foreground">
+  //       Tenant profile not available. Please log in again.
+  //     </div>
+  //   );
+  // }
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-6xl">
