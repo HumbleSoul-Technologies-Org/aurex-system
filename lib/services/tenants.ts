@@ -223,6 +223,65 @@ export async function updateTenantApi(
   }
 }
 
+export async function updateTenantAvatarApi(
+  id: string,
+  payload: { avatar: { url: string; public_id: string } },
+  token?: string,
+): Promise<TenantRecord | null> {
+  try {
+    const res = await apiRequest('PUT', `/tenants/${id}/avatar`, payload, token)
+    const data = await res.json()
+    const tenantData = data.tenant || data.data.tenant || data.data
+    const tenant: TenantRecord = {
+      ...tenantData,
+      id: tenantData.id || tenantData._id,
+    } as TenantRecord
+
+    if (tenant?._id) {
+      const existing = findInCollection<TenantRecord>('tenants', (t) => t._id === tenant._id)
+      if (existing) {
+        updateInCollection<TenantRecord>('tenants', tenant._id, tenant)
+      } else {
+        insertIntoCollection<TenantRecord>('tenants', tenant)
+      }
+
+      queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+        current ? current.map((item) => (item._id === tenant._id ? tenant : item)) : listTenants(),
+      )
+
+      try {
+        const storedUser = getStoredUser()
+        const adminId = storedUser?.id || storedUser?._id || null
+        if (tenant?.propertyId && adminId) {
+          queryClient.setQueryData<any>(["properties", adminId], (current: any) => {
+            if (!current) return current
+            return current.map((prop: any) => {
+              if (prop.id === tenant.propertyId) {
+                const tenantsArr = Array.isArray(prop.tenants) ? [...prop.tenants] : []
+                const idx = tenantsArr.findIndex((t: any) => (t?.id || t) === tenant._id)
+                if (idx !== -1) {
+                  tenantsArr[idx] = tenant
+                } else {
+                  tenantsArr.push(tenant)
+                }
+                return { ...prop, tenants: tenantsArr }
+              }
+              return prop
+            })
+          })
+        }
+      } catch (e) {
+        console.error('Failed to update properties cache after updating tenant avatar', e)
+      }
+    }
+
+    return tenant
+  } catch (e) {
+    console.error('updateTenantAvatarApi failed', e)
+    throw e
+  }
+}
+
 export async function deleteTenantApi(id: string, token?: string): Promise<boolean> {
   try {
     const res = await apiRequest('DELETE', `/tenants/${id}/delete`, undefined, token)

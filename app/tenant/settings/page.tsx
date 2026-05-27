@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import BioSection from "@/components/forms/tenant-profile-sections/BioSection";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +18,15 @@ import {
   CalendarDays,
   ClipboardCheck,
 } from "lucide-react";
-import { currentTenant } from "@/app/lib/tenant-data";
-import { TenantRecord, updateTenantApi } from "@/lib/services/tenants";
+import { useTenantContext } from "@/lib/tenant-context";
+import {
+  TenantRecord,
+  updateTenantApi,
+  updateTenantAvatarApi,
+} from "@/lib/services/tenants";
+import { changePassword } from "@/lib/services/authApi";
 import { getTenantTypeConfig } from "@/lib/services/settings";
+import { getAuthToken } from "@/lib/token-manager";
 
 const tabItems = [
   { id: "profile", label: "Profile" },
@@ -66,7 +73,7 @@ const documentDeliveryOptions = [
 ];
 
 export default function TenantSettingsPage() {
-  const tenant = currentTenant as TenantRecord | null;
+  const { currentTenant: tenant } = useTenantContext();
 
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
@@ -77,21 +84,41 @@ export default function TenantSettingsPage() {
     security: false,
     documents: false,
   });
+  const [saveError, setSaveError] = useState<Record<TabId, string | null>>({
+    profile: null,
+    notifications: null,
+    emergency: null,
+    moveout: null,
+    security: null,
+    documents: null,
+  });
 
   // Load tenant type configuration for defaults
-  const tenantTypeConfig = tenant?.tenantType
-    ? getTenantTypeConfig(tenant.tenantType)
-    : null;
+  const tenantTypeConfig = useMemo(
+    () => (tenant?.tenantType ? getTenantTypeConfig(tenant.tenantType) : null),
+    [tenant?.tenantType],
+  );
 
   const [profile, setProfile] = useState({
+    firstName: tenant?.name?.split(" ")[0] || "",
+    lastName: tenant?.name?.split(" ").slice(1).join(" ") || "",
     name: tenant?.name || "",
     email: tenant?.email || "",
     phone: tenant?.phone || "",
-    address: tenant?.address || "",
-    city: tenant?.city || "",
-    postalCode: tenant?.postalCode || "",
-    country: tenant?.country || "",
-    image: tenant?.image || "",
+    coSigner: tenant?.coSigner || "",
+    emergencyContactPhone:
+      tenant?.emergencyContactPhone || tenant?.emergencyContact || "",
+    pets: tenant?.pets || "",
+    vehicles: tenant?.vehicles || "",
+    businessInfo: tenant?.businessInfo || "",
+    businessContacts: tenant?.businessContacts || "",
+    financialInfo: tenant?.financialInfo || "",
+    image: tenant?.avatar?.url
+      ? {
+          url: tenant.avatar.url,
+          public_id: tenant.avatar.public_id || "",
+        }
+      : undefined,
     preferredContactMethod:
       tenant?.preferredContactMethod ||
       tenantTypeConfig?.defaultSettings?.preferredContactMethod ||
@@ -128,6 +155,35 @@ export default function TenantSettingsPage() {
     TenantRecord["documentDelivery"]
   >(tenant?.documentDelivery || "email");
 
+  useEffect(() => {
+    if (!tenant) return;
+    setProfile({
+      firstName: tenant.name?.split(" ")[0] || "",
+      lastName: tenant.name?.split(" ").slice(1).join(" ") || "",
+      name: tenant.name || "",
+      email: tenant.email || "",
+      phone: tenant.phone || "",
+      coSigner: tenant.coSigner || "",
+      emergencyContactPhone:
+        tenant.emergencyContactPhone || tenant.emergencyContact || "",
+      pets: tenant.pets || "",
+      vehicles: tenant.vehicles || "",
+      businessInfo: tenant.businessInfo || "",
+      businessContacts: tenant.businessContacts || "",
+      financialInfo: tenant.financialInfo || "",
+      image: tenant.avatar?.url
+        ? {
+            url: tenant.avatar.url,
+            public_id: tenant.avatar.public_id || "",
+          }
+        : undefined,
+      preferredContactMethod:
+        tenant.preferredContactMethod ||
+        tenantTypeConfig?.defaultSettings?.preferredContactMethod ||
+        "email",
+    });
+  }, [tenant, tenantTypeConfig]);
+
   const avatarInitials = useMemo(() => {
     if (!profile.name) return "TN";
     return profile.name
@@ -147,6 +203,7 @@ export default function TenantSettingsPage() {
       preferredContactMethod: profile.preferredContactMethod,
     };
     try {
+      setSaveError((prev) => ({ ...prev, [section]: null }));
       await updateTenantApi(tenant.id, fullPatch);
       setSaveStatus((prev) => ({ ...prev, [section]: true }));
       window.setTimeout(
@@ -154,19 +211,61 @@ export default function TenantSettingsPage() {
         2000,
       );
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save settings";
+      setSaveError((prev) => ({ ...prev, [section]: errorMessage }));
       console.error("Failed to save tenant settings", error);
     }
   };
 
-  const handlePasswordSave = async () => {
+  const handleAvatarUpload = async (image: {
+    url: string;
+    public_id: string;
+  }) => {
     if (!tenant) return;
-    if (passwordState.currentPassword !== tenant.password) {
+
+    try {
+      setSaveError((prev) => ({ ...prev, profile: null }));
+      const updatedTenant = await updateTenantAvatarApi(tenant.id, {
+        avatar: image,
+      });
+
+      if (updatedTenant) {
+        setProfile((prev) => ({
+          ...prev,
+          image: {
+            url: updatedTenant.avatar?.url || image.url,
+            public_id: updatedTenant.avatar?.public_id || image.public_id,
+          },
+        }));
+      }
+
+      setSaveStatus((prev) => ({ ...prev, profile: true }));
+      window.setTimeout(
+        () => setSaveStatus((prev) => ({ ...prev, profile: false })),
+        2000,
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to save profile image";
+      setSaveError((prev) => ({ ...prev, profile: errorMessage }));
+      console.error("Failed to upload tenant avatar", error);
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    // Clear previous errors
+    setPasswordState((prev) => ({ ...prev, error: "" }));
+
+    // Validate form fields
+    if (!passwordState.currentPassword) {
       setPasswordState((prev) => ({
         ...prev,
-        error: "Current password is incorrect.",
+        error: "Please enter your current password.",
       }));
       return;
     }
+
     if (!passwordState.newPassword || passwordState.newPassword.length < 6) {
       setPasswordState((prev) => ({
         ...prev,
@@ -174,6 +273,7 @@ export default function TenantSettingsPage() {
       }));
       return;
     }
+
     if (passwordState.newPassword !== passwordState.confirmPassword) {
       setPasswordState((prev) => ({
         ...prev,
@@ -183,23 +283,43 @@ export default function TenantSettingsPage() {
     }
 
     try {
-      await updateTenantApi(tenant.id, { password: passwordState.newPassword });
+      const token = getAuthToken();
+      if (!token) {
+        setPasswordState((prev) => ({
+          ...prev,
+          error: "Authentication required. Please log in again.",
+        }));
+        return;
+      }
+
+      // Call the backend password change endpoint
+      await changePassword(
+        token,
+        passwordState.currentPassword,
+        passwordState.newPassword,
+      );
+
+      // Clear the form on success
       setPasswordState({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
         error: "",
       });
+
+      // Show success status
       setSaveStatus((prev) => ({ ...prev, security: true }));
       window.setTimeout(
         () => setSaveStatus((prev) => ({ ...prev, security: false })),
         2000,
       );
     } catch (error) {
-      console.error("Failed to update tenant password", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to change password";
+      console.error("Failed to change tenant password", error);
       setPasswordState((prev) => ({
         ...prev,
-        error: "Unable to update password. Please try again.",
+        error: errorMessage,
       }));
     }
   };
@@ -244,180 +364,34 @@ export default function TenantSettingsPage() {
 
         <div className="space-y-6">
           {activeTab === "profile" && (
-            <Card className="border border-border p-4 md:p-6">
-              <div className="flex items-start gap-4 md:gap-6 mb-6 pb-6 border-b border-border">
-                <div className="relative">
-                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-primary flex items-center justify-center text-white text-2xl md:text-3xl">
-                    {profile.image ? (
-                      <img
-                        src={profile.image}
-                        alt="Avatar"
-                        className="w-full h-full object-cover rounded-full"
-                      />
-                    ) : (
-                      avatarInitials
-                    )}
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground mb-1">
-                    Profile
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Update your contact information and preferred address.
-                  </p>
-                </div>
-              </div>
+            <BioSection
+              value={profile}
+              onChange={(patch) =>
+                setProfile((prev) => ({ ...prev, ...patch }))
+              }
+              onImageUpload={handleAvatarUpload}
+              onSave={() => {
+                const fullName = [profile.firstName, profile.lastName]
+                  .filter(Boolean)
+                  .join(" ");
 
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Full Name
-                    </label>
-                    <input
-                      value={profile.name}
-                      onChange={(e) =>
-                        setProfile({ ...profile, name: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) =>
-                        setProfile({ ...profile, email: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Phone
-                    </label>
-                    <input
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) =>
-                        setProfile({ ...profile, phone: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Preferred Contact Method
-                    </label>
-                    <select
-                      value={profile.preferredContactMethod}
-                      onChange={(e) =>
-                        setProfile({
-                          ...profile,
-                          preferredContactMethod: e.target.value as
-                            | "email"
-                            | "phone"
-                            | "sms",
-                        })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    >
-                      <option value="email">Email</option>
-                      <option value="phone">Phone</option>
-                      <option value="sms">SMS</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Street Address
-                    </label>
-                    <input
-                      value={profile.address}
-                      onChange={(e) =>
-                        setProfile({ ...profile, address: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      City
-                    </label>
-                    <input
-                      value={profile.city}
-                      onChange={(e) =>
-                        setProfile({ ...profile, city: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Postal Code
-                    </label>
-                    <input
-                      value={profile.postalCode}
-                      onChange={(e) =>
-                        setProfile({ ...profile, postalCode: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground mb-2 block">
-                      Country
-                    </label>
-                    <input
-                      value={profile.country}
-                      onChange={(e) =>
-                        setProfile({ ...profile, country: e.target.value })
-                      }
-                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-6 border-t border-border mt-6 flex flex-col sm:flex-row items-start gap-3">
-                <Button
-                  onClick={() =>
-                    handleSave("profile", {
-                      name: profile.name,
-                      email: profile.email,
-                      phone: profile.phone,
-                      address: profile.address,
-                      city: profile.city,
-                      postalCode: profile.postalCode,
-                      country: profile.country,
-                      image: profile.image,
-                    })
-                  }
-                  className="bg-primary hover:bg-primary/90 text-white gap-2"
-                >
-                  {saveStatus.profile ? (
-                    <>
-                      <Check className="w-4 h-4" />
-                      Saved
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      Save Profile
-                    </>
-                  )}
-                </Button>
-                <div className="text-sm text-muted-foreground">
-                  Updates are saved to your tenant profile immediately.
-                </div>
-              </div>
-            </Card>
+                handleSave("profile", {
+                  name: fullName || profile.name,
+                  email: profile.email,
+                  phone: profile.phone,
+                  coSigner: profile.coSigner,
+                  emergencyContactPhone: profile.emergencyContactPhone,
+                  pets: profile.pets,
+                  vehicles: profile.vehicles,
+                  businessInfo: profile.businessInfo,
+                  businessContacts: profile.businessContacts,
+                  financialInfo: profile.financialInfo,
+                  preferredContactMethod: profile.preferredContactMethod,
+                  avatar: profile?.image,
+                });
+              }}
+              isSaving={saveStatus.profile}
+            />
           )}
 
           {activeTab === "notifications" && (

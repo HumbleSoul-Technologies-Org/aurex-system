@@ -34,3 +34,32 @@ export async function uploadToCloudinary(file: File): Promise<CloudinaryResult> 
   const data = (await res.json()) as CloudinaryResult
   return data
 }
+
+/**
+ * Delete an image from Cloudinary by its public_id.
+ * This calls a server endpoint that uses the Cloudinary Admin API with the API secret.
+ */
+export async function deleteFromCloudinary(publicId: string): Promise<void> {
+  if (!publicId) {
+    return
+  }
+
+  try {
+    const res = await fetch('/api/cloudinary/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ publicId }),
+    })
+
+    if (!res.ok) {
+      const error = await res.text()
+      console.warn(`Failed to delete Cloudinary image ${publicId}: ${error}`)
+      // Don't throw - deletion failure shouldn't block the upload flow
+    }
+  } catch (error) {
+    console.warn(`Error deleting Cloudinary image ${publicId}:`, error)
+    // Don't throw - deletion failure shouldn't block the upload flow
+  }
+}
