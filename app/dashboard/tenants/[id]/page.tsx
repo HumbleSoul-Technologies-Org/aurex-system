@@ -1197,12 +1197,18 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           unitNumber: tenant.unitNumber || "",
           leaseStartDate: tenant.leaseStartDate || "",
           leaseRenewDate: tenant.leaseRenewDate || latestRentPaymentDate || "",
+          leaseEndDate:
+            tenant.leaseEndDate ||
+            (tenant.leaseStartDate
+              ? calculateLeaseEnd(tenant.leaseStartDate, tenant.leaseType || "monthly").toISOString().slice(0, 10)
+              : ""),
           leaseType: tenant.leaseType || "monthly",
           leaseTerms: tenant.leaseTerms || "",
           preferredContactMethod: tenant.preferredContactMethod || "email",
           applicationDate: tenant.applicationDate || "",
           moveInDate: tenant.moveInDate || "",
           password: tenant.password || "",
+          monthlyRent: tenant.rentAmount ?? tenant.monthlyRent ?? 0,
           emergencyContact: tenant.emergencyContact || "",
           notes: tenant.notes || "",
           dateOfBirth: tenant.dateOfBirth || "",
