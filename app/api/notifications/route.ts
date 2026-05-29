@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const q = new URLSearchParams()
     if (tenantId) q.set('tenantId', tenantId)
     if (unreadOnly) q.set('unreadOnly', 'true')
-    const forwardUrl = buildUrl(`/api/notifications?${q.toString()}`)
+    const forwardUrl = buildUrl(`/notifications?${q.toString()}`)
     const headers: any = {}
     const auth = request.headers.get('authorization')
     const cookie = request.headers.get('cookie')
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   if (BASE_SERVER && !forceLocal) {
     const body = await request.json().catch(() => null)
     if (!body || !body.title) return NextResponse.json({ error: 'Missing title' }, { status: 400 })
-    const forwardUrl = buildUrl('/api/notifications/create')
+    const forwardUrl = buildUrl('/notifications/create')
     const headers: any = { 'content-type': 'application/json' }
     const auth = request.headers.get('authorization')
     const cookie = request.headers.get('cookie')
@@ -75,7 +75,7 @@ export async function PATCH(request: Request) {
     const body = await request.json().catch(() => null)
     const id = body?.id
     if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
-    const forwardUrl = buildUrl('/api/notifications/' + encodeURIComponent(id) + '/read')
+    const forwardUrl = buildUrl('/notifications/' + encodeURIComponent(id) + '/read')
     const headers: any = { 'content-type': 'application/json' }
     const auth = request.headers.get('authorization')
     const cookie = request.headers.get('cookie')
