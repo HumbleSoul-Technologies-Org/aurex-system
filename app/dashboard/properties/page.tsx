@@ -35,9 +35,10 @@ export default function PropertiesPage() {
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
-  const { properties, isLoading } = useAppData();
+  const { properties, isLoading, isFetching } = useAppData();
+  const isPageLoading = isLoading || (isFetching && properties.length === 0);
 
-  if (isLoading) {
+  if (isPageLoading) {
     return (
       <div className="space-y-6">
         <AdminSkeletonHeader />
@@ -164,6 +165,7 @@ export default function PropertiesPage() {
       queryClient.invalidateQueries({
         queryKey: ["properties"] as const,
       });
+      setShowAddForm(false);
     } catch (e) {
       console.error("Create property failed", e);
     } finally {

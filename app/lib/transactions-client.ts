@@ -40,6 +40,8 @@ export type TransactionCreate = {
     autoPay?: boolean
   }
   metadata?: Record<string, any>
+  paidOn?: Date
+  createdAt?:Date
 }
 
 export type Transaction = TransactionCreate & {

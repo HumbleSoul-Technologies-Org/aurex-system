@@ -2,27 +2,42 @@ import { apiRequest } from "../query-client";
 import { insertIntoCollection, getCollection, generateId, removeFromCollection, updateInCollection } from "@/lib/local-store";
 import { getTenant, updateTenant } from "@/lib/services/tenants";
 
+export type PaymentReasonFor = "securityDeposit" | "rentPayment";
+export type RentPaymentStatus =
+  | "complete"
+  | "balance"
+  | "pending"
+  | "failed"
+  | "refunded"
+  | "recorded"
+  | "confirmed";
+
 export interface RentPayment {
   id: string;
   tenantId: string;
   propertyId: string;
-  leaseId?: string;
-  amount: number;
-  currency: string;
-  monthlyRent?: number;
-  paymentMethod: "cash" | "bank_transfer" | "check" | "card" | "manual";
-  paymentDate: string; // ISO date
+  txdId?: string;
   transId?: string;
-  date?: string;
-  method?: string;
-  recordedBy?: string;
-  recordedAt?: string;
-  reference?: string;
-  receiptUrl?: string;
-  status?: "recorded" | "confirmed" | "refunded";
+  amount: number;
+  paymentMethod: "cash" | "bank_transfer" | "check" | "card" | "manual";
+  leaseType?: string;
+  paidOn: string;
+  paidBy?: string;
+  reasonForPayment?: PaymentReasonFor;
   notes?: string;
+  balance?: number;
+  status?: RentPaymentStatus;
+  currency?: string;
+  monthlyRent?: number;
+  receiptUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+  raw?: any;
+  reference?: string;
+  recordedBy?: string;
+  paymentDate?: string;
+  method?: string;
+  date?: string;
 }
 
 export async function createManualPayment(payload: Partial<RentPayment>): Promise<RentPayment | null> {
@@ -74,6 +89,27 @@ export async function getPaymentsForProperty(propertyId: string): Promise<RentPa
   }
 }
 
+export async function getPaymentsForPropertyIds(propertyIds: string[]): Promise<RentPayment[]> {
+  if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+    return [];
+  }
+
+  const paymentsByProperty = await Promise.all(
+    propertyIds.map((propertyId) => getPaymentsForProperty(propertyId)),
+  );
+  const allPayments = paymentsByProperty.flat();
+  const seen = new Set<string>();
+
+  return allPayments.filter((payment) => {
+    const paymentKey = payment?.id || payment?.txdId || JSON.stringify(payment);
+    if (!paymentKey || seen.has(paymentKey)) {
+      return false;
+    }
+    seen.add(paymentKey);
+    return true;
+  });
+}
+
 export async function updatePayment(id: string, updates: Partial<RentPayment>): Promise<RentPayment | null> {
   try {
     const res = await apiRequest("PUT", `/payments/${id}/update`, updates);
@@ -87,35 +123,92 @@ export async function updatePayment(id: string, updates: Partial<RentPayment>): 
   }
 }
 
+export async function getAllPayments(): Promise<RentPayment[]> {
+  try {
+    const res = await apiRequest("GET", "/payments/all");
+    const data = await res.json();
+    const rawList = Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.payments)
+      ? data.payments
+      : Array.isArray(data)
+      ? data
+      : [];
+    return rawList.map(mapServerPaymentToClient);
+  } catch (err) {
+    console.warn("Failed to fetch all payments:", err);
+    return [];
+  }
+}
+
+export async function deletePaymentApi(id: string): Promise<boolean> {
+  try {
+    await apiRequest("DELETE", `/payments/${encodeURIComponent(id)}/delete`);
+    return true;
+  } catch (err) {
+    console.warn(`Failed to delete payment ${id}:`, err);
+    return false;
+  }
+}
+
 function mapServerPaymentToClient(p: any): any {
   const id = p._id || p.id || (p._doc && p._doc._id);
-  const transId = p.reference || p.transId || p.receiptReference || id;
-  const tenantId = typeof p.tenantId === 'object' ? (p.tenantId._id || p.tenantId.id) : p.tenantId;
-  const propertyId = typeof p.propertyId === 'object' ? (p.propertyId._id || p.propertyId.id) : p.propertyId;
+  const txdId =
+    p.txdId || p.transId || p.reference || p.receiptReference || id;
+  const tenantId =
+    typeof p.tenantId === 'object'
+      ? p.tenantId._id || p.tenantId.id
+      : p.tenantId;
+  const propertyId =
+    typeof p.propertyId === 'object'
+      ? p.propertyId._id || p.propertyId.id
+      : p.propertyId;
   const amount = Number(p.amount ?? p.total ?? 0);
   const currency = p.currency || 'USD';
-  const method = p.paymentMethod || p.method || p.payment_type || '';
-  const date = p.paymentDate || p.date || p.createdAt || new Date().toISOString();
+  const paymentMethod = p.paymentMethod || p.method || p.payment_type || '';
+  const paidOn =
+    p.paidOn || p.paymentDate || p.date || p.createdAt || new Date().toISOString();
+  const paidBy =
+    p.paidBy ||
+    (typeof p.recordedBy === 'object'
+      ? p.recordedBy._id || p.recordedBy.id
+      : p.recordedBy) ||
+    null;
+  const reasonForPayment =
+    p.reasonForPayment ||
+    (p.paymentType === 'security_deposit'
+      ? 'securityDeposit'
+      : p.paymentType === 'rent'
+      ? 'rentPayment'
+      : undefined);
+  const balance = Number(p.balance ?? 0);
   let status = p.status || 'pending';
-  if (['recorded', 'confirmed', 'completed'].includes(status)) status = 'paid';
+  if (['recorded', 'confirmed', 'completed', 'paid'].includes(status))
+    status = 'complete';
+  if (['pending', 'balance'].includes(status)) status = 'balance';
   if (status === 'refunded') status = 'refunded';
 
   return {
     id,
-    transId,
+    txdId,
+    transId: txdId,
     tenantId,
     propertyId,
     amount,
     currency,
-    date,
-    paymentDate: date,
-    method,
-    paymentMethod: method,
+    paidOn,
+    paymentDate: paidOn,
+    paidBy,
+    reasonForPayment,
+    balance,
+    paymentMethod,
+    method: paymentMethod,
     status,
     receiptUrl: p.receiptUrl || p.receiptURL || p.receipt || null,
     reference: p.reference || null,
     notes: p.notes || p.reference || null,
     recordedBy: p.recordedBy || p.recorded_by || null,
+    leaseType: p.leaseType || p.lease_type || null,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     raw: p,
@@ -131,6 +224,7 @@ function generateShortId(len = 8) {
 
 export interface PaymentRecord {
   id: string
+  txdId: string
   transId: string
   tenantId: string
   propertyId?: string
@@ -139,8 +233,18 @@ export interface PaymentRecord {
   price_per_unit?: number
   currency?: string
   date: string
+  paidOn?: string
+  paidBy?: string
+  paymentMethod?: string
   method?: string
+  reasonForPayment?: 'securityDeposit' | 'rentPayment'
   paymentType?: 'rent' | 'commercial' | 'residential' | 'misc'
+  leaseType?: string
+  paymentDate?: string
+  lease_start?: string
+  lease_type?: string
+  balance?: number
+  note?: string
   commercialPaymentDetails?: {
     baseRent?: number
     additionalRent?: number
@@ -157,11 +261,7 @@ export interface PaymentRecord {
     frequency?: 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
   }
   autoPay?: boolean
-  status?: 'pending' | 'completed' | 'failed'
-  note?: string
-  lease_start?: string
-  lease_type?: string
-  balance?: number
+  status?: 'pending' | 'completed' | 'failed' | 'complete' | 'balance' | 'refunded'
   receiptReference?: string
   receiptUrl?: string
   createdAt?: string
@@ -191,7 +291,8 @@ export function createPayment(payload: Partial<PaymentRecord>): PaymentRecord {
   const now = new Date().toISOString()
   const rec: PaymentRecord = {
     id: generateId('pay'),
-    transId: payload.transId ?? generateShortId(8),
+    txdId: payload.txdId ?? generateShortId(8),
+    transId: payload.txdId ?? payload.transId ?? generateShortId(8),
     tenantId: payload.tenantId || '',
     propertyId: payload.propertyId,
     unit: payload.unit,
@@ -199,11 +300,21 @@ export function createPayment(payload: Partial<PaymentRecord>): PaymentRecord {
     price_per_unit: payload.price_per_unit,
     currency: payload.currency ?? 'USD',
     date: payload.date ?? now,
-    method: payload.method ?? 'offline',
-    status: payload.status ?? 'completed',
+    paidOn: payload.paidOn ?? payload.paymentDate ?? payload.date ?? now,
+    paidBy: payload.paidBy,
+    paymentMethod: payload.paymentMethod ?? payload.method ?? 'offline',
+    method: payload.method ?? payload.paymentMethod ?? 'offline',
+    reasonForPayment:
+      payload.reasonForPayment ||
+      (payload.paymentType === 'security_deposit'
+        ? 'securityDeposit'
+        : payload.paymentType === 'rent'
+        ? 'rentPayment'
+        : undefined),
+    status: payload.status ?? 'complete',
     note: payload.note,
     lease_start: payload.lease_start,
-    lease_type: payload.lease_type,
+    lease_type: payload.lease_type ?? payload.leaseType,
     balance: payload.balance ?? 0,
     receiptReference: payload.receiptReference,
     receiptUrl: payload.receiptUrl,

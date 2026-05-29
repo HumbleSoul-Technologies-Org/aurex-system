@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppData } from "@/lib/data-context";
-import { Calendar, Mail, Phone, User, X } from "lucide-react";
+import { Calendar, Mail, Phone, User, X, Loader2 } from "lucide-react";
 
 interface TenantFormData {
   name: string;
@@ -24,7 +24,7 @@ interface TenantFormData {
   applicationDate: string;
   moveInDate: string;
   password: string;
-  monthlyRent: number;
+  monthlyRent: string | number;
   emergencyContact: string;
   notes: string;
   dateOfBirth: string;
@@ -46,6 +46,7 @@ interface TenantFormProps {
   onClose: () => void;
   onSubmit?: (data: TenantFormData) => void;
   renewalDateHint?: string;
+  isLoading?: boolean;
 }
 
 export default function TenantForm({
@@ -55,6 +56,7 @@ export default function TenantForm({
   onClose,
   onSubmit,
   renewalDateHint,
+  isLoading = false,
 }: TenantFormProps) {
   const [formData, setFormData] = useState<TenantFormData>({
     name: "",
@@ -123,8 +125,10 @@ export default function TenantForm({
     }
   };
 
+  const prevIsOpenRef = React.useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       if (mode === "edit" && initialData) {
         setFormData({
           name: initialData.name || "",
@@ -157,7 +161,6 @@ export default function TenantForm({
           securityDeposit: initialData.securityDeposit || "",
         });
       } else if (mode === "create") {
-        // Reset form for create mode
         setFormData({
           name: "",
           email: "",
@@ -190,7 +193,8 @@ export default function TenantForm({
         });
       }
     }
-  }, [isOpen, mode, initialData]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, mode]);
 
   const generatePassword = (length = 8) => {
     const chars =
@@ -210,7 +214,8 @@ export default function TenantForm({
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === "monthlyRent" ? Number(value) : value,
+      [name]:
+        name === "monthlyRent" ? (value === "" ? "" : Number(value)) : value,
     }));
   };
 
@@ -258,7 +263,12 @@ export default function TenantForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit?.(formData);
+    const sanitizedData = {
+      ...formData,
+      monthlyRent:
+        formData.monthlyRent === "" ? 0 : Number(formData.monthlyRent),
+    };
+    onSubmit?.(sanitizedData);
     if (mode === "create") {
       setFormData({
         name: "",
@@ -797,11 +807,25 @@ export default function TenantForm({
 
             {/* Form Actions */}
             <div className="flex justify-end gap-3 pt-4 border-t border-border">
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={isLoading}
+              >
                 Cancel
               </Button>
-              <Button type="submit">
-                {mode === "create" ? "Add Tenant" : "Save Changes"}
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {mode === "create" ? "Adding..." : "Saving..."}
+                  </>
+                ) : mode === "create" ? (
+                  "Add Tenant"
+                ) : (
+                  "Save Changes"
+                )}
               </Button>
             </div>
           </form>

@@ -19,6 +19,7 @@ interface User {
   role: string;
   status: string;
   emailVerified: boolean;
+  isActivated?: boolean;
   createdAt: string;
   settingsId?: string;
 }

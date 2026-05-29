@@ -6,32 +6,34 @@ import {
   fetchNotifications,
   markNotificationRead,
 } from "@/app/lib/notifications-client";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 
 export default function NotificationBell({ tenantId }: { tenantId?: string }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const { token } = useAuth();
 
   useEffect(() => {
     let mounted = true;
-    fetchNotifications(tenantId).then((list) => {
+    fetchNotifications(tenantId, undefined, token).then((list) => {
       if (!mounted) return;
       setNotifications(list);
     });
     return () => {
       mounted = false;
     };
-  }, [tenantId]);
+  }, [tenantId, token]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const refresh = async () => {
-    const list = await fetchNotifications(tenantId);
+    const list = await fetchNotifications(tenantId, undefined, token);
     setNotifications(list);
   };
 
   const handleMarkRead = async (id: string) => {
-    await markNotificationRead(id);
+    await markNotificationRead(id, token);
     refresh();
   };
 

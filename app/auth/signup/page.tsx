@@ -85,7 +85,17 @@ export default function SignupPage() {
         `A verification code has been sent to ${email}. Enter it below to continue.`,
       );
     } catch (err: any) {
-      setError(err?.message || "Failed to send verification code");
+      const msg = err?.message || "Failed to send verification code";
+      if (
+        msg.toLowerCase().includes("already") ||
+        msg.toLowerCase().includes("exists") ||
+        msg.includes("USER_EXISTS") ||
+        msg.includes("requiresProductKey")
+      ) {
+        router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
+        return;
+      }
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
@@ -110,9 +120,21 @@ export default function SignupPage() {
         code: verificationCode,
       });
 
-      setStep("success");
+      // After successful signup verification, require product key entry
+      router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
-      setError(err?.message || "Failed to verify code");
+      const msg = err?.message || "Failed to verify code";
+      // If account already exists / requires product key, redirect to product-key page
+      if (
+        msg.toLowerCase().includes("already") ||
+        msg.toLowerCase().includes("exists") ||
+        msg.includes("USER_EXISTS") ||
+        msg.includes("requiresProductKey")
+      ) {
+        router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
+        return;
+      }
+      setError(msg);
     } finally {
       setIsLoading(false);
     }

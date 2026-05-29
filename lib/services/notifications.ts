@@ -1,5 +1,5 @@
-import { getCollection, insertIntoCollection, updateInCollection } from '@/lib/local-store'
-import { addNotification as addServerNotification } from '@/app/lib/server-notifications'
+import { getCollection } from '@/lib/local-store'
+import { fetchNotifications, createNotification, markNotificationRead } from '@/app/lib/notifications-client'
 
 export interface Notification {
   id: string
@@ -20,6 +20,9 @@ if (!getCollection<Notification>(NOTIFICATIONS_KEY)) {
 }
 
 export function getNotifications(): Notification[] {
+  // Try server first; fall back to local-store synchronous collection
+  // Note: fetchNotifications is async; for legacy synchronous callers we return local-store immediately and
+  // consumers should call `loadNotifications` from context to refresh from server.
   return getCollection<Notification>(NOTIFICATIONS_KEY) || []
 }
 
@@ -31,22 +34,37 @@ export function addNotification(notification: Omit<Notification, 'id' | 'date' |
     read: false,
   }
 
-  insertIntoCollection(NOTIFICATIONS_KEY, newNotification)
+  // persist locally for immediate UI responsiveness
+  try {
+    const existing = getCollection<Notification>(NOTIFICATIONS_KEY) || []
+    existing.unshift(newNotification)
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(existing))
+  } catch (e) {
+    console.error('Failed to persist local notification', e)
+  }
 
-  // Also add to server notifications for API access
-  addServerNotification({
+  // async send to server (best-effort)
+  createNotification({
     type: notification.type,
-    tenantId: undefined, // adjust if needed
+    tenantId: undefined,
     title: notification.title,
     body: notification.message,
     metadata: { relatedId: notification.relatedId, actionUrl: notification.actionUrl },
-  })
+  }).catch((e) => console.error('Failed to create server notification', e))
 
   return newNotification
 }
 
 export function markAsRead(notificationId: string): void {
-  updateInCollection(NOTIFICATIONS_KEY, notificationId, { read: true })
+  try {
+    const notifications = getCollection<Notification>(NOTIFICATIONS_KEY) || []
+    const updated = notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated))
+  } catch (e) {
+    console.error('Failed to mark local notification read', e)
+  }
+
+  markNotificationRead(notificationId).catch((e) => console.error('Failed to mark server notification read', e))
 }
 
 export function markAllAsRead(): void {

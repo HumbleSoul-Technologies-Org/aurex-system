@@ -90,7 +90,7 @@ export function formatCurrency(
     return formatted
   } catch (error) {
     console.warn('Currency formatting failed for', code, error)
-    return `${code} ${numeric.toFixed(2)}`
+    return `${code} ${numeric}`
   }
 }
 

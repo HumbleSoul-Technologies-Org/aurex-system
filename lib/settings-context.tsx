@@ -15,6 +15,7 @@ import {
   updateSettingsOnApi,
   convertPayloadToTenantPortalSettings,
   TenantPortalSettings,
+  fetchSettingsByTenantId,
 } from "@/lib/services/settings";
 import { useAuth } from "@/lib/auth-context";
 
@@ -55,17 +56,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       // If user has settingsId, use it directly; otherwise fall back to user ID lookup
       let apiSettings: SettingsPayload | null = null;
 
-      if (user.settingsId) {
+      if (user?.role && user?.role === "admin" && user?.settingsId) {
         apiSettings = await fetchSettingsByIdFromApi(user.settingsId);
         setSettingsId(user.settingsId);
       } else {
         // Fallback: fetch by user ID (will look up or create default)
-        apiSettings = await getAdminSettingsByUserId(user.id);
+        apiSettings = await fetchSettingsByTenantId(user.id);
         if (apiSettings?._id) {
           setSettingsId(apiSettings._id);
         }
       }
-
       if (apiSettings) {
         setSettings(apiSettings);
       } else {

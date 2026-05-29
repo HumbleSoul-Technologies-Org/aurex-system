@@ -1064,6 +1064,16 @@ export async function fetchSettingsByIdFromApi(id: string): Promise<SettingsPayl
     return null
   }
 }
+export async function fetchSettingsByTenantId(id: string): Promise<SettingsPayload | null> {
+  try {
+    const res = await apiRequest('GET', `/settings/tenant/${id}`)
+    const data = await res.json()
+    return data || null
+  } catch (error) {
+    console.warn(`Failed to fetch settings ${id} from API:`, error)
+    return null
+  }
+}
 
 /**
  * Create settings on API
@@ -1235,4 +1245,39 @@ export class FieldStatusManager {
   getAll(): Record<string, FieldStatus> {
     return { ...this.statusMap }
   }
+}
+
+// ============================================================================
+// Tenant Portal Feature Helpers
+// ============================================================================
+
+/**
+ * Extract feature toggles from settings payload
+ * Returns the featureToggles object with safe defaults
+ */
+export function getFeatureToggles(payload: SettingsPayload | null): FeatureToggles {
+  if (!payload) {
+    return {
+      paymentPortal: true,
+      maintenanceRequests: true,
+      documentAccess: true,
+      messages: true,
+      evictionNotice: false,
+    }
+  }
+  
+  const portalSettings = convertPayloadToTenantPortalSettings(payload)
+  return portalSettings.featureToggles || {}
+}
+
+/**
+ * Check if a specific feature is enabled
+ * Returns true by default if feature is not explicitly disabled
+ */
+export function isFeatureEnabled(
+  payload: SettingsPayload | null,
+  featureName: keyof FeatureToggles
+): boolean {
+  const toggles = getFeatureToggles(payload)
+  return toggles[featureName] ?? true
 }

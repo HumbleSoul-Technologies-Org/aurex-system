@@ -432,9 +432,9 @@ export default function PropertyDetailPage({
 
                   await updateProperty(property?.id, updated);
                   refreshProperty();
+                  setIsEditOpen(false);
                 } catch (e) {
                   console.error("Failed to update property", e);
-                  alert("Update failed");
                 } finally {
                   setIsUpdatingProperty(false);
                 }
@@ -451,7 +451,9 @@ export default function PropertyDetailPage({
                 {/* Main Image */}
                 <div className="relative h-64 bg-secondary overflow-hidden rounded-lg">
                   <img
-                    src={images?.[0]?.url || "/placeholder.svg"}
+                    src={
+                      images?.[selectedImageIndex]?.url || "/placeholder.svg"
+                    }
                     alt={property?.name}
                     className="w-full h-full object-cover"
                   />
@@ -823,7 +825,7 @@ export default function PropertyDetailPage({
                     <p className="text-sm text-muted-foreground mb-1">
                       Monthly Income
                     </p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
                       {getCurrencySymbol(activeCurrency)}
                       {formatCompactNumber(totalMonthlyIncome)}
                     </p>
@@ -832,8 +834,8 @@ export default function PropertyDetailPage({
                     <p className="text-sm text-muted-foreground mb-1">
                       Annual Income
                     </p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {getCurrencySymbol(activeCurrency)}
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                      {getCurrencySymbol(activeCurrency)}{" "}
                       {formatCompactNumber(totalAnnualIncome)}
                     </p>
                   </div>
@@ -899,7 +901,7 @@ export default function PropertyDetailPage({
                         Property Type
                       </p>
                       <p className="font-semibold text-foreground capitalize">
-                        {property?.type || (
+                        {property?.propertyType || (
                           <span className="text-muted-foreground">
                             No details found
                           </span>
@@ -995,7 +997,7 @@ export default function PropertyDetailPage({
                         Occupancy Status
                       </p>
                       <p className="font-semibold text-foreground">
-                        {property?.occupancy || (
+                        {`${occupancyPercentage}% Occupied` || (
                           <span className="text-muted-foreground">
                             No details found
                           </span>
@@ -1085,7 +1087,7 @@ export default function PropertyDetailPage({
                         Occupancy
                       </p>
                       <p className="text-2xl font-bold text-foreground">
-                        {property?.occupancy}
+                        {property?.tenants?.length} Units Occupied
                       </p>
                     </div>
                   </div>
@@ -1294,7 +1296,7 @@ export default function PropertyDetailPage({
                       <p className="text-sm text-muted-foreground mb-2">
                         Monthly Income
                       </p>
-                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">
                         {formatCurrency(totalMonthlyIncome, activeCurrency)}
                       </p>
                     </Card>
@@ -1302,7 +1304,7 @@ export default function PropertyDetailPage({
                       <p className="text-sm text-muted-foreground mb-2">
                         Annual Income
                       </p>
-                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">
                         {formatCurrency(totalAnnualIncome, activeCurrency)}
                       </p>
                     </Card>
@@ -1311,7 +1313,7 @@ export default function PropertyDetailPage({
                         Occupied Units
                       </p>
                       <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {occupiedUnits}/{property?.units_available}
+                        {occupiedUnits}/{property?.units?.length || 0}
                       </p>
                     </Card>
                     <Card className="border border-border p-4">
@@ -1350,7 +1352,7 @@ export default function PropertyDetailPage({
                       Total Units Available
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      {property?.units_available}
+                      {property?.units?.length - property?.tenants?.length || 0}
                     </p>
                   </Card>
                 </div>
@@ -1449,18 +1451,29 @@ export default function PropertyDetailPage({
                   <p className="text-muted-foreground mb-4">
                     No documents uploaded yet
                   </p>
-                  <Button>Upload Document</Button>
+                  <p className="text-muted-foreground mb-4">
+                    (feature coming soon...)
+                  </p>
+                  <Button className="disabled:opacity-50" disabled={true}>
+                    Upload Document
+                  </Button>
                 </div>
               </TabsContent>
 
               {/* Settings Tab */}
               <TabsContent value="settings" className="p-6">
-                <div className="space-y-6">
+                <div className="space-y-6 text-center">
                   <div>
                     <h3 className="text-lg font-bold text-foreground mb-4">
                       Property Settings
                     </h3>
-                    <Button variant="outline">Edit Property Details</Button>
+                    <p className="text-muted-foreground">
+                      Manage your property details and preferences.
+                    </p>
+                    <p className="text-muted-foreground">
+                      (feature coming soon...)
+                    </p>
+                    {/* <Button variant="outline">Edit Property Details</Button> */}
                   </div>
                 </div>
               </TabsContent>

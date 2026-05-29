@@ -20,11 +20,13 @@ import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useState, useEffect } from "react";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import { useTenantPortalFeatures } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function TenantDashboard() {
   const { user } = useAuth();
   const { tenants, properties } = useAppData();
   const activeCurrency = useActiveCurrency();
+  const features = useTenantPortalFeatures();
 
   // Find the tenant record for the current user
   const tenant = user ? tenants.find((t) => t.email === user.email) : null;
@@ -43,10 +45,7 @@ export default function TenantDashboard() {
     ? allMaintenance.filter((m) => m.tenantId === tenant.id)
     : [];
 
-  const latestPayment =
-    paymentHistory.length > 0
-      ? paymentHistory[paymentHistory.length - 1]
-      : null;
+  const latestPayment = paymentHistory.length > 0 ? paymentHistory[0] : null;
   const pendingMaintenance = tenantMaintenance.filter(
     (r) => r.status !== "completed",
   );
@@ -133,7 +132,9 @@ export default function TenantDashboard() {
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
                 Monthly Rent
               </p>
-              <p className="text-2xl md:text-3xl font-bold text-foreground">
+              <p
+                className={`${formatCurrency(tenant?.rentAmount || 0, activeCurrency).toString.length > 6 ? "md:text-lg text-lg" : "text-lg md:text-sm"}  font-bold text-foreground`}
+              >
                 {formatCurrency(tenant?.rentAmount || 0, activeCurrency)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
@@ -157,11 +158,11 @@ export default function TenantDashboard() {
                 Last Payment
               </p>
               <p className="text-2xl md:text-3xl font-bold text-green-600">
-                {latestPayment?.status === "completed" ? "Paid" : "Pending"}
+                {latestPayment?.status || "_ _"}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 {latestPayment?.status === "completed"
-                  ? `Paid on: ${new Date(latestPayment.date).toLocaleDateString()}`
+                  ? `Paid on: ${new Date(latestPayment?.paidOn).toLocaleDateString()}`
                   : `Due: ${tenant?.leaseStartDate ? new Date(new Date(tenant?.leaseStartDate).getFullYear(), new Date(tenant?.leaseStartDate).getMonth() + 1, new Date(tenant?.leaseStartDate).getDate()).toLocaleDateString() : "N/A"}`}
               </p>
             </div>
@@ -178,7 +179,7 @@ export default function TenantDashboard() {
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
                 Lease Expires
               </p>
-              <p className="text-2xl md:text-3xl font-bold text-foreground">
+              <p className="text-lg md:text-lg font-bold text-foreground">
                 {leaseExpiration ? leaseExpiration.toLocaleDateString() : "N/A"}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
@@ -192,172 +193,182 @@ export default function TenantDashboard() {
         </Card>
 
         {/* Open Maintenance */}
-        <Card className="border border-border p-4 md:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex-1">
-              <p className="text-xs md:text-sm text-muted-foreground mb-1">
-                Open Requests
-              </p>
-              <p className="text-2xl md:text-3xl font-bold text-yellow-600">
-                {pendingMaintenance.length}
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                {pendingMaintenance.filter((r) => r.priority === "high").length}{" "}
-                urgent
-              </p>
+        {features.maintenanceRequests && features.paymentPortal && (
+          <Card className="border border-border p-4 md:p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-xs md:text-sm text-muted-foreground mb-1">
+                  Open Requests
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-yellow-600">
+                  {pendingMaintenance.length}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {
+                    pendingMaintenance.filter((r) => r.priority === "high")
+                      .length
+                  }{" "}
+                  urgent
+                </p>
+              </div>
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Wrench className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
+              </div>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Wrench className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-        <Button
-          asChild
-          className="bg-primary hover:bg-primary/90 text-white h-14 md:h-12"
-        >
-          <Link href="/tenant/make-payment" className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5" />
-            Make Payment
-            <ArrowRight className="w-4 h-4 ml-auto" />
-          </Link>
-        </Button>
+      {features.maintenanceRequests && features.paymentPortal && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          <Button
+            asChild
+            className="bg-muted hover:bg-muted/90 text-muted-foreground h-14 md:h-12"
+          >
+            <Link href="#" className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              Make Payment
+              <ArrowRight className="w-4 h-4 ml-auto" />
+            </Link>
+          </Button>
 
-        <Button
-          asChild
-          className="bg-primary hover:bg-primary/90 text-white h-14 md:h-12"
-        >
-          <Link href="/tenant/maintenance" className="flex items-center gap-2">
-            <Wrench className="w-5 h-5" />
-            Report Maintenance
-            <ArrowRight className="w-4 h-4 ml-auto" />
-          </Link>
-        </Button>
-      </div>
+          <Button
+            asChild
+            className="bg-primary hover:bg-primary/90 text-white h-14 md:h-12"
+          >
+            <Link
+              href="/tenant/maintenance"
+              className="flex items-center gap-2"
+            >
+              <Wrench className="w-5 h-5" />
+              Report Maintenance
+              <ArrowRight className="w-4 h-4 ml-auto" />
+            </Link>
+          </Button>
+        </div>
+      )}
 
       {/* Recent Activity */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-        {/* Recent Payments */}
-        <Card className="border border-border p-4 md:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 md:mb-6">
-            <h2 className="text-lg md:text-xl font-bold text-foreground">
-              Recent Payments
-            </h2>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" asChild className="h-10">
-                <Link
-                  href="/tenant/make-payment"
-                  className="flex items-center gap-2"
+      {features.maintenanceRequests && features.paymentPortal && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+          {/* Recent Payments */}
+          <Card className="border border-border p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 md:mb-6">
+              <h2 className="text-lg md:text-xl font-bold text-foreground">
+                Recent Payments
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" asChild className="h-10">
+                  <Link
+                    href="/tenant/make-payment"
+                    className="flex items-center gap-2"
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    Pay Rent
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  asChild
+                  className="text-primary hover:text-primary/90 h-10"
                 >
-                  <CreditCard className="w-4 h-4" />
-                  Pay Rent
-                </Link>
-              </Button>
+                  <Link href="/tenant/payments">View All</Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {paymentHistory
+                .slice(-3)
+                .reverse()
+                .map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex items-center justify-between p-3 bg-secondary rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {new Date(payment.date).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {payment?.status}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <p className="text-sm font-bold text-foreground">
+                        {getCurrencySymbol(activeCurrency)}
+                        {payment.amount}
+                      </p>
+                      <Badge
+                        className={`${
+                          payment.status === "Paid"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                        }`}
+                      >
+                        {payment.status}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </Card>
+
+          {/* Open Maintenance Requests */}
+          <Card className="border border-border p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4 md:mb-6">
+              <h2 className="text-lg md:text-xl font-bold text-foreground">
+                Maintenance Requests
+              </h2>
               <Button
                 variant="ghost"
                 asChild
-                className="text-primary hover:text-primary/90 h-10"
+                className="text-primary hover:text-primary/90"
               >
-                <Link href="/tenant/payments">View All</Link>
+                <Link href="/tenant/maintenance">View All</Link>
               </Button>
             </div>
-          </div>
 
-          <div className="space-y-3">
-            {paymentHistory
-              .slice(-3)
-              .reverse()
-              .map((payment) => (
+            <div className="space-y-3">
+              {pendingMaintenance.slice(0, 3).map((request) => (
                 <div
-                  key={payment.id}
-                  className="flex items-center justify-between p-3 bg-secondary rounded-lg"
+                  key={request.id}
+                  className="p-3 bg-secondary rounded-lg border border-border"
                 >
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">
-                      {new Date(payment.date).toLocaleDateString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {payment.status === "completed"
-                        ? payment.type
-                        : "Pending"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <p className="text-sm font-bold text-foreground">
-                      {getCurrencySymbol(activeCurrency)}
-                      {payment.amount}
-                    </p>
-                    <Badge
-                      className={
-                        payment.status === "completed"
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                          : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                      }
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        request.priority === "high"
+                          ? "bg-red-100 dark:bg-red-900/30"
+                          : "bg-yellow-100 dark:bg-yellow-900/30"
+                      }`}
                     >
-                      {payment.status === "completed" ? "Paid" : "Pending"}
+                      {request.status === "assigned" ? (
+                        <Clock className="w-4 h-4 text-yellow-600" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-red-600" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {request.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {request.status.charAt(0).toUpperCase() +
+                          request.status.slice(1)}
+                      </p>
+                    </div>
+                    <Badge className="text-xs whitespace-nowrap">
+                      {request.priority}
                     </Badge>
                   </div>
                 </div>
               ))}
-          </div>
-        </Card>
-
-        {/* Open Maintenance Requests */}
-        <Card className="border border-border p-4 md:p-6">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h2 className="text-lg md:text-xl font-bold text-foreground">
-              Maintenance Requests
-            </h2>
-            <Button
-              variant="ghost"
-              asChild
-              className="text-primary hover:text-primary/90"
-            >
-              <Link href="/tenant/maintenance">View All</Link>
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {pendingMaintenance.slice(0, 3).map((request) => (
-              <div
-                key={request.id}
-                className="p-3 bg-secondary rounded-lg border border-border"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      request.priority === "high"
-                        ? "bg-red-100 dark:bg-red-900/30"
-                        : "bg-yellow-100 dark:bg-yellow-900/30"
-                    }`}
-                  >
-                    {request.status === "assigned" ? (
-                      <Clock className="w-4 h-4 text-yellow-600" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-red-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {request.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {request.status.charAt(0).toUpperCase() +
-                        request.status.slice(1)}
-                    </p>
-                  </div>
-                  <Badge className="text-xs whitespace-nowrap">
-                    {request.priority}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Important Notice */}
       <Card className="border border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10 dark:border-yellow-900/30 p-4 md:p-6">

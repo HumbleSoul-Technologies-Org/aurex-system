@@ -37,6 +37,8 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  CreditCardIcon,
+  ShieldAlert,
 } from "lucide-react";
 import {
   getSystemSettings,
@@ -751,35 +753,35 @@ export default function SettingsPage() {
               value="portal"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
-              <SettingsIcon className="w-4 h-4 mr-2" />
+              <Users className="w-4 h-4 mr-2" />
               Portal
             </TabsTrigger>
             <TabsTrigger
               value="finance"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
-              <Users className="w-4 h-4 mr-2" />
-              Finance
+              <CreditCardIcon className="w-4 h-4 mr-2" />
+              Finances
             </TabsTrigger>
             <TabsTrigger
               value="notifications"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
-              <Shield className="w-4 h-4 mr-2" />
+              <Bell className="w-4 h-4 mr-2" />
               Notifications
             </TabsTrigger>
-            <TabsTrigger
+            {/* <TabsTrigger
               value="features"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
               <Bell className="w-4 h-4 mr-2" />
               Features
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger
               value="security"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
-              <FileText className="w-4 h-4 mr-2" />
+              <ShieldAlert className="w-4 h-4 mr-2" />
               Security
             </TabsTrigger>
           </TabsList>
@@ -1250,7 +1252,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           {/* Features Tab (placeholder) */}
-          <TabsContent value="features" className="p-6 space-y-6">
+          {/* <TabsContent value="features" className="p-6 space-y-6">
             <div>
               <h3 className="text-lg font-bold text-foreground mb-4">
                 System Features
@@ -1446,7 +1448,7 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          </TabsContent>
+          </TabsContent> */}
 
           {/* Security Tab (placeholder) */}
           <TabsContent value="security" className="p-6 space-y-6">

@@ -7,12 +7,14 @@ interface AddTenantFormProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit?: (data: any) => void;
+  isLoading?: boolean;
 }
 
 export default function AddTenantForm({
   isOpen,
   onClose,
   onSubmit,
+  isLoading = false,
 }: AddTenantFormProps) {
   if (!isOpen) return null;
 
@@ -20,6 +22,7 @@ export default function AddTenantForm({
     <TenantForm
       mode="create"
       isOpen={isOpen}
+      isLoading={isLoading}
       onClose={onClose}
       onSubmit={(formData) => {
         onSubmit?.(formData);

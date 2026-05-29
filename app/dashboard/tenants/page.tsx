@@ -48,12 +48,14 @@ export default function TenantsPage() {
   const activeCurrency = useActiveCurrency();
 
   const [showAddForm, setShowAddForm] = useState(false);
+  const [isCreatingTenant, setIsCreatingTenant] = useState(false);
 
-  const { tenants, properties, isLoading } = useAppData();
+  const { tenants, properties, isLoading, isFetching } = useAppData();
+  const isPageLoading = isLoading || (isFetching && tenants.length === 0);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
 
-  if (isLoading) {
+  if (isPageLoading) {
     return (
       <div className="space-y-6">
         <AdminSkeletonHeader />
@@ -135,6 +137,7 @@ export default function TenantsPage() {
   };
 
   const handleAddTenant = async (data: any) => {
+    setIsCreatingTenant(true);
     try {
       const payload: Partial<TenantRecord> = {
         name: data.name,
@@ -174,9 +177,11 @@ export default function TenantsPage() {
         queryKey: ["tenants"] as const,
       });
       console.log("New tenant created:", tenant);
+      setShowAddForm(false);
     } catch (error) {
       console.error("Failed to create tenant:", error);
-      alert("Failed to create tenant. Please try again.");
+    } finally {
+      setIsCreatingTenant(false);
     }
   };
 
@@ -186,6 +191,7 @@ export default function TenantsPage() {
         isOpen={showAddForm}
         onClose={() => setShowAddForm(false)}
         onSubmit={handleAddTenant}
+        isLoading={isCreatingTenant}
       />
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

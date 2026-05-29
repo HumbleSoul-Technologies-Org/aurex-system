@@ -72,7 +72,7 @@ export default function BioSection({
     <Card className="border border-border p-4 md:p-6">
       <div className="flex items-start gap-4 md:gap-6 mb-6 pb-6 border-b border-border">
         <div className="relative">
-          <div className="w-20 relative h-20 p-4 md:w-24 md:h-24 rounded-full bg-transparent shadow-lg flex items-center justify-center text-primary text-2xl md:text-3xl">
+          <div className="w-20 relative h-20  md:w-24 md:h-24 rounded-full bg-transparent shadow-lg flex items-center justify-center text-primary text-2xl md:text-3xl">
             {value?.image?.url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

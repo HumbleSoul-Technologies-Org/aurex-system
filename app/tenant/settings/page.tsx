@@ -30,11 +30,11 @@ import { getAuthToken } from "@/lib/token-manager";
 
 const tabItems = [
   { id: "profile", label: "Profile" },
-  { id: "notifications", label: "Notifications" },
-  { id: "emergency", label: "Emergency Contact" },
-  { id: "moveout", label: "Move-Out Notice" },
+  // { id: "notifications", label: "Notifications" },
+  // { id: "emergency", label: "Emergency Contact" },
+  // { id: "moveout", label: "Move-Out Notice" },
   { id: "security", label: "Security" },
-  { id: "documents", label: "Document Delivery" },
+  // { id: "documents", label: "Document Delivery" },
 ] as const;
 
 type TabId = (typeof tabItems)[number]["id"];
@@ -78,19 +78,19 @@ export default function TenantSettingsPage() {
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
     profile: false,
-    notifications: false,
-    emergency: false,
-    moveout: false,
+    // notifications: false,
+    // emergency: false,
+    // moveout: false,
     security: false,
-    documents: false,
+    // documents: false,
   });
   const [saveError, setSaveError] = useState<Record<TabId, string | null>>({
     profile: null,
-    notifications: null,
-    emergency: null,
-    moveout: null,
+    // notifications: null,
+    // emergency: null,
+    // moveout: null,
     security: null,
-    documents: null,
+    // documents: null,
   });
 
   // Load tenant type configuration for defaults
@@ -394,7 +394,7 @@ export default function TenantSettingsPage() {
             />
           )}
 
-          {activeTab === "notifications" && (
+          {/* {activeTab === "notifications" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
                 <div className="rounded-lg bg-primary/10 p-3 text-primary">
@@ -791,7 +791,7 @@ export default function TenantSettingsPage() {
                 </div>
               )}
             </Card>
-          )}
+          )} */}
 
           {activeTab === "security" && (
             <Card className="border border-border p-4 md:p-6">
@@ -890,7 +890,7 @@ export default function TenantSettingsPage() {
             </Card>
           )}
 
-          {activeTab === "documents" && (
+          {/* {activeTab === "documents" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
                 <div className="rounded-lg bg-primary/10 p-3 text-primary">
@@ -960,7 +960,7 @@ export default function TenantSettingsPage() {
                 </Button>
               </div>
             </Card>
-          )}
+          )} */}
         </div>
       </div>
     </div>

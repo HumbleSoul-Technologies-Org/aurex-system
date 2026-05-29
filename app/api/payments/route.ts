@@ -1,36 +1,35 @@
 import { NextResponse } from 'next/server'
-import { insertIntoCollection, getCollection, updateInCollection, generateId } from '@/lib/local-store'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api'
+
+async function forward(path: string, req: Request, init?: RequestInit) {
+  const url = `${API_BASE}${path}`
+  const headers = new Headers(init?.headers as HeadersInit)
+  const auth = req.headers.get('authorization')
+  const cookie = req.headers.get('cookie')
+  if (auth) headers.set('authorization', auth)
+  if (cookie) headers.set('cookie', cookie)
+
+  const res = await fetch(url, {
+    ...init,
+    headers,
+    credentials: 'include',
+  })
+  const data = await res.json().catch(() => ({}))
+  return { status: res.status, data }
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const now = new Date().toISOString()
-    const id = generateId('pay')
-    const payment = {
-      id,
-      tenantId: body.tenantId,
-      propertyId: body.propertyId,
-      leaseId: body.leaseId || null,
-      amount: body.amount,
-      currency: body.currency || 'USD',
-      monthlyRent: body.monthlyRent ?? null,
-      paymentMethod: body.paymentMethod || 'manual',
-      paymentDate: body.paymentDate || now,
-      recordedBy: body.recordedBy || null,
-      recordedAt: now,
-      reference: body.reference || null,
-      receiptUrl: body.receiptUrl || null,
-      status: body.status || 'recorded',
-      notes: body.notes || null,
-      createdAt: now,
-      updatedAt: now,
-    }
-
-    insertIntoCollection('payments', payment)
-
-    return NextResponse.json({ payment }, { status: 201 })
+    const result = await forward('/payments/create', req, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return NextResponse.json(result.data, { status: result.status })
   } catch (err) {
-    console.error('Payments POST error', err)
+    console.error('Payments POST proxy error', err)
     return NextResponse.json({ error: 'Failed to create payment' }, { status: 500 })
   }
 }
@@ -38,21 +37,23 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
-    const tenantId = url.searchParams.get('tenantId')
     const propertyId = url.searchParams.get('propertyId')
+    const tenantId = url.searchParams.get('tenantId')
+    let forwardPath = `/payments`
 
-    let payments = getCollection('payments')
-
-    if (tenantId) {
-      payments = payments.filter((p: any) => p.tenantId === tenantId)
-    }
     if (propertyId) {
-      payments = payments.filter((p: any) => p.propertyId === propertyId)
+      forwardPath = `/payments/property/${encodeURIComponent(propertyId)}/all`
+    } else if (tenantId) {
+      forwardPath = `/payments/tenant/${encodeURIComponent(tenantId)}/all`
+    } else {
+      const query = url.search ? `?${url.searchParams.toString()}` : ''
+      forwardPath = `/payments${query}`
     }
 
-    return NextResponse.json({ payments })
+    const result = await forward(forwardPath, req)
+    return NextResponse.json(result.data, { status: result.status })
   } catch (err) {
-    console.error('Payments GET error', err)
+    console.error('Payments GET proxy error', err)
     return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 })
   }
 }
@@ -62,13 +63,14 @@ export async function PUT(req: Request) {
     const url = new URL(req.url)
     const id = url.pathname.split('/').pop() || ''
     const body = await req.json()
-
-    const updated = updateInCollection('payments', id, { ...body, updatedAt: new Date().toISOString() })
-    if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    return NextResponse.json({ payment: updated })
+    const result = await forward(`/payments/${id}`, req, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return NextResponse.json(result.data, { status: result.status })
   } catch (err) {
-    console.error('Payments PUT error', err)
+    console.error('Payments PUT proxy error', err)
     return NextResponse.json({ error: 'Failed to update payment' }, { status: 500 })
   }
 }

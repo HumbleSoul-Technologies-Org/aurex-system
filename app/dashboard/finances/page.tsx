@@ -27,7 +27,11 @@ import {
   updateExpenseApi,
   deleteExpenseApi,
 } from "@/lib/services/expenses";
-import { listPayments } from "@/lib/services/payments";
+import {
+  deletePaymentApi,
+  getAllPayments,
+  getPaymentsForPropertyIds,
+} from "@/lib/services/payments";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
@@ -73,7 +77,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { deletePayment } from "@/lib/services/payments";
 import AddExpenseForm from "@/components/forms/add-expense-form";
 import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
@@ -94,6 +97,22 @@ export default function FinancesPage() {
   const [isExpensesLoading, setIsExpensesLoading] = useState(true);
   const activeCurrency = useActiveCurrency();
 
+  const loadPayments = async () => {
+    try {
+      const propertyIds = allProperties
+        .map((property) => property.id)
+        .filter(Boolean);
+      const allPayments =
+        propertyIds.length > 0
+          ? await getPaymentsForPropertyIds(propertyIds)
+          : await getAllPayments();
+      setPayments(allPayments);
+    } catch (error) {
+      console.error("Failed to load payments", error);
+      setPayments([]);
+    }
+  };
+
   useEffect(() => {
     // load server-backed expenses for display
     (async () => {
@@ -108,16 +127,16 @@ export default function FinancesPage() {
       }
     })();
 
-    setPayments(listPayments());
+    loadPayments();
     const onTxUpdate = () => refreshTransactions();
-    const onPaymentsUpdated = () => setPayments(listPayments());
+    const onPaymentsUpdated = () => loadPayments();
     window.addEventListener("transactionsUpdated", onTxUpdate);
     window.addEventListener("paymentsUpdated", onPaymentsUpdated);
     return () => {
       window.removeEventListener("transactionsUpdated", onTxUpdate);
       window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
     };
-  }, []);
+  }, [allProperties.length]);
 
   // Enrich transactions with tenant and property data from real lists
   const enrichedTransactions = (transactions || []).map((transaction) => {
@@ -143,7 +162,10 @@ export default function FinancesPage() {
 
   const rentPayments = enrichedPayments;
   const completedPayments = rentPayments.filter(
-    (t) => t.status === "completed" || t.status === "paid",
+    (t) =>
+      t.status === "complete" ||
+      t.status === "completed" ||
+      t.status === "paid",
   );
   // only count pending payments for tenants whose status is 'due'
   const dueTenantIds = allTenants
@@ -156,8 +178,18 @@ export default function FinancesPage() {
       dueTenantIds.includes(t.tenantId),
   );
 
-  const totalRevenue = completedPayments.reduce(
-    (sum, t) => sum + (t.amount || 0),
+  const partialPayments = rentPayments.filter((t) => t.status === "balance");
+  const totalRevenue = rentPayments
+    .filter(
+      (t) =>
+        t.status === "complete" ||
+        t.status === "completed" ||
+        t.status === "paid" ||
+        t.status === "balance",
+    )
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const expectedOutstanding = partialPayments.reduce(
+    (sum, t) => sum + (t.balance || 0),
     0,
   );
   const totalExpenses = enrichedTransactions
@@ -167,6 +199,16 @@ export default function FinancesPage() {
     (sum, t) => sum + (t.amount || 0),
     0,
   );
+  const netProfit = totalRevenue - totalExpenses;
+  const netLabel = netProfit >= 0 ? "Net Profit" : "Net Loss";
+  const netColorClass = netProfit >= 0 ? "text-green-600" : "text-red-600";
+
+  const occupiedPropertyIds = new Set(
+    allTenants.filter((t) => t.propertyId).map((t) => t.propertyId),
+  );
+  const occupancyRate = allProperties.length
+    ? Math.round((occupiedPropertyIds.size / allProperties.length) * 1000) / 10
+    : 0;
 
   // Filter payments by status
   const filteredPayments = rentPayments.filter((payment) => {
@@ -212,7 +254,7 @@ export default function FinancesPage() {
     })();
   };
   const refreshPayments = () => {
-    setPayments(listPayments());
+    void loadPayments();
   };
 
   const isPageLoading = isLoading || isExpensesLoading;
@@ -275,7 +317,21 @@ export default function FinancesPage() {
           <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
             {formatCurrency(totalRevenue, activeCurrency)}
           </p>
-          <p className="text-xs text-muted-foreground">From rent payments</p>
+          <p className="text-xs text-muted-foreground">
+            From rent payments and partial collections
+          </p>
+        </Card>
+
+        <Card className="border border-border p-4 sm:p-6">
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Outstanding Balances
+          </p>
+          <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
+            {formatCurrency(expectedOutstanding, activeCurrency)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Expected from partial payments and overdue rent
+          </p>
         </Card>
 
         <Card className="border border-border p-4 sm:p-6">
@@ -290,12 +346,12 @@ export default function FinancesPage() {
 
         <Card className="border border-border p-4 sm:p-6">
           <p className="text-xs sm:text-sm text-muted-foreground mb-1">
-            Net Profit
+            {netLabel}
           </p>
           <p
-            className={`text-2xl sm:text-3xl font-bold mb-1 ${totalRevenue - totalExpenses > 0 ? "text-green-600" : "text-red-600"} whitespace-nowrap truncate`}
+            className={`text-2xl sm:text-3xl font-bold mb-1 ${netColorClass} whitespace-nowrap truncate`}
           >
-            {formatCurrency(totalRevenue - totalExpenses, activeCurrency)}
+            {formatCurrency(netProfit, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             Revenue minus expenses
@@ -650,7 +706,9 @@ export default function FinancesPage() {
                     onClick={() => handleRowClick(payment)}
                   >
                     <div>
-                      {payment.status === "completed" ? (
+                      {payment.status === "complete" ||
+                      payment.status === "completed" ||
+                      payment.status === "paid" ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
                       ) : (
                         <Clock className="w-6 h-6 text-orange-600" />
@@ -663,6 +721,9 @@ export default function FinancesPage() {
                       <p className="text-sm text-muted-foreground">
                         {payment.propertyName}
                       </p>
+                      <p className="text-sm text-muted-foreground">
+                        <b>Reason:</b> {payment.reasonForPayment}
+                      </p>
                     </div>
                   </div>
 
@@ -671,9 +732,22 @@ export default function FinancesPage() {
                       {formatCurrency(payment.amount, activeCurrency)}
                     </p>
                     <p
-                      className={`text-xs font-semibold ${payment.status === "completed" ? "text-green-600" : "text-orange-600"}`}
+                      className={`text-xs font-semibold ${
+                        payment.status === "complete" ||
+                        payment.status === "completed" ||
+                        payment.status === "paid"
+                          ? "text-green-600"
+                          : "text-orange-600"
+                      }`}
                     >
-                      {payment.status === "completed" ? "Paid" : "Pending"}
+                      {payment.status === "complete" ||
+                      payment.status === "completed" ||
+                      payment.status === "paid"
+                        ? "Paid"
+                        : "balance due"}{" "}
+                      {payment.balance && payment.balance > 0
+                        ? `• ${formatCurrency(payment.balance, activeCurrency)}`
+                        : ""}
                     </p>
                   </div>
 
@@ -693,14 +767,16 @@ export default function FinancesPage() {
                         View details
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => {
+                        onClick={async () => {
                           try {
-                            deletePayment(payment.id);
-                            refreshPayments();
-                            if (typeof window !== "undefined")
-                              window.dispatchEvent(
-                                new CustomEvent("paymentsUpdated"),
-                              );
+                            const deleted = await deletePaymentApi(payment.id);
+                            if (deleted) {
+                              refreshPayments();
+                              if (typeof window !== "undefined")
+                                window.dispatchEvent(
+                                  new CustomEvent("paymentsUpdated"),
+                                );
+                            }
                           } catch (e) {
                             console.error("Failed to delete payment", e);
                           }
@@ -997,20 +1073,24 @@ export default function FinancesPage() {
               {[
                 {
                   label: "Total Revenue",
-                  value: formatCurrency(127500, activeCurrency),
-                  change: "+12.5%",
+                  value: formatCurrency(totalRevenue, activeCurrency),
+                  change: undefined,
                 },
                 {
                   label: "Total Expenses",
-                  value: formatCurrency(42300, activeCurrency),
-                  change: "-3.2%",
+                  value: formatCurrency(totalExpenses, activeCurrency),
+                  change: undefined,
                 },
                 {
-                  label: "Net Income",
-                  value: formatCurrency(85200, activeCurrency),
-                  change: "+18.7%",
+                  label: netLabel,
+                  value: formatCurrency(netProfit, activeCurrency),
+                  change: undefined,
                 },
-                { label: "Occupancy Rate", value: "94%", change: "+2.1%" },
+                {
+                  label: "Occupancy Rate",
+                  value: `${occupancyRate}%`,
+                  change: undefined,
+                },
               ].map((stat) => (
                 <Card key={stat.label} className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">
@@ -1019,10 +1099,12 @@ export default function FinancesPage() {
                   <p className="text-2xl font-bold text-foreground">
                     {stat.value}
                   </p>
-                  <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" />
-                    {stat.change}
-                  </p>
+                  {stat.change ? (
+                    <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3" />
+                      {stat.change}
+                    </p>
+                  ) : null}
                 </Card>
               ))}
             </div>

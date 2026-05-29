@@ -37,10 +37,13 @@ import {
 } from "lucide-react";
 import {
   getNotifications,
-  markAsRead,
-  getUnreadCount,
   deleteNotification,
+  getUnreadCount,
 } from "@/lib/services/notifications";
+import {
+  fetchNotifications,
+  markNotificationRead,
+} from "@/app/lib/notifications-client";
 import { getAllExpenses } from "@/lib/services/expenses";
 import { listTenants } from "@/lib/services/tenants";
 import { getMaintenanceRequests } from "@/lib/services/maintenance";
@@ -71,7 +74,13 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
 
-  const { user: authUser, isAuthenticated, isLoading, logout } = useAuth();
+  const {
+    user: authUser,
+    isAuthenticated,
+    isLoading,
+    logout,
+    token,
+  } = useAuth();
   const { settings } = useSettings();
 
   // Read timeout minutes from settings (stored as minutes)
@@ -89,10 +98,39 @@ export default function DashboardLayout({
 
   useAdminInactivity(timeoutSeconds, handleAutoLogout);
 
-  // Load notifications
+  const normalizeNotificationsResponse = (resp: any) => {
+    if (!resp) return getNotifications();
+    if (Array.isArray(resp)) return resp as any[];
+    if (resp?.success && Array.isArray(resp.data)) return resp.data;
+    return getNotifications();
+  };
+
+  // Load notifications (try server, fall back to local)
   React.useEffect(() => {
-    setNotifications(getNotifications());
-  }, []);
+    let mounted = true;
+    (async () => {
+      try {
+        const resp = await fetchNotifications(
+          undefined,
+          undefined,
+          token ?? undefined,
+        );
+        const list = normalizeNotificationsResponse(resp);
+        if (!mounted) return;
+        setNotifications(list);
+      } catch (e) {
+        console.error(
+          "Failed to fetch notifications, falling back to local",
+          e,
+        );
+        if (!mounted) return;
+        setNotifications(getNotifications());
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
 
   // Function to delete all notifications from DB and UI
   const clearAllNotifications = () => {
@@ -142,9 +180,19 @@ export default function DashboardLayout({
     })();
   }, []);
 
-  const refreshNotifications = () => {
-    setNotifications(getNotifications());
-  };
+  const refreshNotifications = React.useCallback(async () => {
+    try {
+      const resp = await fetchNotifications(
+        undefined,
+        undefined,
+        token ?? undefined,
+      );
+      setNotifications(normalizeNotificationsResponse(resp));
+    } catch (e) {
+      console.error("Refresh notifications failed", e);
+      setNotifications(getNotifications());
+    }
+  }, [token]);
 
   // Make refreshNotifications available globally for other components
   React.useEffect(() => {
@@ -152,7 +200,7 @@ export default function DashboardLayout({
     return () => {
       delete (window as any).refreshNotifications;
     };
-  }, []);
+  }, [refreshNotifications]);
 
   React.useEffect(() => {
     // Don't redirect while loading
@@ -205,11 +253,11 @@ export default function DashboardLayout({
           icon: <Wrench className="w-4 h-4" />,
           badge: pendingMaintenanceCount,
         },
-        {
-          label: "Map",
-          href: "/dashboard/map",
-          icon: <MapPin className="w-4 h-4" />,
-        },
+        // {
+        //   label: "Map",
+        //   href: "/dashboard/map",
+        //   icon: <MapPin className="w-4 h-4" />,
+        // },
       ],
     },
     {
@@ -359,7 +407,7 @@ export default function DashboardLayout({
                           <span className="flex-1 text-sm font-medium">
                             {item.label}
                           </span>
-                          {item?.badge > 0 && (
+                          {(item?.badge ?? 0) > 0 && (
                             <span className="px-2 py-1 text-xs font-semibold bg-destructive text-destructive-foreground rounded-full">
                               {item.badge}
                             </span>
@@ -492,9 +540,16 @@ export default function DashboardLayout({
                         <Link
                           key={notif.id}
                           href={notif.actionUrl}
-                          onClick={() => {
+                          onClick={async () => {
                             if (!notif.read) {
-                              markAsRead(notif.id);
+                              try {
+                                await markNotificationRead(
+                                  notif.id,
+                                  token ?? undefined,
+                                );
+                              } catch (e) {
+                                console.error("markNotificationRead failed", e);
+                              }
                               setNotifications((prev) =>
                                 prev.map((n) =>
                                   n.id === notif.id ? { ...n, read: true } : n,
@@ -568,9 +623,16 @@ export default function DashboardLayout({
                       <Link
                         key={notif.id}
                         href={notif.actionUrl}
-                        onClick={() => {
+                        onClick={async () => {
                           if (!notif.read) {
-                            markAsRead(notif.id);
+                            try {
+                              await markNotificationRead(
+                                notif.id,
+                                token ?? undefined,
+                              );
+                            } catch (e) {
+                              console.error("markNotificationRead failed", e);
+                            }
                             setNotifications((prev) =>
                               prev.map((n) =>
                                 n.id === notif.id ? { ...n, read: true } : n,

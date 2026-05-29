@@ -46,7 +46,7 @@ export default function PaymentsPage() {
     "amount" | "method" | "confirm" | "success" | "history"
   >("amount");
   const [amount, setAmount] = useState<number>(0);
-  const [method, setMethod] = useState("bank-transfer");
+  const [method, setMethod] = useState("bank_transfer");
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
@@ -98,7 +98,7 @@ export default function PaymentsPage() {
     (p) => !currentTenant || p.tenantId === currentTenant.id,
   );
   const totalPaid = tenantPayments
-    .filter((p) => p.status === "completed" || p.status === "paid")
+    .filter((p) => p.status === "complete")
     .reduce((sum, p) => sum + (p.amount || 0), 0);
 
   const handlePaymentSubmit = async () => {
@@ -111,7 +111,6 @@ export default function PaymentsPage() {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           amount,
-          currency: "USD",
           monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
           paymentMethod: method as any,
           paymentDate: new Date().toISOString(),
@@ -136,7 +135,7 @@ export default function PaymentsPage() {
   const handlePaymentReset = () => {
     setStep("amount");
     setAmount(defaultRent);
-    setMethod("bank-transfer");
+    setMethod("bank_transfer");
   };
 
   return (
@@ -155,7 +154,9 @@ export default function PaymentsPage() {
       <Tabs defaultValue="history" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="history">Payment History</TabsTrigger>
-          <TabsTrigger value="make-payment">Make Payment</TabsTrigger>
+          <TabsTrigger disabled={true} value="make-payment">
+            Make Payment
+          </TabsTrigger>
         </TabsList>
 
         {/* Payment History Tab */}
@@ -190,7 +191,10 @@ export default function PaymentsPage() {
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 {
                   tenantPayments.filter(
-                    (p) => p.status === "completed" || p.status === "paid",
+                    (p) =>
+                      p.status === "complete" ||
+                      p.status === "completed" ||
+                      p.status === "paid",
                   ).length
                 }
               </p>
@@ -218,10 +222,11 @@ export default function PaymentsPage() {
                 <span className="hidden sm:inline">Download</span>
               </Button>
               <Button
+                disabled={true}
                 asChild
-                className="bg-primary hover:bg-primary/90 text-white flex-1 sm:flex-none"
+                className="bg-muted hover:bg-muted/90 text-muted-foreground flex-1 sm:flex-none"
               >
-                <Link href="/tenant/make-payment">Make Payment</Link>
+                <Link href="#">Make Payment</Link>
               </Button>
             </div>
           </div>
@@ -240,6 +245,9 @@ export default function PaymentsPage() {
                     </th>
                     <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
                       Amount
+                    </th>
+                    <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
+                      Balance
                     </th>
                     <th className="px-4 md:px-6 py-3 md:py-4 text-left text-xs md:text-sm font-semibold text-foreground">
                       Status
@@ -265,8 +273,13 @@ export default function PaymentsPage() {
                       className="hover:bg-secondary transition-colors"
                     >
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-foreground">
-                        {payment.date
-                          ? new Date(payment.date).toLocaleDateString()
+                        {payment.paidOn || payment.paymentDate || payment.date
+                          ? new Date(
+                              payment.paidOn ||
+                                payment.paymentDate ||
+                                payment.date ||
+                                undefined,
+                            ).toLocaleDateString()
                           : "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-mono text-foreground">
@@ -275,19 +288,22 @@ export default function PaymentsPage() {
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">
                         {formatCurrency(payment.amount || 0, activeCurrency)}
                       </td>
-                      <td className="px-4 md:px-6 py-3 md:py-4">
+                      <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-semibold text-foreground">
+                        {formatCurrency(payment.balance || 0, activeCurrency)}
+                      </td>
+                      <td className="px-4 md:px-6 py-3 md:py-0">
                         <Badge
                           className={
-                            payment.status === "completed" ||
-                            payment.status === "paid"
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                            payment.status === "complete"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs"
+                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 text-xs"
                           }
                         >
-                          {payment.status === "completed" ||
-                          payment.status === "paid"
+                          {payment.status === "complete"
                             ? "Paid"
-                            : payment.status || "Pending"}
+                            : payment.status === "balance"
+                              ? "Balance Due"
+                              : payment.status || "Pending"}
                         </Badge>
                       </td>
                       <td className="hidden sm:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
@@ -298,7 +314,7 @@ export default function PaymentsPage() {
                           ?.name || "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
-                        {payment.unit || "—"}
+                        {currentTenant.unitNumber || "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4">
                         <DropdownMenu>
@@ -472,17 +488,17 @@ export default function PaymentsPage() {
                 <div className="space-y-3">
                   {[
                     {
-                      id: "bank-transfer",
+                      id: "bank_transfer",
                       name: "Bank Transfer",
                       description: "Direct transfer from your bank account",
                     },
                     {
-                      id: "credit-card",
+                      id: "credit_card",
                       name: "Credit Card",
                       description: "Visa, Mastercard, American Express",
                     },
                     {
-                      id: "debit-card",
+                      id: "debit_card",
                       name: "Debit Card",
                       description: "Direct debit card payment",
                     },
@@ -540,9 +556,9 @@ export default function PaymentsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Method</span>
                         <span className="font-semibold text-foreground">
-                          {method === "bank-transfer"
+                          {method === "bank_transfer"
                             ? "Bank Transfer"
-                            : method === "credit-card"
+                            : method === "credit_card"
                               ? "Credit Card"
                               : "Debit Card"}
                         </span>
@@ -609,7 +625,9 @@ export default function PaymentsPage() {
                     <span className="text-muted-foreground">Date</span>
                     <span className="text-foreground">
                       {savedPayment
-                        ? new Date(savedPayment.date).toLocaleDateString()
+                        ? new Date(
+                            savedPayment.date ?? new Date().toISOString(),
+                          ).toLocaleDateString()
                         : new Date().toLocaleDateString()}
                     </span>
                   </div>

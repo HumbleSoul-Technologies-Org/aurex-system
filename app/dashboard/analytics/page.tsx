@@ -1,26 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  LineChart,
-  Line,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
 import { TrendingUp, TrendingDown, Calendar, Share2 } from "lucide-react";
 import { chartData } from "@/app/lib/sample-data";
-import { useState } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+
+const AnalyticsCharts = dynamic(
+  () => import("@/components/charts/dashboard-analytics-charts"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[320px] flex items-center justify-center text-muted-foreground">
+        Loading chart...
+      </div>
+    ),
+  },
+);
 
 export default function AnalyticsPage() {
   const activeCurrency = useActiveCurrency();
@@ -97,65 +95,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Trend */}
-        <Card className="border border-border p-4 md:p-6">
-          <h3 className="text-lg font-bold text-foreground mb-4">
-            Revenue Trend
-          </h3>
-          <div className="w-full h-64 md:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="5%"
-                      stopColor="var(--primary)"
-                      stopOpacity={0.3}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="var(--primary)"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis stroke="var(--muted-foreground)" />
-                <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="var(--primary)"
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Monthly Comparison */}
-        <Card className="border border-border p-4 md:p-6">
-          <h3 className="text-lg font-bold text-foreground mb-4">
-            Monthly Comparison
-          </h3>
-          <div className="w-full h-64 md:h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis stroke="var(--muted-foreground)" />
-                <YAxis stroke="var(--muted-foreground)" />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="revenue" fill="var(--primary)" />
-                <Bar dataKey="expenses" fill="var(--destructive)" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
+      <AnalyticsCharts chartData={chartData} activeCurrency={activeCurrency} />
 
       {/* Property Performance */}
       <Card className="border border-border p-4 md:p-6">

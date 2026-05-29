@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useTenantContext } from "@/lib/tenant-context";
 import { TenantContextProvider } from "@/lib/tenant-context-provider";
 import { fetchMaintenanceRequestsByTenant } from "@/lib/services/maintenance";
+import { useTenantPortalFeatures } from "@/lib/hooks/use-tenant-portal-features";
 
 interface NavItem {
   label: string;
@@ -92,68 +93,96 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
     }
     router.push("/auth/login");
   };
-
+  const features = useTenantPortalFeatures();
   // Desktop sidebar items (all navigation options)
-  const desktopNavItems: NavItem[] = [
+  const allDesktopNavItems: NavItem[] = [
     {
       label: "Dashboard",
       href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
-    {
-      label: "Payments",
-      href: "/tenant/payments",
-      icon: <CreditCard className="w-4 h-4" />,
-    },
-    {
-      label: "Report Maintenance",
-      href: "/tenant/maintenance",
-      icon: <Wrench className="w-4 h-4" />,
-      badge: completedMaintenanceCount,
-    },
-    {
-      label: "Messages",
-      href: "/tenant/messages",
-      icon: <MessageSquare className="w-4 h-4" />,
-      badge: unreadNotifications > 0 ? unreadNotifications : undefined,
-    },
+    ...(features.paymentPortal
+      ? [
+          {
+            label: "Payments",
+            href: "/tenant/payments",
+            icon: <CreditCard className="w-4 h-4" />,
+          } as NavItem,
+        ]
+      : []),
+    ...(features.maintenanceRequests
+      ? [
+          {
+            label: "Report Maintenance",
+            href: "/tenant/maintenance",
+            icon: <Wrench className="w-4 h-4" />,
+            // badge: completedMaintenanceCount,
+          } as NavItem,
+        ]
+      : []),
+    ...(features.messages
+      ? [
+          {
+            label: "Messages",
+            href: "/tenant/messages",
+            icon: <MessageSquare className="w-4 h-4" />,
+            badge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          } as NavItem,
+        ]
+      : []),
     {
       label: "Settings",
       href: "/tenant/settings",
       icon: <Settings className="w-4 h-4" />,
     },
   ];
+
+  const desktopNavItems = allDesktopNavItems;
 
   // Mobile bottom nav items (5 primary items)
-  const mobileNavItems: NavItem[] = [
+  const allMobileNavItems: NavItem[] = [
     {
       label: "Dashboard",
       href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
-    {
-      label: "Maintenance",
-      href: "/tenant/maintenance",
-      icon: <Wrench className="w-4 h-4" />,
-      badge: completedMaintenanceCount,
-    },
-    {
-      label: "Messages",
-      href: "/tenant/messages",
-      icon: <MessageSquare className="w-4 h-4" />,
-      badge: unreadNotifications > 0 ? unreadNotifications : undefined,
-    },
-    {
-      label: "Payments",
-      href: "/tenant/payments",
-      icon: <CreditCard className="w-4 h-4" />,
-    },
+    ...(features.maintenanceRequests
+      ? [
+          {
+            label: "Maintenance",
+            href: "/tenant/maintenance",
+            icon: <Wrench className="w-4 h-4" />,
+            badge: completedMaintenanceCount,
+          } as NavItem,
+        ]
+      : []),
+    ...(features.messages
+      ? [
+          {
+            label: "Messages",
+            href: "/tenant/messages",
+            icon: <MessageSquare className="w-4 h-4" />,
+            badge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          } as NavItem,
+        ]
+      : []),
+    ...(features.paymentPortal
+      ? [
+          {
+            label: "Payments",
+            href: "/tenant/payments",
+            icon: <CreditCard className="w-4 h-4" />,
+          } as NavItem,
+        ]
+      : []),
     {
       label: "Settings",
       href: "/tenant/settings",
       icon: <Settings className="w-4 h-4" />,
     },
   ];
+
+  const mobileNavItems = allMobileNavItems;
 
   return (
     <div className="min-h-screen bg-background">

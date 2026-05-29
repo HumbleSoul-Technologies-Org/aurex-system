@@ -38,7 +38,6 @@ import {
 } from "lucide-react";
 import { useAppData } from "@/lib/data-context";
 import { Skeleton } from "@/components/ui/skeleton";
-import { listPayments } from "@/lib/services/payments";
 import {
   getTenantPortalSettings,
   initializeSystemSettings,
@@ -49,6 +48,7 @@ import {
 import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import { getAllPayments } from "@/lib/services/payments";
 import Link from "next/link";
 import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
@@ -125,8 +125,22 @@ export default function TenantPortalPage() {
 
   // Load tenants, properties, and payments data on mount
   useEffect(() => {
-    setPayments(listPayments());
-    const onPaymentsUpdated = () => setPayments(listPayments());
+    const loadPayments = async () => {
+      try {
+        const allPayments = await getAllPayments();
+        setPayments(allPayments);
+      } catch (error) {
+        console.error("Failed to load payments", error);
+        setPayments([]);
+      }
+    };
+
+    loadPayments();
+
+    const onPaymentsUpdated = () => {
+      loadPayments();
+    };
+
     if (typeof window !== "undefined")
       window.addEventListener("paymentsUpdated", onPaymentsUpdated);
     return () => {
@@ -144,7 +158,7 @@ export default function TenantPortalPage() {
     // Calculate payment success rate from actual payment data
     const totalPayments = payments.length;
     const successfulPayments = payments.filter(
-      (p) => p.status === "completed",
+      (p) => p.status === "complete",
     ).length;
     const paymentSuccessRate =
       totalPayments > 0

@@ -1,0 +1,40 @@
+﻿app/dashboard/admin/users/components/edit-user-modal.tsx(142,34): error TS2322: Type 'Dispatch<SetStateAction<"admin" | "property_manager" | "tenant">>' is not assignable to type '(value: string) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string' is not assignable to type 'SetStateAction<"admin" | "property_manager" | "tenant">'.
+app/dashboard/admin/users/components/edit-user-modal.tsx(159,36): error TS2322: Type 'Dispatch<SetStateAction<"active" | "inactive" | "locked">>' is not assignable to type '(value: string) => void'.
+  Types of parameters 'value' and 'value' are incompatible.
+    Type 'string' is not assignable to type 'SetStateAction<"active" | "inactive" | "locked">'.
+app/dashboard/layout.tsx(362,28): error TS18048: 'item.badge' is possibly 'undefined'.
+app/lib/tenant-data.ts(10,48): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+app/tenant/make-payment/page.tsx(360,32): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+app/tenant/payments/page.tsx(612,36): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | Date'.
+      Type 'undefined' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'string | undefined' is not assignable to parameter of type 'string | number'.
+      Type 'undefined' is not assignable to type 'string | number'.
+components/forms/record-payment-form.tsx(49,47): error TS2339: Property 'monthlyRent' does not exist on type 'TenantRecord'.
+lib/services/admin-approval.ts(38,5): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(56,24): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(66,51): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(79,44): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(87,5): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(99,46): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(113,46): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(123,31): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/services/admin-approval.ts(138,51): error TS2345: Argument of type '"admin_approval_requests"' is not assignable to parameter of type 'CollectionName'.
+lib/tenant-context-provider.tsx(225,19): error TS2345: Argument of type '{ id: any; sender: any; fromUserId: any; toUserId: any; senderType: string; content: any; timestamp: any; isRead: any; sent: boolean; replied: boolean; subject: string | undefined; isStarred: boolean; isArchived: boolean; type: string; originalId: any; propertyId: any; }[]' is not assignable to parameter of type 'SetStateAction<TenantMessage[]>'.
+  Type '{ id: any; sender: any; fromUserId: any; toUserId: any; senderType: string; content: any; timestamp: any; isRead: any; sent: boolean; replied: boolean; subject: string | undefined; isStarred: boolean; isArchived: boolean; type: string; originalId: any; propertyId: any; }[]' is not assignable to type 'TenantMessage[]'.
+    Type '{ id: any; sender: any; fromUserId: any; toUserId: any; senderType: string; content: any; timestamp: any; isRead: any; sent: boolean; replied: boolean; subject: string | undefined; isStarred: boolean; isArchived: boolean; type: string; originalId: any; propertyId: any; }' is not assignable to type 'TenantMessage'.
+      Types of property 'senderType' are incompatible.
+        Type 'string' is not assignable to type '"tenant" | "manager"'.
+lib/tenant-context-provider.tsx(276,9): error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.

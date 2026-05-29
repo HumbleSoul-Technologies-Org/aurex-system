@@ -18,7 +18,7 @@ import {
   listTransactions,
   createTransaction,
 } from "@/app/lib/transactions-client";
-import { listPayments, createPayment } from "@/lib/services/payments";
+import { getPaymentsForTenant } from "@/lib/services/payments";
 import TenantForm from "@/components/forms/tenant-form";
 import {
   DropdownMenu,
@@ -92,12 +92,25 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
 
   // Edit form state
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isEditingTenant, setIsEditingTenant] = useState(false);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
 
   const getLatestRentPaymentDate = (tenantPayments: any[]) => {
     const completedRentPayments = tenantPayments
       .filter((payment) =>
-        ["completed", "paid", undefined, null].includes(payment.status),
+        [
+          "complete",
+          "completed",
+          "paid",
+          "balance",
+          "pending",
+          "failed",
+          "refunded",
+          "recorded",
+          "confirmed",
+          undefined,
+          null,
+        ].includes(payment.status),
       )
       .filter(
         (payment) =>
@@ -110,8 +123,12 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     if (completedRentPayments.length === 0) return "";
 
     const sorted = [...completedRentPayments].sort((a, b) => {
-      const aTime = new Date(a.date).getTime();
-      const bTime = new Date(b.date).getTime();
+      const aTime = new Date(
+        a.paidOn || a.paymentDate || a.date || undefined,
+      ).getTime();
+      const bTime = new Date(
+        b.paidOn || b.paymentDate || b.date || undefined,
+      ).getTime();
       return bTime - aTime;
     });
 
@@ -132,13 +149,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
       // show existing tenant password if present
       setGeneratedPassword((t as any)?.password || null);
     }
-    // load persisted payments for this tenant
-    try {
-      const all = listPayments();
-      setPayments(all.filter((p: any) => p.tenantId === id));
-    } catch (e) {
-      setPayments([]);
-    }
   }, [id]);
 
   const latestRentPaymentDate = useMemo(
@@ -151,36 +161,31 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     : "No rent payment made yet.";
 
   useEffect(() => {
-    let mounted = true;
     if (!tenant) return;
     const list = listTransactions(tenant.id, "rent");
-    if (mounted) setTransactions(list);
-    const refreshPayments = () => {
-      try {
-        const all = listPayments();
-        setPayments(all.filter((p: any) => p.tenantId === tenant.id));
-      } catch (e) {
-        setPayments([]);
-      }
-    };
-    window.addEventListener("paymentsUpdated", refreshPayments);
-    return () => {
-      mounted = false;
-    };
-  }, [tenant?.id]);
+    setTransactions(list);
 
-  useEffect(() => {
-    const onPaymentsUpdated = () => {
+    const loadTenantPayments = async () => {
       try {
-        const all = listPayments();
-        setPayments(all.filter((p: any) => p.tenantId === tenant?.id));
-      } catch (e) {
+        const tenantPayments = await getPaymentsForTenant(tenant.id);
+        setPayments(tenantPayments);
+      } catch (error) {
+        console.error("Failed to load tenant payments", error);
         setPayments([]);
       }
     };
+
+    loadTenantPayments();
+
+    const onPaymentsUpdated = () => {
+      loadTenantPayments();
+    };
+
     window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () =>
-      window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    return () => {
+      if (typeof window !== "undefined")
+        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    };
   }, [tenant?.id]);
 
   const generatePassword = async (length = 8) => {
@@ -206,14 +211,29 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     const startDate = new Date(leaseStart);
     let months = 1;
 
-    if (leaseType === "full year") {
-      months = 12;
-    } else if (leaseType === "6mnths") {
-      months = 6;
-    } else if (leaseType === "3mnths") {
-      months = 3;
-    } else if (leaseType === "monthly") {
-      months = 1;
+    switch (leaseType) {
+      case "monthly":
+      case "month-to-month":
+        months = 1;
+        break;
+      case "3_months":
+      case "3mnths":
+      case "3 months":
+        months = 3;
+        break;
+      case "half_year":
+      case "6mnths":
+      case "6 months":
+        months = 6;
+        break;
+      case "full_year":
+      case "annual":
+      case "yearly":
+      case "12 months":
+        months = 12;
+        break;
+      default:
+        months = 1;
     }
 
     const leaseEnd = new Date(startDate);
@@ -865,7 +885,9 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                       payments
                         .filter(
                           (p) =>
-                            p.status === "completed" || p.status === "paid",
+                            p.status === "complete" ||
+                            p.status === "completed" ||
+                            p.status === "paid",
                         )
                         .reduce((s, p) => s + (p.amount || 0), 0),
                       activeCurrency,
@@ -941,18 +963,23 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                           <td className="px-4 py-3 text-sm">
                             <span
                               className={`px-2 py-1 text-xs font-semibold rounded inline-flex items-center gap-1 ${
+                                payment.status === "complete" ||
                                 payment.status === "completed" ||
                                 payment.status === "paid"
                                   ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                                  : payment.status === "pending"
+                                  : payment.status === "pending" ||
+                                      payment.status === "balance"
                                     ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
                                     : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
                               }`}
                             >
-                              {payment.status === "completed" && (
+                              {(payment.status === "complete" ||
+                                payment.status === "completed" ||
+                                payment.status === "paid") && (
                                 <CheckCircle className="w-3 h-3" />
                               )}
-                              {payment.status === "pending" && (
+                              {(payment.status === "pending" ||
+                                payment.status === "balance") && (
                                 <Clock className="w-3 h-3" />
                               )}
                               {payment.status === "failed" && (
@@ -1200,7 +1227,12 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           leaseEndDate:
             tenant.leaseEndDate ||
             (tenant.leaseStartDate
-              ? calculateLeaseEnd(tenant.leaseStartDate, tenant.leaseType || "monthly").toISOString().slice(0, 10)
+              ? calculateLeaseEnd(
+                  tenant.leaseStartDate,
+                  tenant.leaseType || "monthly",
+                )
+                  .toISOString()
+                  .slice(0, 10)
               : ""),
           leaseType: tenant.leaseType || "monthly",
           leaseTerms: tenant.leaseTerms || "",
@@ -1224,9 +1256,11 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
         }}
         renewalDateHint={leaseRenewalHint}
         isOpen={isEditOpen}
+        isLoading={isEditingTenant}
         onClose={() => setIsEditOpen(false)}
         onSubmit={async (formData) => {
           try {
+            setIsEditingTenant(true);
             const updatedTenant = {
               ...tenant,
               name: formData.name,
@@ -1244,6 +1278,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               applicationDate: formData.applicationDate,
               moveInDate: formData.moveInDate,
               password: formData.password,
+              rentAmount:
+                formData.monthlyRent === "" ? 0 : Number(formData.monthlyRent),
+              monthlyRent:
+                formData.monthlyRent === "" ? 0 : Number(formData.monthlyRent),
               emergencyContact: formData.emergencyContact,
               notes: formData.notes,
               dateOfBirth: formData.dateOfBirth,
@@ -1263,11 +1301,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
             );
             if (savedTenant) setTenant(savedTenant);
             setIsEditOpen(false);
-            // Show success message
-            alert("Tenant updated successfully!");
           } catch (error) {
             console.error("Error updating tenant:", error);
-            alert("Failed to update tenant. Please try again.");
+          } finally {
+            setIsEditingTenant(false);
           }
         }}
       />

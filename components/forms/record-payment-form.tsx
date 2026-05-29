@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppData } from "@/lib/data-context";
-import { uploadToCloudinary } from "@/lib/cloudinary";
 import { createManualPayment } from "@/lib/services/payments";
-import { formatCurrency } from "@/lib/currency";
 
 type Props = {
   tenantId?: string | null;
@@ -29,24 +27,28 @@ export default function RecordPaymentForm({
     initialPropertyId,
   );
   const [amount, setAmount] = useState<string>("");
-  const [currency, setCurrency] = useState<string>("USD");
+  // `currency` removed; server will assign or infer currency
   const [monthlyRent, setMonthlyRent] = useState<number | null>(null);
-  const [paymentDate, setPaymentDate] = useState<string>(
+  const [paidOn, setPaidOn] = useState<string>(
     new Date().toISOString().slice(0, 16),
   );
   const [paymentMethod, setPaymentMethod] = useState<string>("manual");
-  const [status, setStatus] = useState<string>("recorded");
+  const [status, setStatus] = useState<string>("complete");
+  const [leaseType, setLeaseType] = useState<string>("monthly");
+  const [paidBy, setPaidBy] = useState<string>("");
+  const [reasonForPayment, setReasonForPayment] =
+    useState<string>("rentPayment");
+  const [balance, setBalance] = useState<string>("0");
   const [reference, setReference] = useState<string>("");
-  const [receiptUrl, setReceiptUrl] = useState<string>("");
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [notes, setNotes] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (tenantId) {
       const t = tenants.find((x: any) => x.id === tenantId);
-      const rent = Number(t?.rentAmount || t?.monthlyRent || 0);
+      const rent = Number(
+        (t as any)?.rentAmount || (t as any)?.monthlyRent || 0,
+      );
       if (rent > 0) setMonthlyRent(rent);
     }
     if (!tenantId && initialTenantId) setTenantId(initialTenantId as string);
@@ -62,33 +64,20 @@ export default function RecordPaymentForm({
 
     setSaving(true);
 
-    let uploadedReceiptUrl = receiptUrl;
-    if (receiptFile) {
-      try {
-        setUploadingReceipt(true);
-        const result = await uploadToCloudinary(receiptFile);
-        uploadedReceiptUrl = result.secure_url;
-      } catch (err) {
-        console.error("Receipt upload failed", err);
-        alert("Failed to upload receipt file. Please try again.");
-        setSaving(false);
-        setUploadingReceipt(false);
-        return;
-      } finally {
-        setUploadingReceipt(false);
-      }
-    }
+    let uploadedReceiptUrl = undefined;
 
     const payload: any = {
       tenantId,
       propertyId,
       amount: Number(amount),
-      currency,
       monthlyRent: monthlyRent ?? undefined,
       paymentMethod,
-      paymentDate,
-      reference: reference || undefined,
-      receiptUrl: uploadedReceiptUrl || undefined,
+      paidOn,
+      leaseType: leaseType || undefined,
+      paidBy: paidBy || undefined,
+      reasonForPayment,
+      balance: Number(balance),
+      // removed: reference and receiptUrl are handled by server
       notes: notes || undefined,
       status,
     };
@@ -159,24 +148,16 @@ export default function RecordPaymentForm({
 
         <div>
           <label className="text-xs text-muted-foreground block mb-1">
-            Currency
+            Paid On
           </label>
           <Input
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1">
-            Payment Date
-          </label>
-          <Input
-            value={paymentDate}
-            onChange={(e) => setPaymentDate(e.target.value)}
+            value={paidOn}
+            onChange={(e) => setPaidOn(e.target.value)}
             type="datetime-local"
           />
         </div>
+
+        <div />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -205,59 +186,62 @@ export default function RecordPaymentForm({
             onChange={(e) => setStatus(e.target.value)}
             className="w-full border border-border rounded px-3 py-2 bg-transparent"
           >
-            <option value="recorded">Recorded</option>
-            <option value="confirmed">Confirmed</option>
+            <option value="complete">Complete</option>
+            <option value="balance">Balance</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
             <option value="refunded">Refunded</option>
           </select>
         </div>
         <div>
           <label className="text-xs text-muted-foreground block mb-1">
-            Monthly Rent (prefill)
+            Reason for Payment
+          </label>
+          <select
+            value={reasonForPayment}
+            onChange={(e) => setReasonForPayment(e.target.value)}
+            className="w-full border border-border rounded px-3 py-2 bg-transparent"
+          >
+            <option value="rentPayment">Rent Payment</option>
+            <option value="securityDeposit">Security Deposit</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            Lease Type
           </label>
           <Input
-            value={monthlyRent ? String(monthlyRent) : ""}
-            onChange={(e) => setMonthlyRent(Number(e.target.value || 0))}
-            placeholder="Monthly rent"
+            value={leaseType}
+            onChange={(e) => setLeaseType(e.target.value)}
+            placeholder="Monthly, annual, etc."
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            Paid By
+          </label>
+          <Input
+            value={paidBy}
+            onChange={(e) => setPaidBy(e.target.value)}
+            placeholder="Name of payer"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            Balance
+          </label>
+          <Input
+            value={balance}
+            onChange={(e) => setBalance(e.target.value)}
+            placeholder="0.00"
           />
         </div>
       </div>
 
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">
-          Reference
-        </label>
-        <Input
-          value={reference}
-          onChange={(e) => setReference(e.target.value)}
-        />
-      </div>
-
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">
-          Receipt Upload
-        </label>
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
-          className="w-full text-sm text-muted-foreground"
-        />
-        {receiptFile && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Selected: {receiptFile.name}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <label className="text-xs text-muted-foreground block mb-1">
-          Receipt URL (optional)
-        </label>
-        <Input
-          value={receiptUrl}
-          onChange={(e) => setReceiptUrl(e.target.value)}
-        />
-      </div>
+      {/* reference and receipt fields removed — handled by backend */}
 
       <div>
         <label className="text-xs text-muted-foreground block mb-1">
@@ -266,14 +250,11 @@ export default function RecordPaymentForm({
         <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
-      {uploadingReceipt && (
-        <p className="text-xs text-muted-foreground">Uploading receipt…</p>
-      )}
       <div className="flex items-center justify-end gap-2">
         <Button variant="ghost" type="button" onClick={() => onCancel?.()}>
           Cancel
         </Button>
-        <Button type="submit" disabled={saving || uploadingReceipt}>
+        <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Record Payment"}
         </Button>
       </div>

@@ -27,8 +27,9 @@ import {
   AnnouncementRecord,
   getAnnouncementsByProperty,
 } from "./services/announcements";
-import { PaymentRecord, listPayments } from "./services/payments";
+import { PaymentRecord, getPaymentsForTenant } from "./services/payments";
 import { Notification, getNotifications } from "./services/notifications";
+import { fetchNotifications } from "@/app/lib/notifications-client";
 import { DocumentRecord, listDocuments } from "./services/documents";
 import { getTenantPropertyMessagesForUI } from "./services/messages";
 import TenantContext from "./tenant-context";
@@ -295,11 +296,9 @@ export function TenantContextProvider({
     if (!currentTenant?.id) return;
     setLoadingState("payments", true);
     try {
-      const payments = listPayments().filter(
-        (payment) => payment.tenantId === currentTenant.id,
-      );
-      setPayments(payments);
-      writeCache(CACHE_KEYS.payments, payments);
+      const payments = await getPaymentsForTenant(currentTenant.id);
+      setPayments(payments as unknown as PaymentRecord[]);
+      writeCache(CACHE_KEYS.payments, payments as unknown as PaymentRecord[]);
       setErrorState("payments", null);
     } catch (error: any) {
       console.error("Failed to load payments", error);
@@ -314,7 +313,27 @@ export function TenantContextProvider({
   const loadNotifications = useCallback(async () => {
     setLoadingState("notifications", true);
     try {
-      const allNotifications = getNotifications();
+      const allNotifications = await (async () => {
+        try {
+          // try server-side fetch first when available
+          const resp = await fetchNotifications(
+            currentTenant?.id,
+            undefined,
+            token,
+          );
+          // server returns { success: true, data: [...] } or array
+          if (!resp) return getNotifications();
+          if (Array.isArray(resp)) return resp as Notification[];
+          if (resp?.success && Array.isArray(resp.data)) return resp.data;
+          return getNotifications();
+        } catch (e) {
+          console.error(
+            "Server notifications fetch failed, falling back to local",
+            e,
+          );
+          return getNotifications();
+        }
+      })();
       setNotifications(allNotifications);
       writeCache(CACHE_KEYS.notifications, allNotifications);
       setErrorState("notifications", null);
@@ -329,7 +348,7 @@ export function TenantContextProvider({
     } finally {
       setLoadingState("notifications", false);
     }
-  }, [setErrorState, setLoadingState]);
+  }, [currentTenant?.id, setErrorState, setLoadingState, token]);
 
   const loadDocuments = useCallback(async () => {
     if (!currentTenant && !currentProperty) return;

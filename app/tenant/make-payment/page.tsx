@@ -4,10 +4,13 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
-import { paymentHistory } from "@/app/lib/tenant-data";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
-import { createManualPayment, RentPayment } from "@/lib/services/payments";
+import {
+  createManualPayment,
+  getPaymentsForTenant,
+  RentPayment,
+} from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useEffect } from "react";
@@ -35,11 +38,44 @@ export default function MakePaymentPage() {
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
   const [amount, setAmount] = useState<number>(defaultRent);
-  const [method, setMethod] = useState("bank-transfer");
+  const [method, setMethod] = useState<
+    "bank_transfer" | "credit_card" | "debit_card"
+  >("bank_transfer");
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
+  const [tenantPayments, setTenantPayments] = useState<RentPayment[]>([]);
 
-  const nextPayment = paymentHistory.find((p) => p.status === "pending");
+  const nextPayment = tenantPayments.find((p) => p.status === "pending");
+
+  useEffect(() => {
+    const loadTenantPayments = async () => {
+      if (!tenant?.id) {
+        setTenantPayments([]);
+        return;
+      }
+
+      try {
+        const payments = await getPaymentsForTenant(tenant.id);
+        setTenantPayments(payments);
+      } catch (error) {
+        console.error("Failed to load tenant payment history", error);
+        setTenantPayments([]);
+      }
+    };
+
+    loadTenantPayments();
+
+    const onPaymentsUpdated = () => {
+      loadTenantPayments();
+    };
+
+    if (typeof window !== "undefined")
+      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
+    return () => {
+      if (typeof window !== "undefined")
+        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    };
+  }, [tenant?.id]);
 
   const handleSubmit = async () => {
     if (step === "amount") setStep("method");
@@ -47,15 +83,26 @@ export default function MakePaymentPage() {
     else if (step === "confirm") {
       setProcessing(true);
       try {
+        const balance = Math.max(
+          0,
+          (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
+        );
+
+        const normalizedPaymentMethod =
+          method === "bank_transfer" ? "bank_transfer" : "card";
+
         const payload: Partial<RentPayment> = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           amount,
-          currency: "USD",
           monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
-          paymentMethod: method as any,
-          paymentDate: new Date().toISOString(),
-          status: "recorded",
+          paymentMethod: normalizedPaymentMethod,
+          paidOn: new Date().toISOString(),
+          paidBy: user?.name || user?.id || "tenant",
+          leaseType: tenant?.leaseType || "monthly",
+          reasonForPayment: "rentPayment",
+          balance,
+          status: balance > 0 ? "balance" : "complete",
           notes: "Tenant-initiated rent payment",
         };
         const rec = await createManualPayment(payload);
@@ -77,7 +124,7 @@ export default function MakePaymentPage() {
   const handleReset = () => {
     setStep("amount");
     setAmount(defaultRent);
-    setMethod("bank-transfer");
+    setMethod("bank_transfer");
   };
 
   return (
@@ -222,24 +269,28 @@ export default function MakePaymentPage() {
             <div className="space-y-3">
               {[
                 {
-                  id: "bank-transfer",
+                  id: "bank_transfer",
                   name: "Bank Transfer",
                   description: "Direct transfer from your bank account",
                 },
                 {
-                  id: "credit-card",
+                  id: "credit_card",
                   name: "Credit Card",
                   description: "Visa, Mastercard, American Express",
                 },
                 {
-                  id: "debit-card",
+                  id: "debit_card",
                   name: "Debit Card",
                   description: "Direct debit card payment",
                 },
               ].map((m) => (
                 <button
                   key={m.id}
-                  onClick={() => setMethod(m.id)}
+                  onClick={() =>
+                    setMethod(
+                      m.id as "bank_transfer" | "credit_card" | "debit_card",
+                    )
+                  }
                   className={`w-full p-4 border-2 rounded-lg transition-all text-left ${method === m.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
                 >
                   <div className="flex items-center gap-3">
@@ -290,9 +341,9 @@ export default function MakePaymentPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Method</span>
                     <span className="font-semibold text-foreground">
-                      {method === "bank-transfer"
+                      {method === "bank_transfer"
                         ? "Bank Transfer"
-                        : method === "credit-card"
+                        : method === "credit_card"
                           ? "Credit Card"
                           : "Debit Card"}
                     </span>
@@ -357,7 +408,12 @@ export default function MakePaymentPage() {
                 <span className="text-muted-foreground">Date</span>
                 <span className="text-foreground">
                   {savedPayment
-                    ? new Date(savedPayment.date).toLocaleDateString()
+                    ? new Date(
+                        savedPayment.paidOn ??
+                          savedPayment.paymentDate ??
+                          savedPayment.date ??
+                          new Date().toISOString(),
+                      ).toLocaleDateString()
                     : new Date().toLocaleDateString()}
                 </span>
               </div>

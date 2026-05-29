@@ -603,8 +603,8 @@ export default function TenantMessagesPage() {
               {[
                 ["inbox", "Inbox"],
                 ["sent", "Sent"],
-                ["starred", "Starred"],
-                ["archived", "Archived"],
+                // ["starred", "Starred"],
+                // ["archived", "Archived"],
               ].map(([key, label]) => (
                 <button
                   key={key}

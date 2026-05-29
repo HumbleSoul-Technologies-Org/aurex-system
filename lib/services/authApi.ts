@@ -42,7 +42,9 @@ export interface AuthResponse {
       role: string;
       status: string;
       emailVerified: boolean;
+      isActivated?: boolean;
       createdAt: string;
+      settingsId?: string;
     };
     token: string;
   };
@@ -57,6 +59,7 @@ export interface User {
   role: string;
   status: string;
   emailVerified: boolean;
+  isActivated?: boolean;
   createdAt: string;
   settingsId?: string;
 }
@@ -164,6 +167,27 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
 
   if (!response.ok) {
     throw new Error(data.error?.message || 'Email verification failed');
+  }
+
+  return data;
+}
+
+/**
+ * Verify product/license key for a user
+ */
+export async function verifyProductKey(email: string, key: string): Promise<{ success: boolean; message: string; data?: any }> {
+  const response = await fetch(`${API_BASE_URL}/auth/verify-product-key`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, productKey: key }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'Product key verification failed');
   }
 
   return data;
