@@ -1,70 +1,95 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
-import { ArrowRight, ArrowLeft, Building2, Users, CreditCard } from 'lucide-react'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import {
+  ArrowRight,
+  ArrowLeft,
+  Building2,
+  Users,
+  CreditCard,
+  ShieldCheck,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 export default function OnboardingPage() {
-  const [currentStep, setCurrentStep] = useState(1)
+  const [currentStep, setCurrentStep] = useState(1);
   const [propertyData, setPropertyData] = useState({
-    name: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    units: '1',
-    type: 'residential',
-  })
+    name: "",
+    address: "",
+    city: "",
+    state: "",
+    country: "",
+  });
   const [tenantData, setTenantData] = useState({
-    importMethod: 'manual',
-  })
+    importMethod: "manual",
+  });
   const [paymentData, setPaymentData] = useState({
-    paymentMethod: 'stripe',
-    email: '',
-  })
-  const router = useRouter()
+    currency: "USD",
+    paymentMethod: "stripe",
+    email: "",
+  });
+  const router = useRouter();
 
   const handleNext = () => {
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1)
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
     } else {
       // Complete onboarding and redirect to dashboard
-      router.push('/dashboard')
+      router.push("/dashboard");
     }
-  }
+  };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep(currentStep - 1);
     }
-  }
+  };
 
   const steps = [
     {
       number: 1,
-      title: 'Add Your First Property',
-      description: 'Start by adding your first property',
+      title: "Company Name & Property",
+      description: "Start by creating your company profile",
       icon: Building2,
     },
     {
       number: 2,
-      title: 'Import Tenants',
-      description: 'Add existing tenants or start fresh',
-      icon: Users,
+      title: "Set up Your Currency",
+      description: "Choose your preferred currency for transactions",
+      icon: CreditCard,
     },
     {
       number: 3,
-      title: 'Setup Payments',
-      description: 'Configure payment collection',
-      icon: CreditCard,
+      title: "Set up Tenant's Portal",
+      description: "Select which features you want to enable for your tenants",
+      icon: Users,
     },
-  ]
+    {
+      number: 4,
+      title: "Security Settings",
+      description: "Configure security preferences for your account and system",
+      icon: ShieldCheck,
+    },
+  ];
 
-  const activeStep = steps[currentStep - 1]
-  const ActiveIcon = activeStep.icon
+  const activeStep = steps[currentStep - 1];
+  const ActiveIcon = activeStep.icon;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary p-4">
@@ -85,12 +110,16 @@ export default function OnboardingPage() {
                 <div
                   className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
                     currentStep >= step.number
-                      ? 'bg-primary text-white'
-                      : 'bg-secondary text-muted-foreground border border-border'
+                      ? "bg-primary text-white"
+                      : "bg-secondary text-muted-foreground border border-border"
                   }`}
                 >
                   {currentStep > step.number ? (
-                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <svg
+                      className="w-6 h-6"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
                       <path
                         fillRule="evenodd"
                         d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -104,7 +133,7 @@ export default function OnboardingPage() {
                 {idx < steps.length - 1 && (
                   <div
                     className={`flex-1 h-1 transition-all ${
-                      currentStep > step.number ? 'bg-primary' : 'bg-border'
+                      currentStep > step.number ? "bg-primary" : "bg-border"
                     }`}
                   />
                 )}
@@ -125,7 +154,9 @@ export default function OnboardingPage() {
                 <p className="text-sm text-muted-foreground">
                   Step {currentStep} of {steps.length}
                 </p>
-                <h1 className="text-2xl font-bold text-foreground">{activeStep.title}</h1>
+                <h1 className="text-2xl font-bold text-foreground">
+                  {activeStep.title}
+                </h1>
               </div>
             </div>
 
@@ -133,19 +164,23 @@ export default function OnboardingPage() {
             {currentStep === 1 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description} to start managing your rental properties.
+                  {activeStep.description} to start managing your rental
+                  properties.
                 </p>
 
                 <div className="grid gap-4">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Property Name
+                      Company Name
                     </label>
                     <Input
                       placeholder="e.g., Sunset Apartments"
                       value={propertyData.name}
                       onChange={(e) =>
-                        setPropertyData({ ...propertyData, name: e.target.value })
+                        setPropertyData({
+                          ...propertyData,
+                          name: e.target.value,
+                        })
                       }
                     />
                   </div>
@@ -158,7 +193,10 @@ export default function OnboardingPage() {
                       placeholder="Street address"
                       value={propertyData.address}
                       onChange={(e) =>
-                        setPropertyData({ ...propertyData, address: e.target.value })
+                        setPropertyData({
+                          ...propertyData,
+                          address: e.target.value,
+                        })
                       }
                     />
                   </div>
@@ -172,7 +210,10 @@ export default function OnboardingPage() {
                         placeholder="City"
                         value={propertyData.city}
                         onChange={(e) =>
-                          setPropertyData({ ...propertyData, city: e.target.value })
+                          setPropertyData({
+                            ...propertyData,
+                            city: e.target.value,
+                          })
                         }
                       />
                     </div>
@@ -184,46 +225,27 @@ export default function OnboardingPage() {
                         placeholder="State"
                         value={propertyData.state}
                         onChange={(e) =>
-                          setPropertyData({ ...propertyData, state: e.target.value })
+                          setPropertyData({
+                            ...propertyData,
+                            state: e.target.value,
+                          })
                         }
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
-                        ZIP
+                        Country
                       </label>
                       <Input
-                        placeholder="ZIP"
-                        value={propertyData.zip}
+                        placeholder="Country"
+                        value={propertyData.country}
                         onChange={(e) =>
-                          setPropertyData({ ...propertyData, zip: e.target.value })
+                          setPropertyData({
+                            ...propertyData,
+                            country: e.target.value,
+                          })
                         }
                       />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Number of Units
-                      </label>
-                      <Input
-                        type="number"
-                        value={propertyData.units}
-                        onChange={(e) =>
-                          setPropertyData({ ...propertyData, units: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Property Type
-                      </label>
-                      <select className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground">
-                        <option>Residential</option>
-                        <option>Commercial</option>
-                        <option>Mixed Use</option>
-                      </select>
                     </div>
                   </div>
                 </div>
@@ -234,7 +256,8 @@ export default function OnboardingPage() {
             {currentStep === 2 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description}. You can add tenants manually now or import them later.
+                  {activeStep.description}. You can add tenants manually now or
+                  import them later.
                 </p>
 
                 <div className="space-y-4">
@@ -248,14 +271,19 @@ export default function OnboardingPage() {
                           type="radio"
                           name="import"
                           value="manual"
-                          checked={tenantData.importMethod === 'manual'}
+                          checked={tenantData.importMethod === "manual"}
                           onChange={(e) =>
-                            setTenantData({ ...tenantData, importMethod: e.target.value })
+                            setTenantData({
+                              ...tenantData,
+                              importMethod: e.target.value,
+                            })
                           }
                           className="w-4 h-4"
                         />
                         <div className="ml-4">
-                          <p className="font-medium text-foreground">Add manually</p>
+                          <p className="font-medium text-foreground">
+                            Add manually
+                          </p>
                           <p className="text-sm text-muted-foreground">
                             Add tenants one by one
                           </p>
@@ -266,14 +294,19 @@ export default function OnboardingPage() {
                           type="radio"
                           name="import"
                           value="csv"
-                          checked={tenantData.importMethod === 'csv'}
+                          checked={tenantData.importMethod === "csv"}
                           onChange={(e) =>
-                            setTenantData({ ...tenantData, importMethod: e.target.value })
+                            setTenantData({
+                              ...tenantData,
+                              importMethod: e.target.value,
+                            })
                           }
                           className="w-4 h-4"
                         />
                         <div className="ml-4">
-                          <p className="font-medium text-foreground">Import from CSV</p>
+                          <p className="font-medium text-foreground">
+                            Import from CSV
+                          </p>
                           <p className="text-sm text-muted-foreground">
                             Upload a CSV file with tenant data
                           </p>
@@ -284,14 +317,19 @@ export default function OnboardingPage() {
                           type="radio"
                           name="import"
                           value="skip"
-                          checked={tenantData.importMethod === 'skip'}
+                          checked={tenantData.importMethod === "skip"}
                           onChange={(e) =>
-                            setTenantData({ ...tenantData, importMethod: e.target.value })
+                            setTenantData({
+                              ...tenantData,
+                              importMethod: e.target.value,
+                            })
                           }
                           className="w-4 h-4"
                         />
                         <div className="ml-4">
-                          <p className="font-medium text-foreground">Skip for now</p>
+                          <p className="font-medium text-foreground">
+                            Skip for now
+                          </p>
                           <p className="text-sm text-muted-foreground">
                             Add tenants later from the dashboard
                           </p>
@@ -307,7 +345,8 @@ export default function OnboardingPage() {
             {currentStep === 3 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description}. This allows your tenants to pay rent online.
+                  {activeStep.description}. This allows your tenants to pay rent
+                  online.
                 </p>
 
                 <div className="space-y-4">
@@ -321,7 +360,7 @@ export default function OnboardingPage() {
                           type="radio"
                           name="payment"
                           value="stripe"
-                          checked={paymentData.paymentMethod === 'stripe'}
+                          checked={paymentData.paymentMethod === "stripe"}
                           className="w-4 h-4"
                         />
                         <div className="ml-4">
@@ -357,16 +396,130 @@ export default function OnboardingPage() {
                       placeholder="your@email.com"
                       value={paymentData.email}
                       onChange={(e) =>
-                        setPaymentData({ ...paymentData, email: e.target.value })
+                        setPaymentData({
+                          ...paymentData,
+                          email: e.target.value,
+                        })
                       }
                     />
                   </div>
 
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <p className="text-sm text-blue-900 dark:text-blue-200">
-                      You'll complete the payment setup in your dashboard after onboarding.
+                      You'll complete the payment setup in your dashboard after
+                      onboarding.
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+            {/* Step 4: Review and Submit */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <p className="text-muted-foreground mb-6">
+                  {activeStep.description}. This allows you to manage your
+                  account security and system preferences.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <Card className="p-4 border border-border">
+                      <h4 className="font-semibold mb-2">Auto Logout</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Automatically logs you out after a period of
+                        inactivity to protect your account from unauthorized access.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <Switch checked={false} />
+                          <label className="text-sm">Enable Auto Logout</label>
+                          <div className="mt-3">
+                            <label className="block text-sm font-medium text-foreground mb-2">
+                              Inactivity Timeout
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Select>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="1">1 minute</SelectItem>
+                                  <SelectItem value="5">5 minutes</SelectItem>
+                                  <SelectItem value="10">10 minutes</SelectItem>
+                                  <SelectItem value="30">30 minutes</SelectItem>
+                                  <SelectItem value="60">1 hour</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                    <span className="flex text-sm gap-2 text-foreground mb-4">
+                      <label className="block text-sm font-medium text-foreground ">
+                        Automatic Lockout
+                      </label>
+                      <p className="text-sm text-muted-foreground">
+                        (Automatically locks out tenants after multiple failed
+                        login attempts)
+                      </p>
+                    </span>
+                    {/* <div className="space-y-3">
+                      <label className="flex items-center p-4 border-2 border-primary rounded-lg cursor-pointer">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="stripe"
+                          checked={paymentData.paymentMethod === "stripe"}
+                          className="w-4 h-4"
+                        />
+                        <div className="ml-4">
+                          <p className="font-medium text-foreground">Stripe</p>
+                          <p className="text-sm text-muted-foreground">
+                            2.2% + $0.30 per transaction
+                          </p>
+                        </div>
+                      </label>
+                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
+                        <input
+                          type="radio"
+                          name="payment"
+                          value="paypal"
+                          className="w-4 h-4"
+                        />
+                        <div className="ml-4">
+                          <p className="font-medium text-foreground">PayPal</p>
+                          <p className="text-sm text-muted-foreground">
+                            2.2% + $0.30 per transaction
+                          </p>
+                        </div>
+                      </label>
+                    </div> */}
+                  </div>
+
+                  {/* <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Email for Payments
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="your@email.com"
+                      value={paymentData.email}
+                      onChange={(e) =>
+                        setPaymentData({
+                          ...paymentData,
+                          email: e.target.value,
+                        })
+                      }
+                    />
+                  </div> */}
+
+                  {/* <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm text-blue-900 dark:text-blue-200">
+                      You'll complete the payment setup in your dashboard after
+                      onboarding.
+                    </p>
+                  </div> */}
                 </div>
               </div>
             )}
@@ -386,7 +539,7 @@ export default function OnboardingPage() {
                 onClick={handleNext}
                 className="flex-1 bg-primary hover:bg-primary/90 text-white"
               >
-                {currentStep === 3 ? (
+                {currentStep === 4 ? (
                   <>
                     Complete Setup
                     <ArrowRight className="w-4 h-4 ml-2" />
@@ -403,5 +556,5 @@ export default function OnboardingPage() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

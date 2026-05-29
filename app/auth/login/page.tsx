@@ -30,12 +30,12 @@ export default function LoginPage() {
         router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
       } else if (newUser?.role === "admin") {
         router.push("/dashboard");
-      } else if (newUser?.role === "property_manager") {
-        router.push("/dashboard");
       } else if (newUser?.role === "tenant") {
         router.push("/tenant");
+      } else if (newUser?.role === "property_manager") {
+        router.push("/dashboard");
       } else {
-        router.push("/onboarding");
+        setError("Invalid user role");
       }
     } catch (err: any) {
       setError(err?.message || "Invalid email or password");
