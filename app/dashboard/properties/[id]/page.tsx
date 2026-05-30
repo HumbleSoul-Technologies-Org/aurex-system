@@ -1327,6 +1327,49 @@ export default function PropertyDetailPage({
                   </div>
                 </div>
 
+                {/* Revenue Loss Summary */}
+                <div className="mb-8 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-900">
+                  <h3 className="text-lg font-bold text-orange-900 dark:text-orange-400 mb-4">
+                    Potential Revenue Not Generated
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <Card className="border border-orange-200 dark:border-orange-900 bg-white dark:bg-card p-4">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Monthly Revenue Loss
+                      </p>
+                      <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                        {formatCurrency(revenueLost, activeCurrency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        From {availableUnits} vacant unit
+                        {availableUnits !== 1 ? "s" : ""}
+                      </p>
+                    </Card>
+                    <Card className="border border-orange-200 dark:border-orange-900 bg-white dark:bg-card p-4">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Annual Revenue Loss
+                      </p>
+                      <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                        {formatCurrency(revenueLost * 12, activeCurrency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Potential yearly loss
+                      </p>
+                    </Card>
+                    <Card className="border border-orange-200 dark:border-orange-900 bg-white dark:bg-card p-4">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Potential Monthly Revenue
+                      </p>
+                      <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                        {formatCurrency(potentialMonthlyIncome, activeCurrency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        If all units occupied
+                      </p>
+                    </Card>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                   <Card className="border border-border p-4">
                     <p className="text-sm text-muted-foreground mb-2">
