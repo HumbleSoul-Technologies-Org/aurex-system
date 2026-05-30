@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ import {
   submitMaintenanceRequest,
   deleteMaintenanceRequestById,
 } from "@/lib/services/maintenance";
+import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
@@ -61,6 +63,9 @@ export default function MaintenancePage() {
     refetch,
   } = useTenantContext();
   const activeCurrency = useActiveCurrency();
+  const router = useRouter();
+  const { enabled: maintenanceEnabled, isLoaded: featuresLoaded } =
+    useFeatureEnabled("maintenanceRequests");
 
   const tenantUnitNumber =
     tenant?.unitNumber ||
@@ -84,6 +89,25 @@ export default function MaintenancePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!featuresLoaded) return;
+    if (!maintenanceEnabled) {
+      router.replace("/tenant/feature-disabled?feature=maintenance");
+    }
+  }, [featuresLoaded, maintenanceEnabled, router]);
+
+  if (!featuresLoaded) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
+        Loading portal settings...
+      </div>
+    );
+  }
+
+  if (!maintenanceEnabled) {
+    return null;
+  }
 
   const filteredRequests =
     filter === "all"

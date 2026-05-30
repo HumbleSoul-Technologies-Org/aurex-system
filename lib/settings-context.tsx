@@ -11,6 +11,7 @@ import React, {
 import {
   SettingsPayload,
   getAdminSettingsByUserId,
+  fetchSettingsFromApi,
   fetchSettingsByIdFromApi,
   updateSettingsOnApi,
   convertPayloadToTenantPortalSettings,
@@ -23,6 +24,7 @@ interface SettingsContextType {
   settings: SettingsPayload | null;
   settingsId: string | null;
   isLoading: boolean;
+  isLoaded: boolean;
   error: string | null;
   refresh: () => Promise<void>;
   updateFieldAsync: (flatKey: string, value: any) => Promise<boolean>;
@@ -56,12 +58,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       // If user has settingsId, use it directly; otherwise fall back to user ID lookup
       let apiSettings: SettingsPayload | null = null;
 
-      if (user?.role && user?.role === "admin" && user?.settingsId) {
+      if (user?.settingsId) {
         apiSettings = await fetchSettingsByIdFromApi(user.settingsId);
         setSettingsId(user.settingsId);
-      } else {
-        // Fallback: fetch by user ID (will look up or create default)
+      } else if (user.role === "tenant") {
         apiSettings = await fetchSettingsByTenantId(user.id);
+        if (apiSettings?._id) {
+          setSettingsId(apiSettings._id);
+        }
+      } else {
+        apiSettings = await fetchSettingsFromApi();
         if (apiSettings?._id) {
           setSettingsId(apiSettings._id);
         }
@@ -98,6 +104,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setHasFetched(false);
     }
   }, [user, authLoading, hasFetched, fetchSettings]);
+
+  const isLoaded = !isLoading && hasFetched && settings !== null;
 
   // Manual refresh
   const refresh = useCallback(async () => {
@@ -147,6 +155,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     settings,
     settingsId,
     isLoading,
+    isLoaded,
     error,
     refresh,
     updateFieldAsync,

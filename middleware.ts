@@ -59,8 +59,9 @@ export async function middleware(request: NextRequest) {
     }
 
     // Fetch feature toggles from settings API
+    const apiHost = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454').replace(/\/+$/, '');
     const settingsResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/api/settings/${settingsId}`,
+      `${apiHost.replace(/\/api$/, '')}/api/settings/${settingsId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -70,8 +71,11 @@ export async function middleware(request: NextRequest) {
     );
 
     if (!settingsResponse.ok) {
-      // If we can't fetch settings, allow access (fail open)
-      return NextResponse.next();
+      const disabledPageUrl = new URL(
+        `/tenant/feature-disabled?feature=${routeConfig.feature}`,
+        request.url,
+      );
+      return NextResponse.redirect(disabledPageUrl);
     }
 
     const settings = await settingsResponse.json();
@@ -94,8 +98,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   } catch (error) {
     console.error("Middleware error checking feature toggle:", error);
-    // On error, allow access (fail open for safety)
-    return NextResponse.next();
+    const disabledPageUrl = new URL(
+      `/tenant/feature-disabled?feature=${routeConfig.feature}`,
+      request.url,
+    );
+    return NextResponse.redirect(disabledPageUrl);
   }
 }
 

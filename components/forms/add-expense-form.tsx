@@ -11,6 +11,8 @@ import { X, DollarSign, Calendar, Tag } from "lucide-react";
 import { createTransaction } from "@/app/lib/transactions-client";
 import { createExpenseApi, type ExpenseRecord } from "@/lib/services/expenses";
 import { useAppData } from "@/lib/data-context";
+import { currencies } from "@/lib/data/currencies";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 interface AddExpenseFormProps {
   isOpen: boolean;
@@ -57,6 +59,8 @@ export default function AddExpenseForm({
   initialPropertyId,
   maintenanceRequestId,
 }: AddExpenseFormProps) {
+  const activeCurrency = useActiveCurrency();
+
   const [formData, setFormData] = useState<ExpenseFormData>({
     category: "maintenance",
     expenseType: "commercial",
@@ -67,7 +71,7 @@ export default function AddExpenseForm({
     receiptReference: "",
     unit: "",
     paymentMethod: "",
-    currency: "USD",
+    currency: activeCurrency,
     paymentSourceType: "",
     paymentSourceProvider: "",
     paymentSourceLast4: "",
@@ -414,10 +418,14 @@ export default function AddExpenseForm({
                       onChange={handleChange}
                       className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
                     >
-                      <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="CAD">CAD</option>
+                      {currencies.map((currency) => (
+                        <option
+                          key={`${currency.code}-${currency.country}`}
+                          value={currency.code}
+                        >
+                          {currency.code} — {currency.currency}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>

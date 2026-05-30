@@ -3,7 +3,7 @@
  * Handles all API calls to the backend auth endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5555/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api';
 
 export interface LoginRequest {
   email: string;

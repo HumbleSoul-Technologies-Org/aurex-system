@@ -7,7 +7,8 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "api-smoke-test": "node ./scripts/api-smoke-test.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -47,6 +48,9 @@
     "@tanstack/react-query-devtools": "^5.0.0",
     "autoprefixer": "^10.4.20",
     "axios": "^1.6.0",
+    "core-js": "^3.40.0",
+    "regenerator-runtime": "^0.14.0",
+    "whatwg-fetch": "^3.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",

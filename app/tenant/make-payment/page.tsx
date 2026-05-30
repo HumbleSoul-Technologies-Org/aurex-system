@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
+import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 import {
   createManualPayment,
   getPaymentsForTenant,
@@ -13,7 +15,6 @@ import {
 } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
-import { useEffect } from "react";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 export default function MakePaymentPage() {
@@ -21,12 +22,22 @@ export default function MakePaymentPage() {
     "amount",
   );
   const activeCurrency = useActiveCurrency();
+  const router = useRouter();
+  const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
+    useFeatureEnabled("paymentPortal");
 
   const user = useMemo(() => getCurrentUser(), []);
   const tenant = useMemo(
     () => (user?.role === "tenant" ? getTenant(user.id) : null),
     [user],
   );
+
+  useEffect(() => {
+    if (!featuresLoaded) return;
+    if (!paymentEnabled) {
+      router.replace("/tenant/feature-disabled?feature=payments");
+    }
+  }, [featuresLoaded, paymentEnabled, router]);
   const { properties } = useAppData();
   const property = useMemo(
     () =>
@@ -126,6 +137,18 @@ export default function MakePaymentPage() {
     setAmount(defaultRent);
     setMethod("bank_transfer");
   };
+
+  if (!featuresLoaded) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
+        Loading portal settings...
+      </div>
+    );
+  }
+
+  if (!paymentEnabled) {
+    return null;
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 md:space-y-8">

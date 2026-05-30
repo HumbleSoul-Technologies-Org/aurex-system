@@ -22,7 +22,7 @@ export interface MaintenanceRequest {
 }
 
 const MAINTENANCE_KEY = 'maintenance'
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5555/api'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api'
 const MAINTENANCE_API_BASE = `${API_BASE}/maintenance`
 
 export function getMaintenanceRequests(): MaintenanceRequest[] {

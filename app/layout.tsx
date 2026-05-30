@@ -6,6 +6,7 @@ import { SettingsProvider } from "@/lib/settings-context";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/components/query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import Polyfills from "@/app/polyfills";
 
 import "./globals.css";
 
@@ -32,11 +33,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <QueryProvider>
-            <AuthProvider>
+          <Polyfills />
+          <AuthProvider>
+            <QueryProvider>
               <SettingsProvider>{children}</SettingsProvider>
-            </AuthProvider>
-          </QueryProvider>
+            </QueryProvider>
+          </AuthProvider>
           <Toaster />
         </ThemeProvider>
       </body>

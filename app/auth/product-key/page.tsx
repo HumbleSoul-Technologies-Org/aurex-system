@@ -40,10 +40,10 @@ export default function ProductKeyContent({
     try {
       await authApi.verifyProductKey(email, productKey);
 
-      setInfo("Product key verified. Redirecting...");
+      setInfo("Product key verified. Redirecting to onboarding...");
 
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/onboarding");
       }, 900);
     } catch (err: any) {
       setError(err?.message || "Failed to verify product key");

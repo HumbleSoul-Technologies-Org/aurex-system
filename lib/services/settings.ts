@@ -845,7 +845,9 @@ export function convertToSettingsPayload(settings: Partial<TenantPortalSettings>
       },
     },
     finance: {
-      currency: settings.financeSettings?.currency,
+      currency: {
+        code: settings.financeSettings?.currency,
+      },
     },
     notifications: {
       rentDue: {

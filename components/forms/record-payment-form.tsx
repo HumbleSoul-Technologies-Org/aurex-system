@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppData } from "@/lib/data-context";
 import { createManualPayment } from "@/lib/services/payments";
+import { currencies } from "@/lib/data/currencies";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 type Props = {
   tenantId?: string | null;
@@ -21,13 +23,14 @@ export default function RecordPaymentForm({
   onCancel,
 }: Props) {
   const { tenants, properties } = useAppData();
+  const activeCurrency = useActiveCurrency();
 
   const [tenantId, setTenantId] = useState<string | null>(initialTenantId);
   const [propertyId, setPropertyId] = useState<string | null>(
     initialPropertyId,
   );
   const [amount, setAmount] = useState<string>("");
-  // `currency` removed; server will assign or infer currency
+  const [currency, setCurrency] = useState<string>(activeCurrency);
   const [monthlyRent, setMonthlyRent] = useState<number | null>(null);
   const [paidOn, setPaidOn] = useState<string>(
     new Date().toISOString().slice(0, 16),
@@ -56,6 +59,10 @@ export default function RecordPaymentForm({
       setPropertyId(initialPropertyId as string);
   }, [tenantId, initialTenantId, initialPropertyId, tenants, propertyId]);
 
+  useEffect(() => {
+    setCurrency(activeCurrency);
+  }, [activeCurrency]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return alert("Please select a tenant");
@@ -70,6 +77,7 @@ export default function RecordPaymentForm({
       tenantId,
       propertyId,
       amount: Number(amount),
+      currency,
       monthlyRent: monthlyRent ?? undefined,
       paymentMethod,
       paidOn,
@@ -148,6 +156,26 @@ export default function RecordPaymentForm({
 
         <div>
           <label className="text-xs text-muted-foreground block mb-1">
+            Currency
+          </label>
+          <select
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+            className="w-full border border-border rounded px-3 py-2 bg-transparent"
+          >
+            {currencies.map((currencyOption) => (
+              <option
+                key={`${currencyOption.code}-${currencyOption.country}`}
+                value={currencyOption.code}
+              >
+                {currencyOption.code} — {currencyOption.currency}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
             Paid On
           </label>
           <Input
@@ -156,8 +184,6 @@ export default function RecordPaymentForm({
             type="datetime-local"
           />
         </div>
-
-        <div />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

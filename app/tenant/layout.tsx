@@ -93,7 +93,11 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
     }
     router.push("/auth/login");
   };
-  const features = useTenantPortalFeatures();
+  const { features, isLoaded } = useTenantPortalFeatures();
+  const paymentEnabled = isLoaded && features.paymentPortal;
+  const maintenanceEnabled = isLoaded && features.maintenanceRequests;
+  const messagesEnabled = isLoaded && features.messages;
+
   // Desktop sidebar items (all navigation options)
   const allDesktopNavItems: NavItem[] = [
     {
@@ -101,7 +105,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
-    ...(features.paymentPortal
+    ...(paymentEnabled
       ? [
           {
             label: "Payments",
@@ -110,7 +114,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           } as NavItem,
         ]
       : []),
-    ...(features.maintenanceRequests
+    ...(maintenanceEnabled
       ? [
           {
             label: "Report Maintenance",
@@ -120,7 +124,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           } as NavItem,
         ]
       : []),
-    ...(features.messages
+    ...(messagesEnabled
       ? [
           {
             label: "Messages",
@@ -146,7 +150,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
       href: "/tenant",
       icon: <Home className="w-4 h-4" />,
     },
-    ...(features.maintenanceRequests
+    ...(maintenanceEnabled
       ? [
           {
             label: "Maintenance",
@@ -156,7 +160,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           } as NavItem,
         ]
       : []),
-    ...(features.messages
+    ...(messagesEnabled
       ? [
           {
             label: "Messages",
@@ -166,7 +170,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           } as NavItem,
         ]
       : []),
-    ...(features.paymentPortal
+    ...(paymentEnabled
       ? [
           {
             label: "Payments",

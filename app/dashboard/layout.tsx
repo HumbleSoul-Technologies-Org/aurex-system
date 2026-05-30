@@ -210,7 +210,8 @@ export default function DashboardLayout({
       router.push("/auth/login");
       return;
     }
-    if (authUser?.role !== "admin") {
+
+    if (authUser?.role !== "admin" && authUser?.role !== "property_manager") {
       router.push("/auth/login");
     }
   }, [isAuthenticated, isLoading, authUser, router]);

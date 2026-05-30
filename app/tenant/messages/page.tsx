@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   createConversationMessage,
   markConversationMessageSeen,
@@ -7,6 +8,7 @@ import {
 import { markAnnouncementRead } from "@/lib/services/announcements";
 import { useAuth } from "@/lib/auth-context";
 import { useTenantContext } from "@/lib/tenant-context";
+import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   User,
@@ -61,6 +63,7 @@ interface AnnouncementUI {
 
 export default function TenantMessagesPage() {
   const { user, token } = useAuth();
+  const router = useRouter();
   const {
     currentTenant,
     currentProperty,
@@ -70,6 +73,8 @@ export default function TenantMessagesPage() {
     loadMessages,
     loadAnnouncements,
   } = useTenantContext();
+  const { enabled: messagesEnabled, isLoaded: featuresLoaded } =
+    useFeatureEnabled("messages");
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<
@@ -183,6 +188,25 @@ export default function TenantMessagesPage() {
     if (!currentTenant?.id || !currentProperty?.id) return;
     loadMessages();
   }, [currentTenant?.id, currentProperty?.id, loadMessages]);
+
+  useEffect(() => {
+    if (!featuresLoaded) return;
+    if (!messagesEnabled) {
+      router.replace("/tenant/feature-disabled?feature=messages");
+    }
+  }, [featuresLoaded, messagesEnabled, router]);
+
+  if (!featuresLoaded) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
+        Loading portal settings...
+      </div>
+    );
+  }
+
+  if (!messagesEnabled) {
+    return null;
+  }
 
   useEffect(() => {
     const t = window.setTimeout(() => setShowInitialSkeleton(false), 700);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,69 +21,121 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSettings } from "@/lib/settings-context";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  convertPayloadToTenantPortalSettings,
+  convertToSettingsPayload,
+  createSettingsOnApi,
+  updateSettingsOnApi,
+} from "@/lib/services/settings";
+
+const defaultFeatureToggles = {
+  paymentPortal: true,
+  maintenanceRequests: true,
+  messages: true,
+  documentAccess: true,
+};
+
+const defaultSecuritySettings = {
+  autoLogoutEnabled: true,
+  autoLogoutInactivityMinutes: 30,
+  autoLockEnabled: false,
+  failedLoginThreshold: 5,
+  allowProfileEditing: true,
+};
+
+const currencyOptions = [
+  { value: "USD", label: "USD - United States Dollar" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - British Pound" },
+  { value: "KES", label: "KES - Kenyan Shilling" },
+];
 
 export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState(1);
-  const [propertyData, setPropertyData] = useState({
+  const [companyInfo, setCompanyInfo] = useState({
     name: "",
     address: "",
     city: "",
     state: "",
     country: "",
-  });
-  const [tenantData, setTenantData] = useState({
-    importMethod: "manual",
-  });
-  const [paymentData, setPaymentData] = useState({
-    currency: "USD",
-    paymentMethod: "stripe",
+    phone: "",
     email: "",
+    licenseNumber: "",
   });
+  const [financeSettings, setFinanceSettings] = useState({ currency: "USD" });
+  const [featureToggles, setFeatureToggles] = useState(defaultFeatureToggles);
+  const [securitySettings, setSecuritySettings] = useState(
+    defaultSecuritySettings,
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const { settings, settingsId, isLoaded, refresh } = useSettings();
   const router = useRouter();
 
-  const handleNext = () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      // Complete onboarding and redirect to dashboard
-      router.push("/dashboard");
+  useEffect(() => {
+    if (!isLoaded || !settings) {
+      return;
     }
-  };
 
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
+    setCompanyInfo({
+      name: settings.companyInfo?.name ?? "",
+      address: settings.companyInfo?.address?.street ?? "",
+      city: settings.companyInfo?.address?.city ?? "",
+      state: settings.companyInfo?.address?.state ?? "",
+      country: settings.companyInfo?.address?.country ?? "",
+      phone: settings.companyInfo?.phone ?? "",
+      email: settings.companyInfo?.email ?? "",
+      licenseNumber: settings.companyInfo?.licenseNumber ?? "",
+    });
+
+    setFinanceSettings({
+      currency: settings.finance?.currency?.code ?? "USD",
+    });
+
+    const portalSettings = convertPayloadToTenantPortalSettings(settings);
+    setFeatureToggles({
+      paymentPortal: portalSettings.featureToggles.paymentPortal,
+      maintenanceRequests: portalSettings.featureToggles.maintenanceRequests,
+      messages: portalSettings.featureToggles.messages,
+      documentAccess: portalSettings.featureToggles.documentAccess,
+    });
+
+    setSecuritySettings({
+      autoLogoutEnabled: portalSettings.securitySettings.autoLogoutEnabled,
+      autoLogoutInactivityMinutes:
+        portalSettings.securitySettings.autoLogoutInactivityMinutes ?? 30,
+      autoLockEnabled: portalSettings.securitySettings.autoLockEnabled,
+      failedLoginThreshold:
+        portalSettings.securitySettings.failedLoginThreshold ?? 5,
+      allowProfileEditing: portalSettings.securitySettings.allowProfileEditing,
+    });
+  }, [isLoaded, settings]);
 
   const steps = [
     {
       number: 1,
-      title: "Company Name & Property",
+      title: "Company Profile",
       description: "Start by creating your company profile",
       icon: Building2,
     },
     {
       number: 2,
-      title: "Set up Your Currency",
+      title: "Financial Settings",
       description: "Choose your preferred currency for transactions",
       icon: CreditCard,
     },
     {
       number: 3,
-      title: "Set up Tenant's Portal",
-      description: "Select which features you want to enable for your tenants",
+      title: "Tenant Portal Settings",
+      description: "Select which tenant portal features to enable",
       icon: Users,
     },
     {
       number: 4,
       title: "Security Settings",
-      description: "Configure security preferences for your account and system",
+      description: "Configure key tenant security options",
       icon: ShieldCheck,
     },
   ];
@@ -91,10 +143,103 @@ export default function OnboardingPage() {
   const activeStep = steps[currentStep - 1];
   const ActiveIcon = activeStep.icon;
 
+  const validateCurrentStep = () => {
+    if (currentStep === 1) {
+      if (!companyInfo.name.trim()) {
+        return "Company name is required.";
+      }
+      if (!companyInfo.address.trim()) {
+        return "Address is required.";
+      }
+      if (!companyInfo.city.trim()) {
+        return "City is required.";
+      }
+      if (!companyInfo.state.trim()) {
+        return "State is required.";
+      }
+      if (!companyInfo.country.trim()) {
+        return "Country is required.";
+      }
+    }
+
+    if (currentStep === 2) {
+      if (!financeSettings.currency.trim()) {
+        return "Please select a currency.";
+      }
+    }
+
+    return "";
+  };
+
+  const saveSettingsAsync = async () => {
+    const payload = convertToSettingsPayload({
+      companyInfo: {
+        name: companyInfo.name,
+        address: {
+          street: companyInfo.address,
+          city: companyInfo.city,
+          state: companyInfo.state,
+          country: companyInfo.country,
+        },
+        phone: companyInfo.phone,
+        email: companyInfo.email,
+        licenseNumber: companyInfo.licenseNumber,
+      },
+      financeSettings,
+      featureToggles,
+      securitySettings,
+    });
+
+    // Persist settings via admin-linked system settings API
+    if (settingsId) {
+      return updateSettingsOnApi(settingsId, payload);
+    }
+
+    return createSettingsOnApi(payload);
+  };
+
+  const handleNext = async () => {
+    setError("");
+    const validationMessage = validateCurrentStep();
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
+    if (currentStep < 4) {
+      setCurrentStep(currentStep + 1);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await saveSettingsAsync();
+      if (!result) {
+        setError("Failed to save settings. Please try again.");
+        setIsSaving(false);
+        return;
+      }
+
+      await refresh();
+      router.push("/dashboard");
+    } catch (err) {
+      setError("Unexpected error while saving settings.");
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBack = () => {
+    setError("");
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-secondary p-4">
       <div className="max-w-2xl mx-auto py-12">
-        {/* Logo */}
         <div className="flex items-center gap-2 mb-12 justify-center">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-lg">PM</span>
@@ -102,7 +247,6 @@ export default function OnboardingPage() {
           <span className="text-xl font-bold text-foreground">PropManager</span>
         </div>
 
-        {/* Progress Indicator */}
         <div className="mb-8">
           <div className="flex items-center gap-4">
             {steps.map((step, idx) => (
@@ -142,10 +286,8 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        {/* Content Card */}
         <Card className="border-0 shadow-lg">
           <div className="p-8">
-            {/* Step Header */}
             <div className="flex items-center gap-4 mb-8">
               <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                 <ActiveIcon className="w-6 h-6 text-primary" />
@@ -160,7 +302,12 @@ export default function OnboardingPage() {
               </div>
             </div>
 
-            {/* Step 1: Property Setup */}
+            {error && (
+              <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
             {currentStep === 1 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
@@ -175,12 +322,9 @@ export default function OnboardingPage() {
                     </label>
                     <Input
                       placeholder="e.g., Sunset Apartments"
-                      value={propertyData.name}
+                      value={companyInfo.name}
                       onChange={(e) =>
-                        setPropertyData({
-                          ...propertyData,
-                          name: e.target.value,
-                        })
+                        setCompanyInfo({ ...companyInfo, name: e.target.value })
                       }
                     />
                   </div>
@@ -191,10 +335,10 @@ export default function OnboardingPage() {
                     </label>
                     <Input
                       placeholder="Street address"
-                      value={propertyData.address}
+                      value={companyInfo.address}
                       onChange={(e) =>
-                        setPropertyData({
-                          ...propertyData,
+                        setCompanyInfo({
+                          ...companyInfo,
                           address: e.target.value,
                         })
                       }
@@ -208,10 +352,10 @@ export default function OnboardingPage() {
                       </label>
                       <Input
                         placeholder="City"
-                        value={propertyData.city}
+                        value={companyInfo.city}
                         onChange={(e) =>
-                          setPropertyData({
-                            ...propertyData,
+                          setCompanyInfo({
+                            ...companyInfo,
                             city: e.target.value,
                           })
                         }
@@ -223,10 +367,10 @@ export default function OnboardingPage() {
                       </label>
                       <Input
                         placeholder="State"
-                        value={propertyData.state}
+                        value={companyInfo.state}
                         onChange={(e) =>
-                          setPropertyData({
-                            ...propertyData,
+                          setCompanyInfo({
+                            ...companyInfo,
                             state: e.target.value,
                           })
                         }
@@ -238,297 +382,343 @@ export default function OnboardingPage() {
                       </label>
                       <Input
                         placeholder="Country"
-                        value={propertyData.country}
+                        value={companyInfo.country}
                         onChange={(e) =>
-                          setPropertyData({
-                            ...propertyData,
+                          setCompanyInfo({
+                            ...companyInfo,
                             country: e.target.value,
                           })
                         }
                       />
                     </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Phone
+                      </label>
+                      <Input
+                        placeholder="Company phone"
+                        value={companyInfo.phone}
+                        onChange={(e) =>
+                          setCompanyInfo({
+                            ...companyInfo,
+                            phone: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Email
+                      </label>
+                      <Input
+                        type="email"
+                        placeholder="support@example.com"
+                        value={companyInfo.email}
+                        onChange={(e) =>
+                          setCompanyInfo({
+                            ...companyInfo,
+                            email: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      License / Registration Number
+                    </label>
+                    <Input
+                      placeholder="Optional"
+                      value={companyInfo.licenseNumber}
+                      onChange={(e) =>
+                        setCompanyInfo({
+                          ...companyInfo,
+                          licenseNumber: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Tenant Import */}
             {currentStep === 2 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description}. You can add tenants manually now or
-                  import them later.
+                  {activeStep.description}. Configure the system currency used
+                  for rent and financial reports.
                 </p>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-4">
-                      How would you like to add tenants?
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Default Currency
                     </label>
-                    <div className="space-y-3">
-                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
-                        <input
-                          type="radio"
-                          name="import"
-                          value="manual"
-                          checked={tenantData.importMethod === "manual"}
-                          onChange={(e) =>
-                            setTenantData({
-                              ...tenantData,
-                              importMethod: e.target.value,
-                            })
-                          }
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">
-                            Add manually
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Add tenants one by one
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
-                        <input
-                          type="radio"
-                          name="import"
-                          value="csv"
-                          checked={tenantData.importMethod === "csv"}
-                          onChange={(e) =>
-                            setTenantData({
-                              ...tenantData,
-                              importMethod: e.target.value,
-                            })
-                          }
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">
-                            Import from CSV
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Upload a CSV file with tenant data
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
-                        <input
-                          type="radio"
-                          name="import"
-                          value="skip"
-                          checked={tenantData.importMethod === "skip"}
-                          onChange={(e) =>
-                            setTenantData({
-                              ...tenantData,
-                              importMethod: e.target.value,
-                            })
-                          }
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">
-                            Skip for now
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Add tenants later from the dashboard
-                          </p>
-                        </div>
-                      </label>
-                    </div>
+                    <Select
+                      value={financeSettings.currency}
+                      onValueChange={(value) =>
+                        setFinanceSettings({
+                          ...financeSettings,
+                          currency: value,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {currencyOptions.map((currency) => (
+                          <SelectItem
+                            key={currency.value}
+                            value={currency.value}
+                          >
+                            {currency.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Finance Contact Email
+                    </label>
+                    <Input
+                      type="email"
+                      placeholder="finance@example.com"
+                      value={companyInfo.email}
+                      onChange={(e) =>
+                        setCompanyInfo({
+                          ...companyInfo,
+                          email: e.target.value,
+                        })
+                      }
+                    />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Payment Setup */}
             {currentStep === 3 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description}. This allows your tenants to pay rent
-                  online.
+                  {activeStep.description}. Choose which tenant portal features
+                  should be available immediately.
                 </p>
 
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-4">
-                      Payment Gateway
-                    </label>
-                    <div className="space-y-3">
-                      <label className="flex items-center p-4 border-2 border-primary rounded-lg cursor-pointer">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="stripe"
-                          checked={paymentData.paymentMethod === "stripe"}
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">Stripe</p>
-                          <p className="text-sm text-muted-foreground">
-                            2.2% + $0.30 per transaction
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="paypal"
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">PayPal</p>
-                          <p className="text-sm text-muted-foreground">
-                            2.2% + $0.30 per transaction
-                          </p>
-                        </div>
-                      </label>
+                  <label className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium text-foreground">Payments</p>
+                      <p className="text-sm text-muted-foreground">
+                        Allow tenants to view balances and make payments.
+                      </p>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Email for Payments
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="your@email.com"
-                      value={paymentData.email}
-                      onChange={(e) =>
-                        setPaymentData({
-                          ...paymentData,
-                          email: e.target.value,
+                    <Switch
+                      checked={featureToggles.paymentPortal}
+                      onCheckedChange={(checked) =>
+                        setFeatureToggles({
+                          ...featureToggles,
+                          paymentPortal: checked,
                         })
                       }
                     />
-                  </div>
+                  </label>
 
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <p className="text-sm text-blue-900 dark:text-blue-200">
-                      You'll complete the payment setup in your dashboard after
-                      onboarding.
-                    </p>
-                  </div>
+                  <label className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Maintenance Requests
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Let tenants submit and track maintenance issues.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={featureToggles.maintenanceRequests}
+                      onCheckedChange={(checked) =>
+                        setFeatureToggles({
+                          ...featureToggles,
+                          maintenanceRequests: checked,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium text-foreground">Messages</p>
+                      <p className="text-sm text-muted-foreground">
+                        Enable tenant-to-manager messaging.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={featureToggles.messages}
+                      onCheckedChange={(checked) =>
+                        setFeatureToggles({
+                          ...featureToggles,
+                          messages: checked,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium text-foreground">Documents</p>
+                      <p className="text-sm text-muted-foreground">
+                        Allow tenants to view important documents online.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={featureToggles.documentAccess}
+                      onCheckedChange={(checked) =>
+                        setFeatureToggles({
+                          ...featureToggles,
+                          documentAccess: checked,
+                        })
+                      }
+                    />
+                  </label>
                 </div>
               </div>
             )}
-            {/* Step 4: Review and Submit */}
+
             {currentStep === 4 && (
               <div className="space-y-6">
                 <p className="text-muted-foreground mb-6">
-                  {activeStep.description}. This allows you to manage your
-                  account security and system preferences.
+                  {activeStep.description}. Use these settings to protect tenant
+                  access and secure the system.
                 </p>
 
                 <div className="space-y-4">
-                  <div>
-                    <Card className="p-4 border border-border">
-                      <h4 className="font-semibold mb-2">Auto Logout</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Automatically logs you out after a period of
-                        inactivity to protect your account from unauthorized access.
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <Switch checked={false} />
-                          <label className="text-sm">Enable Auto Logout</label>
-                          <div className="mt-3">
-                            <label className="block text-sm font-medium text-foreground mb-2">
-                              Inactivity Timeout
-                            </label>
-                            <div className="flex items-center gap-2">
-                              <Select>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="1">1 minute</SelectItem>
-                                  <SelectItem value="5">5 minutes</SelectItem>
-                                  <SelectItem value="10">10 minutes</SelectItem>
-                                  <SelectItem value="30">30 minutes</SelectItem>
-                                  <SelectItem value="60">1 hour</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </div>
+                  <div className="p-4 border border-border rounded-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Auto Logout
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Automatically log users out after inactivity.
+                        </p>
                       </div>
-                    </Card>
-                    <span className="flex text-sm gap-2 text-foreground mb-4">
-                      <label className="block text-sm font-medium text-foreground ">
-                        Automatic Lockout
-                      </label>
-                      <p className="text-sm text-muted-foreground">
-                        (Automatically locks out tenants after multiple failed
-                        login attempts)
-                      </p>
-                    </span>
-                    {/* <div className="space-y-3">
-                      <label className="flex items-center p-4 border-2 border-primary rounded-lg cursor-pointer">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="stripe"
-                          checked={paymentData.paymentMethod === "stripe"}
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">Stripe</p>
-                          <p className="text-sm text-muted-foreground">
-                            2.2% + $0.30 per transaction
-                          </p>
-                        </div>
-                      </label>
-                      <label className="flex items-center p-4 border border-border rounded-lg cursor-pointer hover:bg-secondary transition-colors">
-                        <input
-                          type="radio"
-                          name="payment"
-                          value="paypal"
-                          className="w-4 h-4"
-                        />
-                        <div className="ml-4">
-                          <p className="font-medium text-foreground">PayPal</p>
-                          <p className="text-sm text-muted-foreground">
-                            2.2% + $0.30 per transaction
-                          </p>
-                        </div>
-                      </label>
-                    </div> */}
+                      <Switch
+                        checked={securitySettings.autoLogoutEnabled}
+                        onCheckedChange={(checked) =>
+                          setSecuritySettings({
+                            ...securitySettings,
+                            autoLogoutEnabled: checked,
+                          })
+                        }
+                      />
+                    </div>
+                    {securitySettings.autoLogoutEnabled && (
+                      <div className="space-y-3">
+                        <label className="block text-sm font-medium text-foreground">
+                          Inactivity timeout
+                        </label>
+                        <Select
+                          value={securitySettings.autoLogoutInactivityMinutes.toString()}
+                          onValueChange={(value) =>
+                            setSecuritySettings({
+                              ...securitySettings,
+                              autoLogoutInactivityMinutes: Number(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 minute</SelectItem>
+                            <SelectItem value="5">5 minutes</SelectItem>
+                            <SelectItem value="10">10 minutes</SelectItem>
+                            <SelectItem value="30">30 minutes</SelectItem>
+                            <SelectItem value="60">1 hour</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
-                  {/* <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Email for Payments
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="your@email.com"
-                      value={paymentData.email}
-                      onChange={(e) =>
-                        setPaymentData({
-                          ...paymentData,
-                          email: e.target.value,
+                  <div className="p-4 border border-border rounded-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Auto Lockout
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Lock accounts after repeated failed login attempts.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={securitySettings.autoLockEnabled}
+                        onCheckedChange={(checked) =>
+                          setSecuritySettings({
+                            ...securitySettings,
+                            autoLockEnabled: checked,
+                          })
+                        }
+                      />
+                    </div>
+                    {securitySettings.autoLockEnabled && (
+                      <div className="space-y-3">
+                        <label className="block text-sm font-medium text-foreground">
+                          Failed attempts before lockout
+                        </label>
+                        <Select
+                          value={securitySettings.failedLoginThreshold.toString()}
+                          onValueChange={(value) =>
+                            setSecuritySettings({
+                              ...securitySettings,
+                              failedLoginThreshold: Number(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="3">3 attempts</SelectItem>
+                            <SelectItem value="5">5 attempts</SelectItem>
+                            <SelectItem value="7">7 attempts</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="flex items-center justify-between gap-3 p-4 border border-border rounded-lg">
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Allow Profile Editing
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Allow tenants to update their own profile information.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.allowProfileEditing}
+                      onCheckedChange={(checked) =>
+                        setSecuritySettings({
+                          ...securitySettings,
+                          allowProfileEditing: checked,
                         })
                       }
                     />
-                  </div> */}
-
-                  {/* <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <p className="text-sm text-blue-900 dark:text-blue-200">
-                      You'll complete the payment setup in your dashboard after
-                      onboarding.
-                    </p>
-                  </div> */}
+                  </label>
                 </div>
               </div>
             )}
 
-            {/* Navigation */}
             <div className="flex gap-3 mt-8 pt-8 border-t border-border">
               <Button
                 onClick={handleBack}
-                disabled={currentStep === 1}
+                disabled={currentStep === 1 || isSaving}
                 variant="outline"
                 className="flex-1 border-border text-foreground bg-transparent"
               >
@@ -537,11 +727,12 @@ export default function OnboardingPage() {
               </Button>
               <Button
                 onClick={handleNext}
+                disabled={isSaving}
                 className="flex-1 bg-primary hover:bg-primary/90 text-white"
               >
                 {currentStep === 4 ? (
                   <>
-                    Complete Setup
+                    {isSaving ? "Saving..." : "Complete Setup"}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </>
                 ) : (

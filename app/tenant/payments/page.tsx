@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,11 +36,15 @@ import { getCurrentUser } from "@/lib/services/auth";
 import { getTenant } from "@/lib/services/tenants";
 import { getProperty } from "@/lib/services/properties";
 import { useAppData } from "@/lib/data-context";
+import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<any[]>([]);
+  const router = useRouter();
   const activeCurrency = useActiveCurrency();
   const { properties } = useAppData();
+  const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
+    useFeatureEnabled("paymentPortal");
 
   // Make Payment state
   const [step, setStep] = useState<
@@ -94,6 +99,13 @@ export default function PaymentsPage() {
     };
   }, [tenant?.id]);
 
+  useEffect(() => {
+    if (!featuresLoaded) return;
+    if (!paymentEnabled) {
+      router.replace("/tenant/feature-disabled?feature=payments");
+    }
+  }, [featuresLoaded, paymentEnabled, router]);
+
   const tenantPayments = payments.filter(
     (p) => !currentTenant || p.tenantId === currentTenant.id,
   );
@@ -137,6 +149,18 @@ export default function PaymentsPage() {
     setAmount(defaultRent);
     setMethod("bank_transfer");
   };
+
+  if (!featuresLoaded) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
+        Loading portal settings...
+      </div>
+    );
+  }
+
+  if (!paymentEnabled) {
+    return null;
+  }
 
   return (
     <div className="space-y-6 md:space-y-8">

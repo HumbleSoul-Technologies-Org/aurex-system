@@ -8,7 +8,7 @@ function buildExternalUrl(path: string) {
 }
 
 export async function fetchNotifications(tenantId?: string, unreadOnly?: boolean, token?: string) {
-  const basePath = '/api/notifications'
+  const basePath = '/notifications'
   const headers: Record<string, string> = {}
   if (token) headers['authorization'] = `Bearer ${token}`
 
@@ -17,7 +17,7 @@ export async function fetchNotifications(tenantId?: string, unreadOnly?: boolean
     return new URL(path, origin)
   }
 
-  const externalUrl = new URL(buildExternalUrl(basePath), typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+  const externalUrl = makeUrl(buildExternalUrl(basePath))
   const localUrl = makeUrl(`${basePath}?local=true`)
   if (tenantId) {
     externalUrl.searchParams.set('tenantId', tenantId)
@@ -59,9 +59,9 @@ export async function fetchNotifications(tenantId?: string, unreadOnly?: boolean
 }
 
 export async function createNotification(payload: { type?: string; tenantId?: string; title: string; body?: string; metadata?: any }, token?: string) {
-  // External backend exposes POST /api/notifications/create
+  // External backend exposes POST /notifications/create
   if (BASE_SERVER) {
-    const url = buildExternalUrl('/api/notifications/create')
+    const url = buildExternalUrl('/notifications/create')
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers['authorization'] = `Bearer ${token}`
     const res = await fetch(url, {
@@ -77,7 +77,7 @@ export async function createNotification(payload: { type?: string; tenantId?: st
   // Fallback to Next.js internal route
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['authorization'] = `Bearer ${token}`
-  const res = await fetch('/api/notifications', {
+  const res = await fetch('/notifications', {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
@@ -89,7 +89,7 @@ export async function createNotification(payload: { type?: string; tenantId?: st
 export async function markNotificationRead(id: string, token?: string) {
   if (!id) return null
   if (BASE_SERVER) {
-    const url = buildExternalUrl(`/api/notifications/${id}/read`)
+    const url = buildExternalUrl(`/notifications/${id}/read`)
     const headers: Record<string, string> = {}
     if (token) headers['authorization'] = `Bearer ${token}`
     const res = await fetch(url, {
@@ -104,7 +104,7 @@ export async function markNotificationRead(id: string, token?: string) {
   // Fallback to Next.js internal route which expects body { id }
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (token) headers['authorization'] = `Bearer ${token}`
-  const res = await fetch('/api/notifications', {
+  const res = await fetch('/notifications', {
     method: 'PATCH',
     headers,
     body: JSON.stringify({ id }),

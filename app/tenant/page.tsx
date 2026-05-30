@@ -26,7 +26,9 @@ export default function TenantDashboard() {
   const { user } = useAuth();
   const { tenants, properties } = useAppData();
   const activeCurrency = useActiveCurrency();
-  const features = useTenantPortalFeatures();
+  const { features, isLoaded } = useTenantPortalFeatures();
+  const showPaymentAndMaintenance =
+    isLoaded && features.paymentPortal && features.maintenanceRequests;
 
   // Find the tenant record for the current user
   const tenant = user ? tenants.find((t) => t.email === user.email) : null;
@@ -193,7 +195,7 @@ export default function TenantDashboard() {
         </Card>
 
         {/* Open Maintenance */}
-        {features.maintenanceRequests && features.paymentPortal && (
+        {showPaymentAndMaintenance && (
           <Card className="border border-border p-4 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
@@ -220,7 +222,7 @@ export default function TenantDashboard() {
       </div>
 
       {/* Quick Actions */}
-      {features.maintenanceRequests && features.paymentPortal && (
+      {showPaymentAndMaintenance && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           <Button
             asChild
@@ -250,7 +252,7 @@ export default function TenantDashboard() {
       )}
 
       {/* Recent Activity */}
-      {features.maintenanceRequests && features.paymentPortal && (
+      {showPaymentAndMaintenance && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
           {/* Recent Payments */}
           <Card className="border border-border p-4 md:p-6">

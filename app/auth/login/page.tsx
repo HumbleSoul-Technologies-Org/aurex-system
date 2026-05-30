@@ -26,6 +26,7 @@ export default function LoginPage() {
 
     try {
       const newUser = await login(email, password);
+
       if (newUser?.role === "admin" && newUser?.isActivated === false) {
         router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
       } else if (newUser?.role === "admin") {
@@ -35,7 +36,7 @@ export default function LoginPage() {
       } else if (newUser?.role === "property_manager") {
         router.push("/dashboard");
       } else {
-        setError("Invalid user role");
+        router.push("/onboarding");
       }
     } catch (err: any) {
       setError(err?.message || "Invalid email or password");

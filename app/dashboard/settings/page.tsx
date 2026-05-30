@@ -1060,6 +1060,7 @@ export default function SettingsPage() {
                             city: localCompanyInfo.address.city,
                             country: localCompanyInfo.address.country,
                           },
+                          owner: user?.id,
                         },
                       });
                       setSettings((prev) =>
