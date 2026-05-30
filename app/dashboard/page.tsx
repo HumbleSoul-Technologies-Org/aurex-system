@@ -49,6 +49,10 @@ import PropertyPerformanceGrouped from "@/components/charts/property-performance
 import RentCollectionProgress from "@/components/charts/rent-collection-progress";
 import TenantDistributionRing from "@/components/charts/tenant-distribution-ring";
 import MaintenanceAnalyticsRing from "@/components/charts/maintenance-analytics-ring";
+import MaintenanceTrendsLine from "@/components/charts/maintenance-trends-line";
+import MaintenanceCostBar from "@/components/charts/maintenance-cost-bar";
+import TenantAnalyticsBar from "@/components/charts/tenant-analytics-bar";
+import LeaseExpiryTimeline from "@/components/charts/lease-expiry-timeline";
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -560,6 +564,54 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Quick Actions */}
+      <Card className="border border-border p-6">
+        <h2 className="text-lg font-bold text-foreground mb-6">
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <Button
+            className="w-full bg-primary hover:bg-primary/90 text-white justify-start"
+            onClick={() => router.push("/dashboard/properties")}
+          >
+            <Building2 className="w-4 h-4 mr-2" />
+            Add Property
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full border-border text-foreground justify-start bg-transparent"
+            onClick={() => router.push("/dashboard/finances")}
+          >
+            <DollarSign className="w-4 h-4 mr-2" />
+            Record Payment
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full border-border text-foreground justify-start bg-transparent"
+            onClick={() => router.push("/dashboard/maintenance")}
+          >
+            <Wrench className="w-4 h-4 mr-2" />
+            Create Work Order
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full border-border text-foreground justify-start bg-transparent"
+            onClick={() => router.push("/dashboard/tenants")}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Add Tenant
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full border-border text-foreground justify-start bg-transparent"
+            onClick={() => router.push("/dashboard/map")}
+          >
+            <MapPin className="w-4 h-4 mr-2" />
+            View Properties Map
+          </Button>
+        </div>
+      </Card>
+
       {/* Rent Collection Progress */}
       <Card className="border border-border p-6">
         <h2 className="text-lg font-bold text-foreground mb-6">
@@ -881,6 +933,43 @@ export default function DashboardPage() {
         <MaintenanceAnalyticsRing maintenanceByStatus={maintenanceByStatus} />
       </Card>
 
+      {/* Maintenance Trends & Cost Analytics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="border border-border p-4 md:p-6">
+          <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
+            Maintenance Trends
+          </h2>
+          <MaintenanceTrendsLine maintenanceRequests={maintenanceRequests} />
+        </Card>
+
+        <Card className="border border-border p-4 md:p-6">
+          <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
+            Maintenance Cost by Property
+          </h2>
+          <MaintenanceCostBar
+            maintenanceRequests={maintenanceRequests}
+            properties={properties}
+            activeCurrency={activeCurrency}
+          />
+        </Card>
+      </div>
+
+      {/* Tenant Payment Analytics */}
+      <Card className="border border-border p-4 md:p-6">
+        <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
+          Tenant Payment Analytics
+        </h2>
+        <TenantAnalyticsBar payments={payments} tenants={tenants} />
+      </Card>
+
+      {/* Lease Expiry Timeline */}
+      <Card className="border border-border p-4 md:p-6">
+        <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
+          Lease Expiry Timeline
+        </h2>
+        <LeaseExpiryTimeline tenants={tenants} properties={properties} />
+      </Card>
+
       {/* Occupancy & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Occupancy by Property */}
@@ -979,56 +1068,6 @@ export default function DashboardPage() {
             ) : (
               <PropertyPerformanceGrouped data={combinedData} />
             )}
-          </Card>
-        </div>
-
-        {/* Quick Actions */}
-        <div>
-          <Card className="border border-border p-6 h-full">
-            <h2 className="text-lg font-bold text-foreground mb-6">
-              Quick Actions
-            </h2>
-            <div className="space-y-3">
-              <Button
-                className="w-full bg-primary hover:bg-primary/90 text-white justify-start"
-                onClick={() => router.push("/dashboard/properties")}
-              >
-                <Building2 className="w-4 h-4 mr-2" />
-                Add Property
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-border text-foreground justify-start bg-transparent"
-                onClick={() => router.push("/dashboard/finances")}
-              >
-                <DollarSign className="w-4 h-4 mr-2" />
-                Record Payment
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-border text-foreground justify-start bg-transparent"
-                onClick={() => router.push("/dashboard/maintenance")}
-              >
-                <Wrench className="w-4 h-4 mr-2" />
-                Create Work Order
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-border text-foreground justify-start bg-transparent"
-                onClick={() => router.push("/dashboard/tenants")}
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Add Tenant
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full border-border text-foreground justify-start bg-transparent"
-                onClick={() => router.push("/dashboard/map")}
-              >
-                <MapPin className="w-4 h-4 mr-2" />
-                View Properties Map
-              </Button>
-            </div>
           </Card>
         </div>
       </div>
