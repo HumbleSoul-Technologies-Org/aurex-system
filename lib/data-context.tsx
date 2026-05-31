@@ -60,6 +60,10 @@ async function fetchProperties(
   const res = await apiRequest("GET", endpoint);
   const data = await res.json();
 
+  console.log('====================================');
+  console.log(data);
+  console.log('====================================');
+
   const rawProperties = Array.isArray(data)
     ? data
     : Array.isArray(data?.data)
