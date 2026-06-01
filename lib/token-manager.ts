@@ -7,6 +7,32 @@ const TOKEN_KEY = 'propman:auth_token';
 const USER_KEY = 'propman:user';
 const REFRESH_TOKEN_KEY = 'propman:refresh_token';
 
+const COOKIE_AUTH_TOKEN = 'auth-token';
+const COOKIE_SETTINGS_ID = 'settings-id';
+
+function setCookie(name: string, value: string, options: { path?: string; expires?: Date; maxAge?: number; sameSite?: 'Lax' | 'Strict' | 'None'; secure?: boolean } = {}) {
+  if (typeof document === 'undefined') return;
+
+  const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
+  if (options.path) parts.push(`path=${options.path}`);
+  if (options.expires) parts.push(`expires=${options.expires.toUTCString()}`);
+  if (options.maxAge !== undefined) parts.push(`max-age=${options.maxAge}`);
+  if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
+  if (options.secure) parts.push('Secure');
+  document.cookie = parts.join('; ');
+}
+
+function deleteCookie(name: string) {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax;`;
+}
+
+function getTokenExpiry(token: string) {
+  const expiry = getTokenExpiryTime(token);
+  if (!expiry) return undefined;
+  return expiry;
+}
+
 /**
  * Store authentication token and user data
  */
@@ -15,6 +41,22 @@ export function setAuthToken(token: string, user: any) {
 
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+  const expiry = getTokenExpiry(token);
+  const cookieOptions = {
+    path: '/',
+    sameSite: 'Lax' as const,
+    secure: window.location.protocol === 'https:',
+    expires: expiry,
+  };
+
+  setCookie(COOKIE_AUTH_TOKEN, token, cookieOptions);
+
+  if (user?.settingsId) {
+    setCookie(COOKIE_SETTINGS_ID, user.settingsId, cookieOptions);
+  } else {
+    deleteCookie(COOKIE_SETTINGS_ID);
+  }
 }
 
 /**
@@ -45,6 +87,8 @@ export function clearAuthData() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  deleteCookie(COOKIE_AUTH_TOKEN);
+  deleteCookie(COOKIE_SETTINGS_ID);
 }
 
 /**
@@ -128,6 +172,17 @@ export function updateStoredUser(user: any) {
   if (typeof window === 'undefined') return; // SSR check
 
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+  if (user?.settingsId) {
+    setCookie(COOKIE_SETTINGS_ID, user.settingsId, {
+      path: '/',
+      sameSite: 'Lax',
+      secure: window.location.protocol === 'https:',
+      expires: getTokenExpiry(getAuthToken() ?? '') || undefined,
+    });
+  } else {
+    deleteCookie(COOKIE_SETTINGS_ID);
+  }
 }
 
 /**

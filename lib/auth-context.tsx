@@ -24,6 +24,17 @@ interface User {
   settingsId?: string;
 }
 
+function normalizeRole(role?: string | null): string {
+  return role?.toString().trim().toLowerCase() || "";
+}
+
+function normalizeUser(user: any): User {
+  return {
+    ...user,
+    role: normalizeRole(user?.role),
+  };
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -78,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Try to fetch current user
         try {
           const response = await authApi.getCurrentUser(token);
-          setUser(response.data.user);
+          setUser(normalizeUser(response.data.user));
         } catch (err) {
           // Token invalid or expired, clear it
           tokenManager.clearAuthData();
@@ -100,12 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
 
         const response = await authApi.login({ email, password });
+        const normalizedUser = normalizeUser(response.data.user);
 
         // Store token and user
-        tokenManager.setAuthToken(response.data.token, response.data.user);
-        setUser(response.data.user);
+        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        setUser(normalizedUser);
 
-        return response.data.user;
+        return normalizedUser;
       } catch (err: any) {
         const errorMessage = err.message || "Login failed";
         setError(errorMessage);
@@ -136,12 +148,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           password,
           phone,
         });
+        const normalizedUser = normalizeUser(response.data.user);
 
         // Store token and user
-        tokenManager.setAuthToken(response.data.token, response.data.user);
-        setUser(response.data.user);
+        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        setUser(normalizedUser);
 
-        return { user: response.data.user, password: undefined };
+        return { user: normalizedUser, password: undefined };
       } catch (err: any) {
         const errorMessage = err.message || "Registration failed";
         setError(errorMessage);
@@ -177,8 +190,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const response = await authApi.updateProfile(token, data);
-      setUser(response.data.user);
-      tokenManager.updateStoredUser(response.data.user);
+      const normalizedUser = normalizeUser(response.data.user);
+      setUser(normalizedUser);
+      tokenManager.updateStoredUser(normalizedUser);
     } catch (err: any) {
       const errorMessage = err.message || "Failed to update profile";
       setError(errorMessage);
@@ -224,8 +238,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await authApi.resetPassword(token, newPassword);
 
         // Store token and user
-        tokenManager.setAuthToken(response.data.token, response.data.user);
-        setUser(response.data.user);
+        const normalizedUser = normalizeUser(response.data.user);
+        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        setUser(normalizedUser);
       } catch (err: any) {
         const errorMessage = err.message || "Failed to reset password";
         setError(errorMessage);

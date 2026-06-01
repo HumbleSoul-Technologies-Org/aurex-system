@@ -42,7 +42,10 @@ import {
   getAllPayments,
   getPaymentsForPropertyIds,
 } from "@/lib/services/payments";
-import { getMaintenanceRequests } from "@/lib/services/maintenance";
+import {
+  getMaintenanceRequests,
+  fetchAllMaintenanceRequests,
+} from "@/lib/services/maintenance";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import PropertyPerformanceGrouped from "@/components/charts/property-performance-grouped";
@@ -102,7 +105,28 @@ export default function DashboardPage() {
     if (typeof window !== "undefined")
       window.addEventListener("paymentsUpdated", onPaymentsUpdated);
 
-    setMaintenanceRequests(getMaintenanceRequests());
+    const loadMaintenanceRequests = async () => {
+      const localRequests = getMaintenanceRequests();
+      try {
+        const requests = await fetchAllMaintenanceRequests();
+        const mergedRequests = [...localRequests];
+
+        requests.forEach((req) => {
+          if (!mergedRequests.some((localReq) => localReq.id === req.id)) {
+            mergedRequests.push(req);
+          }
+        });
+
+        setMaintenanceRequests(
+          mergedRequests.length > 0 ? mergedRequests : localRequests,
+        );
+      } catch (error) {
+        console.error("Failed to load maintenance requests", error);
+        setMaintenanceRequests(localRequests);
+      }
+    };
+
+    loadMaintenanceRequests();
 
     return () => {
       if (typeof window !== "undefined")

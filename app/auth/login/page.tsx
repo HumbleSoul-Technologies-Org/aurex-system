@@ -26,17 +26,20 @@ export default function LoginPage() {
 
     try {
       const newUser = await login(email, password);
+      const role = newUser?.role?.toString().trim().toLowerCase();
 
-      if (newUser?.role === "admin" && newUser?.isActivated === false) {
+      if (role === "admin" && newUser?.isActivated === false) {
         router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
-      } else if (newUser?.role === "admin") {
+      } else if (role === "admin") {
         router.push("/dashboard");
-      } else if (newUser?.role === "tenant") {
+      } else if (role === "tenant") {
         router.push("/tenant");
-      } else if (newUser?.role === "property_manager") {
+      } else if (role === "property_manager") {
         router.push("/dashboard");
+      } else if (!role) {
+        setError("Unable to determine account type. Please contact support.");
       } else {
-        router.push("/onboarding");
+        setError("Unsupported account role. Please contact support.");
       }
     } catch (err: any) {
       setError(err?.message || "Invalid email or password");
