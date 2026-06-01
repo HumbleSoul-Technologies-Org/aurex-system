@@ -454,7 +454,7 @@ export default function DashboardLayout({
                 {/* Notifications */}
                 <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative p-2 hover:bg-secondary rounded-lg transition-colors"
+                  className="relative hidden p-2 hover:bg-secondary rounded-lg transition-colors"
                   aria-label="Notifications"
                 >
                   <Bell className="w-5 h-5" />
@@ -530,7 +530,7 @@ export default function DashboardLayout({
                       .map((notif, index) => (
                         <Link
                           key={notif.id || index}
-                          href={notif.actionUrl}
+                          href={notif?.actionUrl?.toString() || "#"}
                           onClick={async () => {
                             if (!notif.read) {
                               try {

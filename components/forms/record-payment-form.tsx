@@ -84,11 +84,13 @@ export default function RecordPaymentForm({
       leaseType: leaseType || undefined,
       paidBy: paidBy || undefined,
       reasonForPayment,
-      balance: Number(balance),
-      // removed: reference and receiptUrl are handled by server
       notes: notes || undefined,
-      status,
     };
+
+    if (reasonForPayment !== "rentPayment") {
+      payload.balance = Number(balance);
+      payload.status = status;
+    }
 
     const created = await createManualPayment(payload);
     setSaving(false);

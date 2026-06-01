@@ -110,6 +110,28 @@ export function normalizePropertyRecord(property: any): PropertyRecord {
     id: property.id || property._id || "",
   } as PropertyRecord;
 
+  if (Array.isArray(normalized.units)) {
+    normalized.units = normalized.units.map((unit: any) => {
+      if (typeof unit === "string") {
+        return {
+          unitNumber: unit,
+          rent: Number(normalized.price_per_unit ?? 0),
+          unitType: "",
+          specifications: [],
+        } as any;
+      }
+
+      return {
+        unitNumber: unit.unitNumber || unit.unit || "",
+        rent: Number(unit.rent ?? unit.price ?? normalized.price_per_unit ?? 0),
+        unitType: unit.unitType || unit.type || "",
+        specifications: Array.isArray(unit.specifications)
+          ? unit.specifications
+          : [],
+      } as any;
+    });
+  }
+
   if (Array.isArray(normalized.tenants)) {
     normalized.tenants = normalized.tenants.map((tenant: any) => ({
       ...tenant,

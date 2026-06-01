@@ -88,7 +88,6 @@ export default function FinancesPage() {
   } = useAppData();
 
   const [transactions, setTransactions] = useState<any[]>([]);
-  const isExpensesLoading = isLoading || isFetching;
   const activeCurrency = useActiveCurrency();
 
   useEffect(() => {
@@ -148,34 +147,37 @@ export default function FinancesPage() {
   const dueTenantIds = allTenants
     .filter((t) => t.status === "due")
     .map((t) => t.id);
-  const pendingPayments = rentPayments.filter(
-    (t) =>
-      (t.status === "pending" || t.status === undefined) &&
+  const pendingPayments = rentPayments.filter((t) => {
+    const status = String(t.status || "").toLowerCase();
+    return (
+      (status === "pending" || status === "balance" || status === "") &&
       t.tenantId &&
-      dueTenantIds.includes(t.tenantId),
-  );
+      dueTenantIds.includes(t.tenantId)
+    );
+  });
 
-  const partialPayments = rentPayments.filter((t) => t.status === "balance");
+  const partialPayments = rentPayments.filter(
+    (t) => String(t.status || "").toLowerCase() === "balance",
+  );
   const totalRevenue = rentPayments
-    .filter(
-      (t) =>
-        t.status === "complete" ||
-        t.status === "completed" ||
-        t.status === "paid" ||
-        t.status === "balance",
-    )
+    .filter((t) => {
+      const status = String(t.status || "").toLowerCase();
+      return ["complete", "completed", "paid", "balance"].includes(status);
+    })
     .reduce((sum, t) => sum + (t.amount || 0), 0);
   const expectedOutstanding = partialPayments.reduce(
     (sum, t) => sum + (t.balance || 0),
     0,
   );
+  const totalPending = pendingPayments.reduce((sum, t) => {
+    if (String(t.status || "").toLowerCase() === "balance") {
+      return sum + Number(t.balance || 0);
+    }
+    return sum + Number(t.amount || 0);
+  }, 0);
   const totalExpenses = enrichedTransactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
-  const totalPending = pendingPayments.reduce(
-    (sum, t) => sum + (t.amount || 0),
-    0,
-  );
   const netProfit = totalRevenue - totalExpenses;
   const netLabel = netProfit >= 0 ? "Net Profit" : "Net Loss";
   const netColorClass = netProfit >= 0 ? "text-green-600" : "text-red-600";
@@ -315,8 +317,13 @@ export default function FinancesPage() {
 
   // Filter payments by status
   const filteredPayments = rentPayments.filter((payment) => {
+    const normalizedStatus = String(payment.status || "").toLowerCase();
     const matchesStatus =
-      filterStatus === "all" || payment.status === filterStatus;
+      filterStatus === "all" ||
+      (filterStatus === "pending" &&
+        ["pending", "balance", ""].includes(normalizedStatus)) ||
+      (filterStatus === "completed" &&
+        ["complete", "completed", "paid"].includes(normalizedStatus));
     const matchesSearch =
       !searchQuery ||
       (payment.tenantName || "")
@@ -354,7 +361,7 @@ export default function FinancesPage() {
     refetchAll();
   };
 
-  const isPageLoading = isLoading || isExpensesLoading;
+  const isPageLoading = isLoading;
 
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
@@ -398,7 +405,7 @@ export default function FinancesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-1">Finances</h1>
+          <h1 className="text-lg font-bold text-foreground mb-1">Finances</h1>
           <p className="text-muted-foreground">
             Manage rent collection, expenses, and financial reports
           </p>
@@ -411,11 +418,11 @@ export default function FinancesPage() {
           <p className="text-xs sm:text-sm text-muted-foreground mb-1">
             Total Revenue
           </p>
-          <p className="text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
+          <p className="text-2xl sm:text-lg font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
             {formatCurrency(totalRevenue, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
-            From rent payments and partial collections
+            Includes partial and completed rent payments
           </p>
         </Card>
 
@@ -423,7 +430,7 @@ export default function FinancesPage() {
           <p className="text-xs sm:text-sm text-muted-foreground mb-1">
             Outstanding Balances
           </p>
-          <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
+          <p className="text-2xl sm:text-lg font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
             {formatCurrency(expectedOutstanding, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -433,9 +440,31 @@ export default function FinancesPage() {
 
         <Card className="border border-border p-4 sm:p-6">
           <p className="text-xs sm:text-sm text-muted-foreground mb-1">
+            Pending Payments
+          </p>
+          <p className="text-2xl sm:text-lg font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
+            {formatCurrency(
+              payments
+                .filter((t) => t.status === "pending" || t.status === "balance")
+                .reduce((sum, t) => sum + (t.balance || 0), 0),
+              activeCurrency,
+            )}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {
+              payments.filter(
+                (t) => t.status === "pending" || t.status === "balance",
+              ).length
+            }{" "}
+            pending/partial payments
+          </p>
+        </Card>
+
+        <Card className="border border-border p-4 sm:p-6">
+          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
             Total Expenses
           </p>
-          <p className="text-2xl sm:text-3xl font-bold text-foreground mb-1 whitespace-nowrap truncate">
+          <p className="text-2xl sm:text-lg font-bold text-foreground mb-1 whitespace-nowrap truncate">
             {formatCurrency(totalExpenses, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">Maintenance & other</p>
@@ -446,24 +475,12 @@ export default function FinancesPage() {
             {netLabel}
           </p>
           <p
-            className={`text-2xl sm:text-3xl font-bold mb-1 ${netColorClass} whitespace-nowrap truncate`}
+            className={`text-2xl sm:text-lg font-bold mb-1 ${netColorClass} whitespace-nowrap truncate`}
           >
             {formatCurrency(netProfit, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
             Revenue minus expenses
-          </p>
-        </Card>
-
-        <Card className="border border-border p-4 sm:p-6">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-1">
-            Pending Payments
-          </p>
-          <p className="text-2xl sm:text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
-            {formatCurrency(totalPending, activeCurrency)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {pendingPayments.length} payments
           </p>
         </Card>
       </div>
@@ -523,7 +540,7 @@ export default function FinancesPage() {
                 <strong>Tenant:</strong> {selectedTx.tenantName || "N/A"}
               </p>
               <p>
-                <strong>Description:</strong> {selectedTx.description || "—"}
+                <strong>Description:</strong> {selectedTx.notes || "—"}
               </p>
               {selectedTx.receiptReference && (
                 <p>
@@ -839,18 +856,21 @@ export default function FinancesPage() {
                     </p>
                     <p
                       className={`text-xs font-semibold ${
-                        payment.status === "complete" ||
-                        payment.status === "completed" ||
-                        payment.status === "paid"
+                        ["complete", "completed", "paid"].includes(
+                          String(payment.status || "").toLowerCase(),
+                        )
                           ? "text-green-600"
                           : "text-orange-600"
                       }`}
                     >
-                      {payment.status === "complete" ||
-                      payment.status === "completed" ||
-                      payment.status === "paid"
+                      {["complete", "completed", "paid"].includes(
+                        String(payment.status || "").toLowerCase(),
+                      )
                         ? "Paid"
-                        : "balance due"}{" "}
+                        : String(payment.status || "").toLowerCase() ===
+                            "balance"
+                          ? "Partial payment"
+                          : "Pending"}{" "}
                       {payment.balance && payment.balance > 0
                         ? `• ${formatCurrency(payment.balance, activeCurrency)}`
                         : ""}
@@ -1040,7 +1060,7 @@ export default function FinancesPage() {
           <div className="space-y-6">
             {/* Header */}
             <div className="space-y-4">
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+              <h1 className="text-2xl md:text-lg font-bold text-foreground">
                 Reports & Analytics
               </h1>
               <p className="text-muted-foreground">

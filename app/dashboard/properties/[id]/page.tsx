@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { use } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -101,7 +101,30 @@ export default function PropertyDetailPage({
     refreshProperty();
   }, [id, properties]);
 
-  const propertyTenants = tenants.filter((t) => t.propertyId === id);
+  const propertyTenants = useMemo(
+    () =>
+      tenants.filter(
+        (t) =>
+          t.propertyId === id ||
+          t.propertyId === property?.id ||
+          t.propertyId === property?._id,
+      ),
+    [tenants, id, property?.id, property?._id],
+  );
+
+  const transactions = useMemo(() => {
+    if (!property) {
+      return [];
+    }
+
+    const tenantIds = propertyTenants.map((t: any) => t.id);
+    return payments.filter(
+      (tx: any) =>
+        tx.propertyId === property.id ||
+        (tx.tenantId && tenantIds.includes(tx.tenantId)),
+    );
+  }, [property, payments, propertyTenants]);
+
   const initialPropertyType =
     property?.propertyType || property?.type || "apartment";
   const initialSpecificationValues = getSpecificationsForType(
@@ -145,43 +168,48 @@ export default function PropertyDetailPage({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingProperty, setIsUpdatingProperty] = useState(false);
 
-  const [transactions, setTransactions] = useState<any[]>([]);
-
-  useEffect(() => {
-    if (!property) {
-      setTransactions([]);
-      return;
-    }
-    const tenantIds = propertyTenants.map((t: any) => t.id);
-    const filtered = payments.filter(
-      (tx: any) =>
-        tx.propertyId === property.id ||
-        (tx.tenantId && tenantIds.includes(tx.tenantId)),
-    );
-    setTransactions(filtered);
-  }, [property, payments, propertyTenants]);
-
   // Income Calculations
-  const tenantMonthly = propertyTenants.reduce(
-    (sum, tenant) => sum + (tenant.rentAmount || 0),
-    0,
-  );
+  const tenantMonthly = propertyTenants.reduce((sum, tenant) => {
+    const tenantRent = Number(tenant.rentAmount || 0);
+    if (tenantRent > 0) return sum + tenantRent;
 
-  const unitRecords = Array.isArray(property?.units)
-    ? property.units.map((unit: any) =>
-        typeof unit === "string"
-          ? {
-              unitNumber: unit,
-              rent: Number(property?.price_per_unit ?? 0),
-            }
-          : {
-              unitNumber: unit.unitNumber || unit.unit || "",
-              rent: Number(unit.rent ?? property?.price_per_unit ?? 0),
-            },
-      )
-    : [];
+    const matchingUnit = unitRecords.find(
+      (unit: any) =>
+        unit.unitNumber === tenant.unitNumber ||
+        unit.unitNumber === tenant.unit ||
+        unit.unitNumber === tenant.unit_no,
+    );
 
-  const totalUnits = unitRecords.length;
+    return sum + (matchingUnit?.rent || 0);
+  }, 0);
+
+  const unitRecords = (() => {
+    const rawUnits =
+      Array.isArray(property?.detailedUnits) &&
+      property.detailedUnits.length > 0
+        ? property.detailedUnits
+        : Array.isArray(property?.units)
+          ? property.units
+          : [];
+
+    return Array.isArray(rawUnits)
+      ? rawUnits.map((unit: any) =>
+          typeof unit === "string"
+            ? {
+                unitNumber: unit,
+                rent: Number(property?.price_per_unit ?? 0),
+              }
+            : {
+                unitNumber: unit.unitNumber || unit.unit || "",
+                rent: Number(
+                  unit.rent ?? unit.price ?? property?.price_per_unit ?? 0,
+                ),
+              },
+        )
+      : [];
+  })();
+
+  const totalUnits = unitRecords.length || property?.units_available || 0;
   const occupiedUnits = propertyTenants.length;
   const availableUnits = Math.max(0, totalUnits - occupiedUnits);
 
@@ -190,10 +218,15 @@ export default function PropertyDetailPage({
     0,
   );
 
+  const totalUnitRentFallback =
+    property?.price_per_unit && totalUnits > 0
+      ? property.price_per_unit * totalUnits
+      : 0;
+
   let totalMonthlyIncome = tenantMonthly;
-  if (totalUnits > 0) {
+  if (unitRecords.length > 0) {
     totalMonthlyIncome = totalUnitRent;
-  } else if (property?.price_per_unit) {
+  } else if (property?.price_per_unit && totalUnits > 0) {
     totalMonthlyIncome = property.price_per_unit * totalUnits;
   }
 
@@ -201,11 +234,7 @@ export default function PropertyDetailPage({
   const averageIncomePerUnit =
     occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0;
   const potentialMonthlyIncome =
-    totalUnits > 0
-      ? totalUnitRent
-      : property?.price_per_unit
-        ? property.price_per_unit * totalUnits
-        : 0;
+    unitRecords.length > 0 ? totalUnitRent : totalUnitRentFallback;
   const occupancyPercentage =
     totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
   const incomeUtilization =
@@ -1391,7 +1420,7 @@ export default function PropertyDetailPage({
                         Occupied Units
                       </p>
                       <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {occupiedUnits}/{property?.units?.length || 0}
+                        {occupiedUnits}/{totalUnits}
                       </p>
                     </Card>
                     <Card className="border border-border p-4">
@@ -1473,7 +1502,7 @@ export default function PropertyDetailPage({
                       Total Units Available
                     </p>
                     <p className="text-2xl font-bold text-foreground">
-                      {property?.units?.length - property?.tenants?.length || 0}
+                      {availableUnits}
                     </p>
                   </Card>
                 </div>

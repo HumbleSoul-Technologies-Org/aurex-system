@@ -107,39 +107,79 @@ export default function DashboardPage() {
       0,
     );
 
-    // Calculate monthly revenue based on properties and tenants
-    const totalMonthlyRevenue = properties.reduce((sum, p) => {
-      const propertyTenants = tenants.filter((t) => t.propertyId === p.id);
-      return sum + propertyTenants.length * Number(p.price_per_unit ?? 0);
+    const now = new Date();
+    const currentMonthKey = `${now.getUTCFullYear()}-${String(
+      now.getUTCMonth() + 1,
+    ).padStart(2, "0")}`;
+    const currentYear = now.getUTCFullYear();
+
+    const revenueStatuses = new Set([
+      "complete",
+      "completed",
+      "paid",
+      "balance",
+      "recorded",
+      "confirmed",
+      "settled",
+      "success",
+    ]);
+
+    const totalMonthlyRevenue = payments.reduce((sum, payment) => {
+      const status = String(payment.status || "").toLowerCase();
+      if (!revenueStatuses.has(status)) return sum;
+      const paymentDate =
+        payment.date ||
+        payment.paymentDate ||
+        payment.paidOn ||
+        payment.createdAt;
+      const date = new Date(String(paymentDate || ""));
+      if (Number.isNaN(date.getTime())) return sum;
+      const monthKey = `${date.getUTCFullYear()}-${String(
+        date.getUTCMonth() + 1,
+      ).padStart(2, "0")}`;
+      if (monthKey !== currentMonthKey) return sum;
+      return sum + Number(payment.amount || 0);
     }, 0);
 
-    // Calculate occupancy rate
+    const totalYtdRevenue = payments.reduce((sum, payment) => {
+      const status = String(payment.status || "").toLowerCase();
+      if (!revenueStatuses.has(status)) return sum;
+      const paymentDate =
+        payment.date ||
+        payment.paymentDate ||
+        payment.paidOn ||
+        payment.createdAt;
+      const date = new Date(String(paymentDate || ""));
+      if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== currentYear)
+        return sum;
+      return sum + Number(payment.amount || 0);
+    }, 0);
+
+    const totalExpenses = expenses.reduce(
+      (sum, expense) => sum + Number(expense.amount || 0),
+      0,
+    );
+    const ytdProfit = totalYtdRevenue - totalExpenses;
+
+    const pendingPaymentsList = payments.filter((payment) => {
+      const status = String(payment.status || "").toLowerCase();
+      return status === "pending" || status === "balance";
+    });
+    const pendingPayments = pendingPaymentsList.length;
+    const pendingBalanceTotal = pendingPaymentsList.reduce(
+      (sum, payment) => sum + Number(payment.balance || 0),
+      0,
+    );
+
     const averageOccupancy =
       properties.length > 0
         ? Math.round((tenants.length / totalUnits) * 100 * 100) / 100
         : 0;
 
-    // Count pending payments (payments with status 'pending')
-    const pendingPayments = payments.filter(
-      (p) => p.status === "pending",
-    ).length;
-
     // Count open maintenance requests
     const openMaintenanceRequests = maintenanceRequests.filter(
       (req) => req.status === "pending",
     ).length;
-
-    // Calculate YTD profit using actual expenses
-    const successfulPayments = payments.filter((p) => p.status === "complete");
-    const totalRevenue = successfulPayments.reduce(
-      (sum, p) => sum + Number(p.amount || 0),
-      0,
-    );
-    const totalExpenses = expenses.reduce(
-      (sum, expense) => sum + Number(expense.amount || 0),
-      0,
-    );
-    const ytdProfit = totalRevenue - totalExpenses;
 
     return {
       totalProperties,
@@ -147,11 +187,12 @@ export default function DashboardPage() {
       totalMonthlyRevenue,
       averageOccupancy,
       pendingPayments,
+      pendingBalanceTotal,
       openMaintenanceRequests,
       totalExpenses,
       ytdProfit,
       expectedRent: totalMonthlyRevenue,
-      collectedRent: totalRevenue,
+      collectedRent: totalYtdRevenue,
     };
   }, [properties, tenants, payments, maintenanceRequests, expenses]);
 
@@ -525,7 +566,7 @@ export default function DashboardPage() {
                   : "—"}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
-                From active tenants
+                Includes completed and partial rent payments this month
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -545,7 +586,10 @@ export default function DashboardPage() {
                 {isHydrated ? metrics.pendingPayments : "—"}
               </p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                Awaiting processing
+                Balance due:{" "}
+                {isHydrated
+                  ? formatCurrency(metrics.pendingBalanceTotal, activeCurrency)
+                  : "—"}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">

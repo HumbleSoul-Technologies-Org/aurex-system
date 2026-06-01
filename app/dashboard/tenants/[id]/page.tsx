@@ -40,7 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MoreHorizontal, Printer, Share2 } from "lucide-react";
+import {
+  MessageSquareLock,
+  MoreHorizontal,
+  Printer,
+  Share2,
+} from "lucide-react";
 import {
   ArrowLeft,
   Mail,
@@ -131,9 +136,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   useEffect(() => {
     const t = tenants.find((item) => item.id === id || item._id === id);
     if (t) {
-      console.log("====================================");
-      console.log(t);
-      console.log("====================================");
       setTenant(t);
       if (t.propertyId) {
         const p = properties.find((item) => item.id === t.propertyId);
@@ -144,14 +146,38 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     }
   }, [id]);
 
-  const tenantPayments = useMemo(
+  const tenantPaymentIds = useMemo(() => {
+    if (!tenant || !Array.isArray(tenant.paymentHistory)) {
+      return [];
+    }
+    return tenant.paymentHistory
+      .filter((id: any) => id !== undefined && id !== null)
+      .map((id: any) => String(id));
+  }, [tenant?.paymentHistory]);
+
+  const tenantPayments = useMemo(() => {
+    if (tenantPaymentIds.length > 0) {
+      return payments.filter((payment: any) =>
+        tenantPaymentIds.includes(
+          String(payment.id || payment._id || payment.transId),
+        ),
+      );
+    }
+
+    return payments.filter((payment: any) =>
+      tenant
+        ? payment.tenantId === tenant.id || payment.tenantId === tenant._id
+        : false,
+    );
+  }, [payments, tenant, tenantPaymentIds]);
+
+  const totalPaid = useMemo(
     () =>
-      payments.filter((payment: any) =>
-        tenant
-          ? payment.tenantId === tenant.id || payment.tenantId === tenant._id
-          : false,
+      tenantPayments.reduce(
+        (sum, payment: any) => sum + Number(payment.amount || 0),
+        0,
       ),
-    [payments, tenant?.id, tenant?._id],
+    [tenantPayments],
   );
 
   const latestRentPaymentDate = useMemo(
@@ -856,17 +882,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     Total Paid
                   </p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {formatCurrency(
-                      payments
-                        .filter(
-                          (p) =>
-                            p.status === "complete" ||
-                            p.status === "completed" ||
-                            p.status === "paid",
-                        )
-                        .reduce((s, p) => s + (p.amount || 0), 0),
-                      activeCurrency,
-                    )}
+                    {formatCurrency(totalPaid, activeCurrency)}
                   </p>
                 </Card>
                 <Card className="border border-border p-4">
@@ -893,7 +909,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 </Button>
               </div>
 
-              {payments.length > 0 ? (
+              {tenantPayments.length > 0 ? (
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-secondary/50 border-b border-border">
@@ -916,7 +932,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {payments.map((payment) => (
+                      {tenantPayments.map((payment) => (
                         <tr
                           key={payment.id}
                           className="border-b border-border hover:bg-secondary/30 transition-colors"
@@ -1139,9 +1155,15 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <p className="text-muted-foreground mb-4">
-                  Document management coming soon
+                  Document management coming soon...
                 </p>
-                <Button>Upload Document</Button>
+
+                <Button
+                  className="bg-muted text-muted-foreground hover:cursor-not-allowed"
+                  disabled
+                >
+                  Upload Document
+                </Button>
               </div>
             </div>
           </TabsContent>
@@ -1153,7 +1175,11 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 <h3 className="font-bold text-foreground">
                   Tenant Communication
                 </h3>
-                <Button size="sm">
+                <Button
+                  className="bg-muted text-muted-foreground hover:cursor-not-allowed"
+                  disabled
+                  size="sm"
+                >
                   <Send className="w-4 h-4 mr-2" />
                   New Message
                 </Button>
@@ -1180,8 +1206,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                  <p className="text-muted-foreground">No messages yet</p>
+                  <MessageSquareLock className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <p className="text-muted-foreground">
+                    Instant messaging coming soon...
+                  </p>
                 </div>
               )}
             </div>

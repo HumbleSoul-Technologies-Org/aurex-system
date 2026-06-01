@@ -67,7 +67,61 @@ export default function MakePaymentPage() {
     ? payments.filter((p) => p.tenantId === tenant.id)
     : [];
 
-  const nextPayment = tenantPayments.find((p) => p.status === "pending");
+  const getLeaseTermMonths = (leaseType?: string) => {
+    const normalized = (leaseType || "monthly").toString().toLowerCase().trim();
+    if (
+      normalized === "monthly" ||
+      normalized === "month-to-month" ||
+      normalized === "month_to_month"
+    ) {
+      return 1;
+    }
+    if (
+      normalized === "3_months" ||
+      normalized === "3-months" ||
+      normalized === "3 months"
+    ) {
+      return 3;
+    }
+    if (
+      normalized === "half_year" ||
+      normalized === "half-year" ||
+      normalized === "6_months" ||
+      normalized === "6-months" ||
+      normalized === "6 months"
+    ) {
+      return 6;
+    }
+    if (
+      normalized === "full_year" ||
+      normalized === "full-year" ||
+      normalized === "12_months" ||
+      normalized === "12-months" ||
+      normalized === "12 months"
+    ) {
+      return 12;
+    }
+    const parsed = parseInt(normalized, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  };
+
+  const monthlyRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
+  const leaseType = tenant?.leaseType || "monthly";
+  const outstandingBalance = Math.max(
+    0,
+    monthlyRent * getLeaseTermMonths(leaseType) -
+      tenantPayments
+        .filter(
+          (p) =>
+            p.reasonForPayment === "rentPayment" &&
+            !["failed", "refunded"].includes(p.status ?? ""),
+        )
+        .reduce((sum, p) => sum + (p.amount || 0), 0),
+  );
+
+  useEffect(() => {
+    setAmount(defaultRent);
+  }, [defaultRent]);
 
   const handleSubmit = async () => {
     if (step === "amount") setStep("method");
@@ -75,26 +129,20 @@ export default function MakePaymentPage() {
     else if (step === "confirm") {
       setProcessing(true);
       try {
-        const balance = Math.max(
-          0,
-          (tenant?.rentAmount ?? property?.price_per_unit ?? 0) - amount,
-        );
-
+        const paymentAmount = Number(amount || 0);
         const normalizedPaymentMethod =
           method === "bank_transfer" ? "bank_transfer" : "card";
 
         const payload: Partial<RentPayment> = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
-          amount,
-          monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
+          amount: paymentAmount,
+          monthlyRent,
           paymentMethod: normalizedPaymentMethod,
           paidOn: new Date().toISOString(),
           paidBy: user?.name || user?.id || "tenant",
-          leaseType: tenant?.leaseType || "monthly",
+          leaseType,
           reasonForPayment: "rentPayment",
-          balance,
-          status: balance > 0 ? "balance" : "complete",
           notes: "Tenant-initiated rent payment",
         };
         const rec = await createManualPayment(payload);
@@ -256,6 +304,10 @@ export default function MakePaymentPage() {
                 <p className="text-xs md:text-sm text-muted-foreground">
                   Your payment will be processed securely. You will receive a
                   confirmation email immediately after successful payment.
+                </p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                  Current outstanding balance for this lease term is{" "}
+                  {formatCurrency(outstandingBalance, activeCurrency)}.
                 </p>
               </div>
             </div>
