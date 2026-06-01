@@ -101,6 +101,10 @@ export default function PropertiesPage() {
         geography: data.geography,
         units_available: data.units,
         price_per_unit: data.pricePerUnit,
+        customizeUnits: data.customizeUnits,
+        autoGenerateUnitNumbers: data.autoGenerateUnitNumbers,
+        customUnitNumbers: data.customUnitNumbers,
+        detailedUnits: data.detailedUnits,
         propertyType: data.propertyType,
         features: data.features
           ? data.features

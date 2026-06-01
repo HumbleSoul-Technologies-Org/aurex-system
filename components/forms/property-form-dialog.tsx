@@ -24,6 +24,18 @@ interface SpecificationRow {
   value: string;
 }
 
+interface UnitSpecification {
+  label: string;
+  value: string;
+}
+
+interface PropertyUnit {
+  unitNumber: string;
+  rent: number;
+  unitType: string;
+  specifications: UnitSpecification[];
+}
+
 interface PropertyFormData {
   name: string;
   address: string;
@@ -38,6 +50,10 @@ interface PropertyFormData {
   };
   units: number;
   pricePerUnit: number;
+  customizeUnits: boolean;
+  autoGenerateUnitNumbers: boolean;
+  customUnitNumbers: string;
+  detailedUnits: PropertyUnit[];
   features: string;
   specificationValues: Record<string, string>;
   customSpecifications: SpecificationRow[];
@@ -91,6 +107,10 @@ const getDefaultFormData = (): PropertyFormData => ({
   location: { lat: "", lng: "" },
   units: 1,
   pricePerUnit: 0,
+  customizeUnits: false,
+  autoGenerateUnitNumbers: true,
+  customUnitNumbers: "",
+  detailedUnits: [],
   price_per_unit: 0,
   features: "",
   specificationValues: createSpecificationValues(defaultPropertyType),
@@ -149,6 +169,32 @@ export default function PropertyFormDialog({
             : 0) ??
           0,
         pricePerUnit: initialData.price_per_unit ?? 0,
+        customizeUnits: initialData.customizeUnits ?? false,
+        autoGenerateUnitNumbers: initialData.autoGenerateUnitNumbers ?? true,
+        customUnitNumbers: initialData.customUnitNumbers ?? "",
+        detailedUnits: Array.isArray(initialData.detailedUnits)
+          ? initialData.detailedUnits
+          : Array.isArray(initialData.units)
+            ? (initialData.units as any).map((unit: any) =>
+                typeof unit === "string"
+                  ? {
+                      unitNumber: unit,
+                      rent: initialData.price_per_unit ?? 0,
+                      unitType: "",
+                      specifications: [],
+                    }
+                  : {
+                      unitNumber: unit.unitNumber || unit.unit || "",
+                      rent:
+                        unit.rent ??
+                        unit.price ??
+                        initialData.price_per_unit ??
+                        0,
+                      unitType: unit.unitType || unit.type || "",
+                      specifications: unit.specifications || [],
+                    },
+              )
+            : [],
         features: Array.isArray(initialData.features)
           ? initialData.features.join("\n")
           : (initialData.features ?? ""),
@@ -204,6 +250,14 @@ export default function PropertyFormDialog({
           ...(prev as any)[parent],
           [child]: value,
         },
+      }));
+      return;
+    }
+
+    if (e.target.type === "checkbox") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: (e.target as HTMLInputElement).checked,
       }));
       return;
     }
@@ -291,6 +345,114 @@ export default function PropertyFormDialog({
         (_, i) => i !== index,
       ),
     }));
+  };
+
+  const toggleCustomizeUnits = () => {
+    setFormData((prev) => ({
+      ...prev,
+      customizeUnits: !prev.customizeUnits,
+    }));
+  };
+
+  const toggleAutoGenerateUnitNumbers = () => {
+    setFormData((prev) => ({
+      ...prev,
+      autoGenerateUnitNumbers: !prev.autoGenerateUnitNumbers,
+    }));
+  };
+
+  const addDetailedUnit = () => {
+    setFormData((prev) => ({
+      ...prev,
+      detailedUnits: [
+        ...prev.detailedUnits,
+        {
+          unitNumber: "",
+          rent: 0,
+          unitType: "",
+          specifications: [],
+        },
+      ],
+    }));
+  };
+
+  const removeDetailedUnit = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      detailedUnits: prev.detailedUnits.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateDetailedUnit = (
+    index: number,
+    field: keyof PropertyUnit,
+    value: string | number,
+  ) => {
+    setFormData((prev) => {
+      const nextUnits = [...prev.detailedUnits];
+      nextUnits[index] = {
+        ...nextUnits[index],
+        [field]: value,
+      };
+      return {
+        ...prev,
+        detailedUnits: nextUnits,
+      };
+    });
+  };
+
+  const addDetailedUnitSpecification = (unitIndex: number) => {
+    setFormData((prev) => {
+      const nextUnits = [...prev.detailedUnits];
+      const current = nextUnits[unitIndex];
+      nextUnits[unitIndex] = {
+        ...current,
+        specifications: [
+          ...(current.specifications || []),
+          { label: "", value: "" },
+        ],
+      };
+      return { ...prev, detailedUnits: nextUnits };
+    });
+  };
+
+  const removeDetailedUnitSpecification = (
+    unitIndex: number,
+    specIndex: number,
+  ) => {
+    setFormData((prev) => {
+      const nextUnits = [...prev.detailedUnits];
+      const current = nextUnits[unitIndex];
+      nextUnits[unitIndex] = {
+        ...current,
+        specifications: (current.specifications || []).filter(
+          (_, i) => i !== specIndex,
+        ),
+      };
+      return { ...prev, detailedUnits: nextUnits };
+    });
+  };
+
+  const updateDetailedUnitSpecification = (
+    unitIndex: number,
+    specIndex: number,
+    field: keyof UnitSpecification,
+    value: string,
+  ) => {
+    setFormData((prev) => {
+      const nextUnits = [...prev.detailedUnits];
+      const current = nextUnits[unitIndex];
+      const nextSpecs = [...(current.specifications || [])];
+      nextSpecs[specIndex] = {
+        ...nextSpecs[specIndex],
+        [field]: value,
+      };
+      nextUnits[unitIndex] = {
+        ...current,
+        specifications: nextSpecs,
+      };
+      return { ...prev, detailedUnits: nextUnits };
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,6 +745,211 @@ export default function PropertyFormDialog({
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-4 border border-border rounded-lg p-4 bg-secondary">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    Customize Units
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Enable custom unit rent, numbering, and specifications.
+                  </p>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="customizeUnits"
+                    checked={formData.customizeUnits}
+                    onChange={handleChange}
+                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                  />
+                  Enable
+                </label>
+              </div>
+
+              {formData.customizeUnits && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        name="autoGenerateUnitNumbers"
+                        checked={formData.autoGenerateUnitNumbers}
+                        onChange={handleChange}
+                        className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                      />
+                      Auto-generate unit numbers
+                    </label>
+                  </div>
+
+                  {!formData.autoGenerateUnitNumbers && (
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Custom Unit Numbers
+                      </label>
+                      <Textarea
+                        name="customUnitNumbers"
+                        value={formData.customUnitNumbers}
+                        onChange={handleChange}
+                        placeholder="A-101\nA-102\nB-201"
+                        className="h-24"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Enter one unit number per line or separate with commas.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground">
+                        Detailed unit configuration
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addDetailedUnit}
+                      >
+                        Add Unit
+                      </Button>
+                    </div>
+
+                    {formData.detailedUnits.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Add individual unit records or leave empty to generate
+                        units from the count and base rent.
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {formData.detailedUnits.map((unit, index) => (
+                          <div
+                            key={index}
+                            className="space-y-3 border border-border rounded-lg p-4 bg-background"
+                          >
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+                              <Input
+                                placeholder="Unit number"
+                                value={unit.unitNumber}
+                                onChange={(event) =>
+                                  updateDetailedUnit(
+                                    index,
+                                    "unitNumber",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <Input
+                                type="number"
+                                placeholder="Rent"
+                                value={unit.rent}
+                                onChange={(event) =>
+                                  updateDetailedUnit(
+                                    index,
+                                    "rent",
+                                    Number(event.target.value),
+                                  )
+                                }
+                              />
+                              <Input
+                                placeholder="Unit type"
+                                value={unit.unitType}
+                                onChange={(event) =>
+                                  updateDetailedUnit(
+                                    index,
+                                    "unitType",
+                                    event.target.value,
+                                  )
+                                }
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => removeDetailedUnit(index)}
+                                className="text-destructive"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-foreground">
+                                  Unit specifications
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    addDetailedUnitSpecification(index)
+                                  }
+                                >
+                                  Add Spec
+                                </Button>
+                              </div>
+                              {unit.specifications?.length === 0 && (
+                                <p className="text-sm text-muted-foreground">
+                                  Add specifics such as bedrooms, baths, or
+                                  size.
+                                </p>
+                              )}
+                              <div className="space-y-2">
+                                {unit.specifications?.map((spec, specIndex) => (
+                                  <div
+                                    key={specIndex}
+                                    className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1.4fr_auto]"
+                                  >
+                                    <Input
+                                      placeholder="Label"
+                                      value={spec.label}
+                                      onChange={(event) =>
+                                        updateDetailedUnitSpecification(
+                                          index,
+                                          specIndex,
+                                          "label",
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <Input
+                                      placeholder="Value"
+                                      value={spec.value}
+                                      onChange={(event) =>
+                                        updateDetailedUnitSpecification(
+                                          index,
+                                          specIndex,
+                                          "value",
+                                          event.target.value,
+                                        )
+                                      }
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        removeDetailedUnitSpecification(
+                                          index,
+                                          specIndex,
+                                        )
+                                      }
+                                      className="text-destructive"
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="hidden">

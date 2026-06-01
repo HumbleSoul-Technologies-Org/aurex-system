@@ -169,21 +169,46 @@ export default function PropertyDetailPage({
     (sum, tenant) => sum + (tenant.rentAmount || 0),
     0,
   );
-  let totalMonthlyIncome = tenantMonthly;
-  const totalUnits = property?.units?.length ?? 0;
+
+  const unitRecords = Array.isArray(property?.units)
+    ? property.units.map((unit: any) =>
+        typeof unit === "string"
+          ? {
+              unitNumber: unit,
+              rent: Number(property?.price_per_unit ?? 0),
+            }
+          : {
+              unitNumber: unit.unitNumber || unit.unit || "",
+              rent: Number(unit.rent ?? property?.price_per_unit ?? 0),
+            },
+      )
+    : [];
+
+  const totalUnits = unitRecords.length;
   const occupiedUnits = propertyTenants.length;
   const availableUnits = Math.max(0, totalUnits - occupiedUnits);
 
-  // If property has units and a price per unit, use that to calculate income
-  if (totalUnits > 0 && property?.price_per_unit) {
+  const totalUnitRent = unitRecords.reduce(
+    (sum, unit) => sum + (Number(unit.rent) || 0),
+    0,
+  );
+
+  let totalMonthlyIncome = tenantMonthly;
+  if (totalUnits > 0) {
+    totalMonthlyIncome = totalUnitRent;
+  } else if (property?.price_per_unit) {
     totalMonthlyIncome = property.price_per_unit * totalUnits;
   }
+
   const totalAnnualIncome = totalMonthlyIncome * 12;
   const averageIncomePerUnit =
     occupiedUnits > 0 ? Math.round(totalMonthlyIncome / occupiedUnits) : 0;
-  const potentialMonthlyIncome = property?.price_per_unit
-    ? property.price_per_unit * totalUnits
-    : 0;
+  const potentialMonthlyIncome =
+    totalUnits > 0
+      ? totalUnitRent
+      : property?.price_per_unit
+        ? property.price_per_unit * totalUnits
+        : 0;
   const occupancyPercentage =
     totalUnits > 0 ? Math.round((occupiedUnits / totalUnits) * 100) : 0;
   const incomeUtilization =
@@ -401,6 +426,14 @@ export default function PropertyDetailPage({
 
                   if (specifications.length > 0) {
                     updated.specifications = specifications;
+                  }
+
+                  if (data.customizeUnits !== undefined) {
+                    updated.customizeUnits = data.customizeUnits;
+                    updated.autoGenerateUnitNumbers =
+                      data.autoGenerateUnitNumbers;
+                    updated.customUnitNumbers = data.customUnitNumbers;
+                    updated.detailedUnits = data.detailedUnits;
                   }
 
                   if (data.zoning !== "") updated.zoning = data.zoning;
@@ -1149,6 +1182,54 @@ export default function PropertyDetailPage({
                       Add Tenant
                     </Button>
                   </div>
+                  {unitRecords.length > 0 && (
+                    <div className="mb-6 overflow-x-auto">
+                      <h4 className="text-base font-semibold text-foreground mb-3">
+                        Unit Inventory
+                      </h4>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="px-4 py-3 text-left font-semibold text-foreground">
+                              Unit
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold text-foreground">
+                              Rent
+                            </th>
+                            <th className="px-4 py-3 text-left font-semibold text-foreground">
+                              Status
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unitRecords.map((unit: any, index: number) => {
+                            const occupied = propertyTenants.some(
+                              (tenant) => tenant.unitNumber === unit.unitNumber,
+                            );
+                            return (
+                              <tr
+                                key={`${unit.unitNumber}-${index}`}
+                                className="border-b border-border hover:bg-secondary"
+                              >
+                                <td className="px-4 py-3 font-semibold text-foreground">
+                                  {unit.unitNumber}
+                                </td>
+                                <td className="px-4 py-3 text-foreground">
+                                  {formatCurrency(
+                                    unit.rent ?? 0,
+                                    activeCurrency,
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-foreground">
+                                  {occupied ? "Occupied" : "Available"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   {propertyTenants.length > 0 ? (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">

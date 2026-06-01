@@ -11,6 +11,13 @@ export interface PropertySpecification {
   value: string
 }
 
+export interface UnitDetails {
+  unitNumber: string
+  rent: number
+  unitType?: string
+  specifications?: PropertySpecification[]
+}
+
 export interface PropertyRecord {
   id: string
   _id?: string
@@ -20,8 +27,11 @@ export interface PropertyRecord {
   country: string
   category?: string
   units_available: number
-  units: string[] // unit identifiers like LKU-1
+  units: Array<string | UnitDetails>
   price_per_unit: number
+  customizeUnits?: boolean
+  customUnitNumbers?: string
+  detailedUnits?: UnitDetails[]
   type?: string
   propertyType?: 'residential' | 'commercial' | 'mixed_use' | 'industrial' | 'retail' | 'office' | 'apartment' | 'house' | 'villa' | 'condo' | 'townhouse' | 'duplex' | 'mixed-use' | 'warehouse' | 'hotel' | 'restaurant' | 'shopping-center' | 'medical' | 'flex-space' | 'other'
   geography?: string
@@ -95,7 +105,7 @@ export function getAvailablePropertiesWithUnits() {
   const tenants = listTenants();
 
   return properties.map((property) => {
-    const units = Array.isArray(property.units) && property.units.length > 0
+    const rawUnits = Array.isArray(property.units) && property.units.length > 0
       ? property.units
       : generateUnitNumbers(
           property.name ?? '',
@@ -103,6 +113,21 @@ export function getAvailablePropertiesWithUnits() {
           property.country ?? '',
           (property as any).units_available ?? (property as any).unitsAvailable ?? (property.units?.length ?? 1),
         );
+
+    const unitRecords = Array.isArray(rawUnits)
+      ? rawUnits.map((unit) =>
+          typeof unit === 'string'
+            ? {
+                unitNumber: unit,
+                rent: property.price_per_unit ?? 0,
+                unitType: '',
+                specifications: [],
+              }
+            : unit,
+        )
+      : []
+
+    const unitNumbers = unitRecords.map((unit) => unit.unitNumber)
 
     // Find tenants assigned to this property
     const propertyTenants = tenants.filter((tenant) => tenant.propertyId === property._id);
@@ -130,7 +155,9 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
   const name = payload.name ?? 'Property'
   const city = payload.city ?? ''
   const country = payload.country ?? ''
-  const units = generateUnitNumbers(name, city, country, units_available)
+  const units = Array.isArray(payload.units)
+    ? payload.units
+    : generateUnitNumbers(name, city, country, units_available)
 
   const payLoad= {
    
@@ -146,6 +173,10 @@ export async function createProperty(payload: Partial<PropertyRecord>, token?: a
     units_available,
     units,
     price_per_unit: payload.price_per_unit ?? 0,
+    customizeUnits: payload.customizeUnits,
+    autoGenerateUnitNumbers: payload.autoGenerateUnitNumbers,
+    customUnitNumbers: payload.customUnitNumbers,
+    detailedUnits: payload.detailedUnits,
     propertyType: payload.propertyType ?? (payload.type as PropertyRecord['propertyType']) ?? 'residential',
     geography: payload.geography,
     images: payload.images ?? [],
