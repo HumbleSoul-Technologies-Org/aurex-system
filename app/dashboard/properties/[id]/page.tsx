@@ -258,7 +258,7 @@ export default function PropertyDetailPage({
 
   // Tenant-collected rent for this property (completed rent transactions)
   const tenantCollected = transactions
-    .filter((t) => t.type === "rent" && t.status === "completed")
+    .filter((t) => t?.type === "rent" && t.status === "completed")
     .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
   // revenue lost compared to potential monthly income

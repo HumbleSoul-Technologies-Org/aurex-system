@@ -37,7 +37,11 @@ import {
   Users,
   MapPin,
 } from "lucide-react";
-import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
+import {
+  formatCurrency,
+  getCurrencySymbol,
+  getLocaleForCurrency,
+} from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import PropertyPerformanceGrouped from "@/components/charts/property-performance-grouped";
 import RentCollectionProgress from "@/components/charts/rent-collection-progress";
@@ -65,6 +69,18 @@ export default function DashboardPage() {
   } = useAppData();
   const [isHydrated, setIsHydrated] = useState(false);
   const activeCurrency = useActiveCurrency();
+
+  const formatWholeCurrency = (value: number) => {
+    const code = String(activeCurrency || "USD").toUpperCase();
+    const locale = getLocaleForCurrency(code);
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: code,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.round(value));
+  };
+
   const [viewMode, setViewMode] = useState<"occupancy" | "performance">(
     "occupancy",
   );
@@ -141,6 +157,30 @@ export default function DashboardPage() {
       return sum + Number(payment.amount || 0);
     }, 0);
 
+    const totalExpectedRent = properties.reduce((sum, property) => {
+      const units = Array.isArray(property.units) ? property.units : [];
+      if (units.length > 0) {
+        const unitRentSum = units.reduce((unitSum, unit) => {
+          const rentValue =
+            typeof unit === "object" && unit !== null
+              ? Number(
+                  (unit as any).rent ??
+                    (unit as any).price ??
+                    property.price_per_unit ??
+                    0,
+                )
+              : Number(property.price_per_unit ?? 0);
+          return unitSum + rentValue;
+        }, 0);
+        return sum + unitRentSum;
+      }
+
+      const unitCount = Number(
+        property.units_available ?? property.units?.length ?? 0,
+      );
+      return sum + Number(property.price_per_unit ?? 0) * unitCount;
+    }, 0);
+
     const totalYtdRevenue = payments.reduce((sum, payment) => {
       const status = String(payment.status || "").toLowerCase();
       if (!revenueStatuses.has(status)) return sum;
@@ -191,8 +231,8 @@ export default function DashboardPage() {
       openMaintenanceRequests,
       totalExpenses,
       ytdProfit,
-      expectedRent: totalMonthlyRevenue,
-      collectedRent: totalYtdRevenue,
+      expectedRent: totalExpectedRent,
+      collectedRent: totalMonthlyRevenue,
     };
   }, [properties, tenants, payments, maintenanceRequests, expenses]);
 
@@ -231,16 +271,17 @@ export default function DashboardPage() {
         .slice(0, 7);
       if (!map[k]) map[k] = { revenue: 0, expenses: 0 };
       const normalizedStatus = String(payment.status || "").toLowerCase();
-      const isComplete = [
+      const isRevenue = [
         "complete",
         "completed",
         "paid",
+        "balance",
         "recorded",
         "confirmed",
         "settled",
         "success",
       ].includes(normalizedStatus);
-      if (isComplete) {
+      if (isRevenue) {
         const rawAmount =
           (payment as any).amount ??
           (payment as any).total ??
@@ -755,23 +796,10 @@ export default function DashboardPage() {
                     fontSize: 10,
                   }}
                   tickFormatter={(value) =>
-                    formatCurrency(Number(value ?? 0), activeCurrency)
+                    formatWholeCurrency(Number(value ?? 0))
                   }
                 />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  stroke="var(--border)"
-                  tickLine={{ stroke: "var(--border)" }}
-                  axisLine={{ stroke: "var(--border)" }}
-                  tick={{
-                    fill: "var(--muted-foreground)",
-                    fontSize: 10,
-                  }}
-                  tickFormatter={(value) =>
-                    formatCurrency(Number(value ?? 0), activeCurrency)
-                  }
-                />
+                <YAxis yAxisId="right" hide />
                 <Tooltip
                   formatter={(value, name) => [
                     formatCurrency(Number(value ?? 0), activeCurrency),
@@ -899,23 +927,10 @@ export default function DashboardPage() {
                         fontSize: 10,
                       }}
                       tickFormatter={(value) =>
-                        formatCurrency(Number(value ?? 0), activeCurrency)
+                        formatWholeCurrency(Number(value ?? 0))
                       }
                     />
-                    <YAxis
-                      yAxisId="right"
-                      orientation="right"
-                      stroke="var(--border)"
-                      tickLine={{ stroke: "var(--border)" }}
-                      axisLine={{ stroke: "var(--border)" }}
-                      tick={{
-                        fill: "var(--muted-foreground)",
-                        fontSize: 10,
-                      }}
-                      tickFormatter={(value) =>
-                        formatCurrency(Number(value ?? 0), activeCurrency)
-                      }
-                    />
+                    <YAxis yAxisId="right" hide />
                     <Tooltip
                       formatter={(value, name) => [
                         formatCurrency(Number(value ?? 0), activeCurrency),

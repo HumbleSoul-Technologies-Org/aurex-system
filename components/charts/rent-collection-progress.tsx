@@ -3,13 +3,11 @@
 import React, { useMemo } from "react";
 import {
   ResponsiveContainer,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
+  PieChart,
+  Pie,
   Tooltip,
   Legend,
-  Bar,
+  Cell,
 } from "recharts";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
@@ -26,16 +24,22 @@ export default function RentCollectionProgress({
   const activeCurrency = useActiveCurrency();
   const currencySymbol = getCurrencySymbol(activeCurrency);
 
+  const pendingRent = Math.max(0, expectedRent - collectedRent);
+
   const data = useMemo(
     () => [
       {
-        name: "Rent",
-        expected: expectedRent,
-        collected: collectedRent,
-        pending: Math.max(0, expectedRent - collectedRent),
+        name: "Collected Rent",
+        value: collectedRent,
+        color: "#16a34a",
+      },
+      {
+        name: "Pending Rent",
+        value: pendingRent,
+        color: "#94a3b8",
       },
     ],
-    [expectedRent, collectedRent],
+    [expectedRent, collectedRent, pendingRent],
   );
 
   const collectionRate = useMemo(() => {
@@ -57,8 +61,8 @@ export default function RentCollectionProgress({
         >
           {payload.map((entry: any, index: number) => (
             <div key={index} style={{ color: entry.color }}>
-              <strong>{entry.name}:</strong> {currencySymbol}
-              {(entry.value || 0).toLocaleString()}
+              <strong>{entry.name}:</strong>{" "}
+              {formatCurrency(entry.value, activeCurrency)}
             </div>
           ))}
         </div>
@@ -123,51 +127,36 @@ export default function RentCollectionProgress({
         </div>
       </div>
 
-      {/* Progress Bar Chart */}
-      <div className="w-full h-[250px]">
+      {/* Rent Collection Ring */}
+      <div className="w-full h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 10, right: 20, left: 0, bottom: 10 }}
-          >
-            <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" />
-            <XAxis
-              dataKey="name"
-              stroke="var(--border)"
-              tickLine={{ stroke: "var(--border)" }}
-              axisLine={{ stroke: "var(--border)" }}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-            />
-            <YAxis
-              tickFormatter={(value) =>
-                `${currencySymbol}${(value / 1000).toFixed(0)}k`
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={70}
+              outerRadius={110}
+              paddingAngle={3}
+              cornerRadius={20}
+              labelLine={false}
+              label={({ name, percent }) =>
+                `${name}: ${Math.round((percent || 0) * 100)}%`
               }
-              stroke="var(--border)"
-              tickLine={{ stroke: "var(--border)" }}
-              axisLine={{ stroke: "var(--border)" }}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
-            />
+            >
+              {data.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
+              ))}
+            </Pie>
             <Tooltip content={<CustomTooltip />} />
             <Legend
-              verticalAlign="top"
-              height={36}
+              verticalAlign="bottom"
+              height={40}
               wrapperStyle={{ color: "var(--muted-foreground)" }}
             />
-            <Bar
-              dataKey="expected"
-              name="Expected Rent"
-              fill="#94a3b8"
-              radius={[8, 8, 0, 0]}
-              barSize={60}
-            />
-            <Bar
-              dataKey="collected"
-              name="Collected Rent"
-              fill="#16a34a"
-              radius={[8, 8, 0, 0]}
-              barSize={60}
-            />
-          </BarChart>
+          </PieChart>
         </ResponsiveContainer>
       </div>
 
