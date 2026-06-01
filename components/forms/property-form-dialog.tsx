@@ -572,7 +572,7 @@ export default function PropertyFormDialog({
                 <label className="block text-sm font-medium text-foreground mb-2">
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-primary" />
-                    Price Per Unit
+                    Amount Per Unit
                   </div>
                 </label>
                 <Input
@@ -585,11 +585,12 @@ export default function PropertyFormDialog({
               </div>
             </div>
 
-            <div>
+            <div className="hidden">
               <label className="block text-sm font-medium text-foreground mb-2">
                 Geography
               </label>
               <Input
+                disabled={true}
                 name="geography"
                 value={formData.geography}
                 onChange={handleChange}
@@ -805,7 +806,6 @@ export default function PropertyFormDialog({
                         </Button>
                       )}
                     </div>
-                    
 
                     {previewUrl && (
                       <div className="mt-3">

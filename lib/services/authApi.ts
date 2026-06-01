@@ -24,6 +24,7 @@ export interface SignupSendCodeRequest {
   email: string;
   role: 'admin' | 'property_manager';
   password: string;
+  acceptedTermsAndConditions: boolean;
 }
 
 export interface SignupVerifyCodeRequest {

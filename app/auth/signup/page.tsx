@@ -27,6 +27,7 @@ export default function SignupPage() {
   );
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +48,11 @@ export default function SignupPage() {
 
     if (!email.includes("@")) {
       setError("Please enter a valid email address");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setError("You must accept the Terms & Conditions to continue");
       return;
     }
 
@@ -78,6 +84,7 @@ export default function SignupPage() {
         email,
         role,
         password,
+        acceptedTermsAndConditions: acceptedTerms,
       });
 
       setStep("verification");
@@ -294,6 +301,25 @@ export default function SignupPage() {
                     uppercase, lowercase, and a number.
                   </p>
 
+                  <label className="flex items-start gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) => setAcceptedTerms(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <span>
+                      I accept the{" "}
+                      <Link
+                        href="/terms"
+                        className="text-primary hover:text-primary/80 font-medium"
+                        target="_blank"
+                      >
+                        Terms & Conditions
+                      </Link>
+                    </span>
+                  </label>
+
                   <Button
                     type="submit"
                     disabled={isLoading}
@@ -393,6 +419,7 @@ export default function SignupPage() {
                             email,
                             role,
                             password,
+                            acceptedTermsAndConditions: acceptedTerms,
                           });
                           setInfo(`A new code has been sent to ${email}.`);
                         } catch (err: any) {
