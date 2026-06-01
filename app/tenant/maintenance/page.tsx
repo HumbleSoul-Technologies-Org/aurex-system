@@ -59,7 +59,7 @@ export default function MaintenancePage() {
   const {
     currentTenant: tenant,
     currentProperty: propertyInfo,
-    maintenanceRequests,
+    maintenanceRequests: contextMaintenanceRequests,
     refetchAll,
   } = useAppData();
   const activeCurrency = useActiveCurrency();
