@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { useAdminInactivity } from "@/lib/hooks/use-admin-inactivity";
+import { useAppData } from "@/lib/data-context";
 import {
   LayoutDashboard,
   Building2,
@@ -44,9 +45,6 @@ import {
   fetchNotifications,
   markNotificationRead,
 } from "@/app/lib/notifications-client";
-import { getAllExpenses } from "@/lib/services/expenses";
-import { listTenants } from "@/lib/services/tenants";
-import { getMaintenanceRequests } from "@/lib/services/maintenance";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -82,6 +80,7 @@ export default function DashboardLayout({
     token,
   } = useAuth();
   const { settings } = useSettings();
+  const { tenants: allTenants, expenses, maintenanceRequests } = useAppData();
 
   // Read timeout minutes from settings (stored as minutes)
   const timeoutMinutes = settings?.security?.autoLogout?.durationMinutes;
@@ -144,18 +143,17 @@ export default function DashboardLayout({
 
   // Load maintenance and messages counts
   React.useEffect(() => {
-    const maintenanceRequests = getMaintenanceRequests();
-    const pendingCount = maintenanceRequests.filter(
+    const pendingMaintenance = maintenanceRequests.filter(
       (req) => req.status === "pending",
     ).length;
-    setPendingMaintenanceCount(pendingCount);
+    setPendingMaintenanceCount(pendingMaintenance);
+
     // Messages unread count from notifications service
     setUnreadMessagesCount(getUnreadCount());
 
     // Pending tenant approvals
     try {
-      const tenants = listTenants();
-      const pendingTenants = tenants.filter(
+      const pendingTenants = allTenants.filter(
         (t) =>
           t.status === "pending" ||
           t.status === undefined ||
@@ -166,19 +164,11 @@ export default function DashboardLayout({
       setPendingApprovalsCount(0);
     }
 
-    // Pending expenses (server-backed)
-    (async () => {
-      try {
-        const all = await getAllExpenses();
-        const pendingExpenses = all.filter(
-          (ex) => ex.status === "pending",
-        ).length;
-        setPendingExpensesCount(pendingExpenses);
-      } catch (e) {
-        setPendingExpensesCount(0);
-      }
-    })();
-  }, []);
+    const pendingExpenses = expenses.filter(
+      (ex) => ex.status === "pending",
+    ).length;
+    setPendingExpensesCount(pendingExpenses);
+  }, [allTenants, expenses, maintenanceRequests]);
 
   const refreshNotifications = React.useCallback(async () => {
     try {
@@ -537,9 +527,9 @@ export default function DashboardLayout({
                           new Date(b.date).getTime() -
                           new Date(a.date).getTime(),
                       )
-                      .map((notif) => (
+                      .map((notif, index) => (
                         <Link
-                          key={notif.id}
+                          key={notif.id || index}
                           href={notif.actionUrl}
                           onClick={async () => {
                             if (!notif.read) {

@@ -48,7 +48,6 @@ import {
 import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
-import { getAllPayments } from "@/lib/services/payments";
 import Link from "next/link";
 import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
@@ -92,7 +91,14 @@ export default function TenantPortalPage() {
     },
   ]);
 
-  const { tenants, properties, isLoading } = useAppData();
+  const {
+    tenants,
+    properties,
+    payments,
+    isLoading,
+    isFetching,
+    refetchAll,
+  } = useAppData();
   const [showInitialSkeleton, setShowInitialSkeleton] = useState(true);
 
   useEffect(() => {
@@ -100,18 +106,31 @@ export default function TenantPortalPage() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const showTenantPortalSkeleton = isLoading && showInitialSkeleton;
+  const showTenantPortalSkeleton = (isLoading || isFetching) && showInitialSkeleton;
   const {
     settings: apiSettings,
     settingsId,
     refresh: refreshSettings,
   } = useSettings();
-  const [payments, setPayments] = useState<any[]>([]);
   const [selectedTenant, setSelectedTenant] = useState<any>(null);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const refreshHandler = () => refetchAll();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("paymentsUpdated", refreshHandler);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("paymentsUpdated", refreshHandler);
+      }
+    };
+  }, [refetchAll]);
 
   const getTenantSettingsForPortal = () => {
     if (apiSettings) {
@@ -123,31 +142,19 @@ export default function TenantPortalPage() {
     );
   };
 
-  // Load tenants, properties, and payments data on mount
   useEffect(() => {
-    const loadPayments = async () => {
-      try {
-        const allPayments = await getAllPayments();
-        setPayments(allPayments);
-      } catch (error) {
-        console.error("Failed to load payments", error);
-        setPayments([]);
+    const refreshHandler = () => refetchAll();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("paymentsUpdated", refreshHandler);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("paymentsUpdated", refreshHandler);
       }
     };
-
-    loadPayments();
-
-    const onPaymentsUpdated = () => {
-      loadPayments();
-    };
-
-    if (typeof window !== "undefined")
-      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () => {
-      if (typeof window !== "undefined")
-        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
-    };
-  }, []);
+  }, [refetchAll]);
 
   // Calculate statistics from real tenant and payment data
   const tenantStats = useMemo(() => {

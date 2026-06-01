@@ -1,23 +1,40 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import {
-  Phone,
-  Mail,
-  Clock,
-  MessageSquare,
-  Send,
-  MapPin,
-} from 'lucide-react'
-import { managementContacts, propertyInfo, currentTenant } from '@/app/lib/tenant-data'
+import { useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Phone, Mail, Clock, MessageSquare, Send, MapPin } from "lucide-react";
+import { useAppData } from "@/lib/data-context";
+
+const managementContacts = [
+  {
+    id: "property-manager",
+    name: "Property Manager",
+    title: "Leasing Office",
+    phone: "(555) 123-4567",
+    email: "leasing@management.local",
+    hours: "Mon-Fri 9am - 5pm",
+  },
+  {
+    id: "maintenance",
+    name: "Maintenance Team",
+    title: "24/7 Support",
+    phone: "(555) 987-6543",
+    email: "maintenance@management.local",
+    hours: "Always available",
+  },
+];
 
 export default function ContactManagementPage() {
-  const [selectedContact, setSelectedContact] = useState(0)
-  const [message, setMessage] = useState('')
-
-  const contact = managementContacts[selectedContact] || null
+  const [selectedContact, setSelectedContact] = useState(0);
+  const [message, setMessage] = useState("");
+  const { currentTenant, currentProperty } = useAppData();
+  const propertyInfo = currentProperty;
+  const tenantUnit = useMemo(
+    () => currentTenant?.unitNumber || currentTenant?.unit || "N/A",
+    [currentTenant],
+  );
+  const contact = managementContacts[selectedContact] || null;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -43,7 +60,7 @@ export default function ContactManagementPage() {
                     {propertyInfo.name}
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Unit {currentTenant?.unit || 'N/A'} • {propertyInfo.address}
+                    Unit {tenantUnit} • {propertyInfo.address}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {propertyInfo.city}, {propertyInfo.state} {propertyInfo.zip}
@@ -68,8 +85,8 @@ export default function ContactManagementPage() {
               onClick={() => setSelectedContact(index)}
               className={`p-4 md:p-6 rounded-lg border-2 transition-all text-left ${
                 selectedContact === index
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-primary/50'
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/50"
               }`}
             >
               <h3 className="font-bold text-foreground text-sm md:text-base mb-1">
@@ -183,7 +200,7 @@ export default function ContactManagementPage() {
             <div className="flex flex-col sm:flex-row gap-3">
               <Button
                 variant="outline"
-                onClick={() => setMessage('')}
+                onClick={() => setMessage("")}
                 className="border-border text-foreground flex-1"
               >
                 Clear
@@ -238,5 +255,5 @@ export default function ContactManagementPage() {
         </div>
       </Card>
     </div>
-  )
+  );
 }

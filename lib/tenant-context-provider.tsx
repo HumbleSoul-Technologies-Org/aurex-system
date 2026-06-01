@@ -81,6 +81,22 @@ function getPropertyOwnerId(property: any): string | null {
   );
 }
 
+async function fetchTenantProfile(userId: string, token: string) {
+  const paths = [`/tenant/${userId}/self`, `/tenants/${userId}/self`];
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      const res = await apiRequest("GET", path, undefined, token);
+      return res;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
 export function TenantContextProvider({
   children,
 }: TenantContextProviderProps) {
@@ -143,12 +159,7 @@ export function TenantContextProvider({
     if (!user?.id || !token || !isAuthenticated) return;
     setLoadingState("tenantProfile", true);
     try {
-      const res = await apiRequest(
-        "GET",
-        `/tenants/${user.id}/self`,
-        undefined,
-        token,
-      );
+      const res = await fetchTenantProfile(user.id, token);
       const data = await res.json();
       const tenant = {
         ...data,

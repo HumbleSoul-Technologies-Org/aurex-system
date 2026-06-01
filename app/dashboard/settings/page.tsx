@@ -46,6 +46,7 @@ import {
   createSettingsOnApi,
   updateSettingsOnApi,
   convertPayloadToTenantPortalSettings,
+  updateTenantPortalSettings,
   FieldStatus,
   debounce,
 } from "@/lib/services/settings";
@@ -585,9 +586,23 @@ export default function SettingsPage() {
         try {
           const payloadToSend = payload ?? buildPayloadForField(flatKey, value);
 
+          // Debug logs to trace what is being sent when updating settings
+          // Helps diagnose currency save issues where USD is persisted unexpectedly
+          // eslint-disable-next-line no-console
+          console.debug(
+            "[Settings] Saving field",
+            flatKey,
+            "value:",
+            value,
+            "payload:",
+            payloadToSend,
+          );
+
           if (payloadToSend) {
             if (!settingsId) {
               const created = await createSettingsOnApi(payloadToSend);
+              // eslint-disable-next-line no-console
+              console.debug("[Settings] createSettingsOnApi result:", created);
               // After creating settings, refresh the context to pick up the new settingsId
               if (created?._id) {
                 await refreshSettings();
@@ -598,6 +613,8 @@ export default function SettingsPage() {
                 settingsId,
                 payloadToSend,
               );
+              // eslint-disable-next-line no-console
+              console.debug("[Settings] updateSettingsOnApi result:", updated);
               if (!updated) {
                 throw new Error("Failed to save to server");
               }
@@ -1131,6 +1148,24 @@ export default function SettingsPage() {
                               },
                             });
                             // persist independently
+                            // Also update local system-settings immediately so UI reflects choice
+                            try {
+                              updateTenantPortalSettings({
+                                financeSettings: { currency: value },
+                              });
+                              // notify other parts of app
+                              dispatchSystemSettingsChange();
+                              // refresh context to pick up local change if API is unreachable
+                              refreshSettings();
+                            } catch (e) {
+                              // ignore local persistence failures
+                              // eslint-disable-next-line no-console
+                              console.warn(
+                                "Local updateTenantPortalSettings failed",
+                                e,
+                              );
+                            }
+
                             createIndependentFieldHandler(
                               "financeSettings_currency",
                               (v) =>

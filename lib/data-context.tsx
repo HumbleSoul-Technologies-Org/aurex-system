@@ -6,15 +6,32 @@ import { apiRequest } from "./query-client";
 import { useAuth } from "./auth-context";
 import { listProperties, PropertyRecord } from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
+import { getPaymentsForPropertyIds, PaymentRecord } from "./services/payments";
+import { getAllExpenses, ExpenseRecord } from "./services/expenses";
+import {
+  getMaintenanceRequests,
+  fetchAllMaintenanceRequests,
+  MaintenanceRequest,
+} from "./services/maintenance";
 import { writeCollection } from "./local-store";
 
 interface DataContextValue {
   properties: PropertyRecord[];
   tenants: TenantRecord[];
+  currentTenant: TenantRecord | null;
+  currentProperty: PropertyRecord | null;
+  payments: PaymentRecord[];
+  expenses: ExpenseRecord[];
+  tenantPayments: PaymentRecord[];
+  tenantExpenses: ExpenseRecord[];
+  maintenanceRequests: MaintenanceRequest[];
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
+  paymentsError: string | null;
+  expensesError: string | null;
   refetch: () => void;
+  refetchAll: () => void;
 }
 
 const DataContext = createContext<DataContextValue | undefined>(undefined);
@@ -55,28 +72,95 @@ function normalizePropertyRecord(property: any): PropertyRecord {
 
 async function fetchProperties(
   adminId: string | null,
+  userRole: string | null,
 ): Promise<PropertyRecord[]> {
-  const endpoint = adminId ? `/property/${adminId}/all` : "/property/all";
-  const res = await apiRequest("GET", endpoint);
-  const data = await res.json();
+  const normalizedRole = userRole?.toLowerCase() || "";
+  if (
+    !adminId ||
+    (normalizedRole !== "admin" && normalizedRole !== "property_manager")
+  ) {
+    return listProperties();
+  }
 
-  console.log('====================================');
-  console.log(data);
-  console.log('====================================');
+  const endpoint = `/property/${adminId}/all`;
+  try {
+    const res = await apiRequest("GET", endpoint);
+    const data = await res.json();
 
-  const rawProperties = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.properties)
-        ? data.properties
-        : Array.isArray(data?.data?.properties)
-          ? data.data.properties
-          : Array.isArray(data?.property)
-            ? data.property
-            : [];
+    const rawProperties = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.properties)
+          ? data.properties
+          : Array.isArray(data?.data?.properties)
+            ? data.data.properties
+            : Array.isArray(data?.property)
+              ? data.property
+              : [];
 
-  return rawProperties.map(normalizePropertyRecord);
+    return rawProperties.map(normalizePropertyRecord);
+  } catch (err) {
+    console.warn(
+      "Failed to fetch properties from API, falling back to local store:",
+      err,
+    );
+    return listProperties();
+  }
+}
+
+async function fetchPayments(
+  propertyIds: string[] | null,
+  token: string | null,
+): Promise<PaymentRecord[]> {
+  if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+    return [];
+  }
+
+  try {
+    return (await getPaymentsForPropertyIds(
+      propertyIds,
+      token ?? undefined,
+    )) as unknown as PaymentRecord[];
+  } catch (err) {
+    console.warn(
+      `Failed to fetch payments for properties ${propertyIds.join(", ")} from API, falling back to empty list:`,
+      err,
+    );
+    return [];
+  }
+}
+
+async function fetchExpenses(): Promise<ExpenseRecord[]> {
+  try {
+    return await getAllExpenses();
+  } catch (err) {
+    console.warn(
+      "Failed to fetch expenses from API, falling back to empty list:",
+      err,
+    );
+    return [];
+  }
+}
+
+async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> {
+  const localRequests = getMaintenanceRequests();
+  try {
+    const remoteRequests = await fetchAllMaintenanceRequests();
+    const mergedRequests = [...localRequests];
+    remoteRequests.forEach((req) => {
+      if (!mergedRequests.some((localReq) => localReq.id === req.id)) {
+        mergedRequests.push(req);
+      }
+    });
+    return mergedRequests;
+  } catch (err) {
+    console.warn(
+      "Failed to fetch maintenance requests from API, falling back to local store:",
+      err,
+    );
+    return localRequests;
+  }
 }
 
 // Tenant data is now derived from populated `property.tenants` returned by the properties API.
@@ -84,13 +168,56 @@ async function fetchProperties(
 // If you still need a standalone tenant endpoint later, re-introduce a fetch function.
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  const adminId = user?.id || user?._id || null;
+  const { user, token } = useAuth();
+  const adminId = user?.id || null;
+  const [paymentsError, setPaymentsError] = React.useState<string | null>(null);
+  const [expensesError, setExpensesError] = React.useState<string | null>(null);
+
+  async function fetchPaymentsWithErrorHandling(
+    propertyIds: string[] | null,
+    token: string | null,
+  ): Promise<PaymentRecord[]> {
+    try {
+      setPaymentsError(null);
+      return await fetchPayments(propertyIds, token);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Payment fetch error:", message);
+      setPaymentsError(message);
+      return [];
+    }
+  }
+
+  async function fetchExpensesWithErrorHandling(): Promise<ExpenseRecord[]> {
+    try {
+      setExpensesError(null);
+      return await fetchExpenses();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Expense fetch error:", message);
+      setExpensesError(message);
+      return [];
+    }
+  }
 
   const propertiesQuery = useQuery({
-    queryKey: ["properties", adminId] as const,
-    queryFn: () => fetchProperties(adminId),
+    queryKey: ["properties", adminId, user?.role] as const,
+    queryFn: () => fetchProperties(adminId, user?.role ?? null),
     initialData: () => listProperties(),
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const expensesQuery = useQuery({
+    queryKey: ["expenses"],
+    queryFn: fetchExpensesWithErrorHandling,
+    initialData: () => [] as ExpenseRecord[],
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const maintenanceRequestsQuery = useQuery({
+    queryKey: ["maintenanceRequests"],
+    queryFn: fetchMaintenanceRequests,
+    initialData: () => [] as MaintenanceRequest[],
     staleTime: 1000 * 60 * 2,
   });
 
@@ -111,14 +238,103 @@ export function DataProvider({ children }: { children: ReactNode }) {
       propertyId: tenant.propertyId || "",
     }));
 
+  const tenantsData =
+    tenantsDerived.length > 0 ? tenantsDerived : listTenants();
+
+  const currentTenant = React.useMemo(() => {
+    if (!user || tenantsData.length === 0) return null;
+    const email = user.email?.toLowerCase();
+    return (
+      tenantsData.find(
+        (tenant) =>
+          tenant.id === user.id ||
+          tenant._id === user.id ||
+          tenant.email?.toLowerCase() === email,
+      ) || null
+    );
+  }, [user, tenantsData]);
+
+  const currentProperty = React.useMemo(() => {
+    if (!currentTenant) return null;
+    return (
+      propertiesData.find(
+        (property) =>
+          property.id === currentTenant.propertyId ||
+          property._id === currentTenant.propertyId,
+      ) || null
+    );
+  }, [currentTenant, propertiesData]);
+
+  const paymentPropertyIds = React.useMemo(() => {
+    if (currentProperty?.id) {
+      return [currentProperty.id];
+    }
+
+    return propertiesData
+      .map((property) => property.id || property._id || "")
+      .filter(Boolean);
+  }, [currentProperty, propertiesData]);
+
+  const paymentsQuery = useQuery({
+    queryKey: ["payments", paymentPropertyIds.join(","), token || ""] as const,
+    queryFn: () =>
+      fetchPaymentsWithErrorHandling(paymentPropertyIds, token ?? null),
+    enabled: paymentPropertyIds.length > 0,
+    initialData: () => [] as PaymentRecord[],
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const tenantPayments = React.useMemo(() => {
+    if (!currentTenant) return [];
+    return (paymentsQuery.data ?? []).filter(
+      (payment) => payment.tenantId === currentTenant.id,
+    );
+  }, [currentTenant, paymentsQuery.data]);
+
+  const tenantExpenses = React.useMemo(() => {
+    if (!currentTenant) return [];
+    return (expensesQuery.data ?? []).filter(
+      (expense) => expense.tenantId === currentTenant.id,
+    );
+  }, [currentTenant, expensesQuery.data]);
+
   const value: DataContextValue = {
     properties: propertiesQuery.data ?? listProperties(),
-    tenants: tenantsDerived ?? listTenants(),
-    isLoading: propertiesQuery.isLoading,
-    isFetching: propertiesQuery.isFetching,
-    isError: propertiesQuery.isError,
+    tenants: tenantsData,
+    currentTenant,
+    currentProperty,
+    payments: paymentsQuery.data ?? [],
+    expenses: expensesQuery.data ?? [],
+    tenantPayments,
+    tenantExpenses,
+    maintenanceRequests: maintenanceRequestsQuery.data ?? [],
+    isLoading:
+      propertiesQuery.isLoading ||
+      paymentsQuery.isLoading ||
+      expensesQuery.isLoading ||
+      maintenanceRequestsQuery.isLoading,
+    isFetching:
+      propertiesQuery.isFetching ||
+      paymentsQuery.isFetching ||
+      expensesQuery.isFetching ||
+      maintenanceRequestsQuery.isFetching,
+    paymentsError,
+    expensesError,
+    isError:
+      propertiesQuery.isError ||
+      paymentsQuery.isError ||
+      expensesQuery.isError ||
+      maintenanceRequestsQuery.isError ||
+      Boolean(paymentsError) ||
+      Boolean(expensesError),
     refetch: () => {
       propertiesQuery.refetch();
+    },
+    refetchAll: () => {
+      propertiesQuery.refetch();
+      paymentsQuery.refetch();
+      expensesQuery.refetch();
+      maintenanceRequestsQuery.refetch();
     },
   };
 
@@ -133,6 +349,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
       writeCollection("tenants", tenantsDerived as any[]);
     }
   }, [JSON.stringify(tenantsDerived)]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onPaymentsUpdated = () => paymentsQuery.refetch();
+    const onExpensesUpdated = () => expensesQuery.refetch();
+    const onMaintenanceUpdated = () => maintenanceRequestsQuery.refetch();
+
+    window.addEventListener("paymentsUpdated", onPaymentsUpdated);
+    window.addEventListener("expensesUpdated", onExpensesUpdated);
+    window.addEventListener("maintenanceUpdated", onMaintenanceUpdated);
+
+    return () => {
+      window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+      window.removeEventListener("expensesUpdated", onExpensesUpdated);
+      window.removeEventListener("maintenanceUpdated", onMaintenanceUpdated);
+    };
+  }, [
+    paymentsQuery.refetch,
+    expensesQuery.refetch,
+    maintenanceRequestsQuery.refetch,
+  ]);
 
   React.useEffect(() => {
     if (propertiesQuery.error) {

@@ -1,5 +1,12 @@
 import { getCollection, insertIntoCollection, updateInCollection, removeFromCollection, generateId } from '@/lib/local-store'
 import { notifyNewMaintenanceRequest } from '@/lib/services/notifications'
+import { apiRequest } from '@/lib/query-client'
+
+function dispatchMaintenanceUpdatedEvent() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('maintenanceUpdated'))
+  }
+}
 
 export interface MaintenanceRequest {
   id: string
@@ -22,8 +29,6 @@ export interface MaintenanceRequest {
 }
 
 const MAINTENANCE_KEY = 'maintenance'
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api'
-const MAINTENANCE_API_BASE = `${API_BASE}/maintenance`
 
 export function getMaintenanceRequests(): MaintenanceRequest[] {
   return getCollection<MaintenanceRequest>(MAINTENANCE_KEY) || []
@@ -92,60 +97,49 @@ async function parseJsonResponse(response: Response) {
 }
 
 export async function fetchMaintenanceRequestsByTenant(tenantId: string): Promise<MaintenanceRequest[]> {
-  const response = await fetch(`${MAINTENANCE_API_BASE}/tenant/${tenantId}/all`, {
-    cache: 'no-store',
-  })
-  const data = await parseJsonResponse(response)
+  const response = await apiRequest('GET', `/maintenance/tenant/${tenantId}/all`)
+  const data = await response.json()
   return Array.isArray(data)
     ? data.map(mapMaintenanceRequestResponse)
-    : []
+    : Array.isArray(data?.data)
+      ? data.data.map(mapMaintenanceRequestResponse)
+      : []
 }
 
 export async function submitMaintenanceRequest(request: Omit<MaintenanceRequest, 'id' | 'createdDate' | 'status'>): Promise<MaintenanceRequest> {
-  const response = await fetch(`${MAINTENANCE_API_BASE}/create`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      ...request,
-      unitNumber: request.unit,
-    }),
+  const response = await apiRequest('POST', '/maintenance/create', {
+    ...request,
+    unitNumber: request.unit,
   })
-  const data = await parseJsonResponse(response)
-  return mapMaintenanceRequestResponse(data.maintenanceRequest || data)
+  const data = await response.json()
+  const record = mapMaintenanceRequestResponse(data.maintenanceRequest || data)
+  dispatchMaintenanceUpdatedEvent()
+  return record
 }
 
 export async function deleteMaintenanceRequestById(id: string): Promise<boolean> {
-  const response = await fetch(`${MAINTENANCE_API_BASE}/${id}/delete`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-  await parseJsonResponse(response)
+  await apiRequest('DELETE', `/maintenance/${id}/delete`)
+  dispatchMaintenanceUpdatedEvent()
   return true
 }
 
 export async function fetchAllMaintenanceRequests(): Promise<MaintenanceRequest[]> {
-  const response = await fetch(`${MAINTENANCE_API_BASE}/all`, {
-    cache: 'no-store',
-  })
-  const data = await parseJsonResponse(response)
-  return Array.isArray(data) ? data.map(mapMaintenanceRequestResponse) : []
+  const response = await apiRequest('GET', '/maintenance/all')
+  const data = await response.json()
+  return Array.isArray(data)
+    ? data.map(mapMaintenanceRequestResponse)
+    : Array.isArray(data?.data)
+      ? data.data.map(mapMaintenanceRequestResponse)
+      : []
 }
 
 export async function updateMaintenanceRequestById(
   id: string,
   updates: Partial<MaintenanceRequest>,
 ): Promise<MaintenanceRequest> {
-  const response = await fetch(`${MAINTENANCE_API_BASE}/${id}/update`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updates),
-  })
-  const data = await parseJsonResponse(response)
-  return mapMaintenanceRequestResponse(data.maintenanceRequest || data)
+  const response = await apiRequest('PUT', `/maintenance/${id}/update`, updates)
+  const data = await response.json()
+  const record = mapMaintenanceRequestResponse(data.maintenanceRequest || data)
+  dispatchMaintenanceUpdatedEvent()
+  return record
 }

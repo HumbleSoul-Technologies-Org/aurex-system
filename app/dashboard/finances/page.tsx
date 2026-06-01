@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,24 +14,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { chartData, expenseBreakdown } from "@/app/lib/sample-data";
 import { useAppData } from "@/lib/data-context";
 import {
-  listTransactions,
-  createTransaction,
   deleteTransaction,
   updateTransaction,
 } from "@/app/lib/transactions-client";
-import {
-  getAllExpenses,
-  updateExpenseApi,
-  deleteExpenseApi,
-} from "@/lib/services/expenses";
-import {
-  deletePaymentApi,
-  getAllPayments,
-  getPaymentsForPropertyIds,
-} from "@/lib/services/payments";
+import { updateExpenseApi, deleteExpenseApi } from "@/lib/services/expenses";
+import { deletePaymentApi } from "@/lib/services/payments";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
@@ -89,54 +78,42 @@ export default function FinancesPage() {
   const {
     tenants: allTenants,
     properties: allProperties,
+    payments,
+    expenses,
     isLoading,
+    isFetching,
+    refetchAll,
+    paymentsError,
+    expensesError,
   } = useAppData();
 
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [isExpensesLoading, setIsExpensesLoading] = useState(true);
+  const isExpensesLoading = isLoading || isFetching;
   const activeCurrency = useActiveCurrency();
 
-  const loadPayments = async () => {
-    try {
-      const propertyIds = allProperties
-        .map((property) => property.id)
-        .filter(Boolean);
-      const allPayments =
-        propertyIds.length > 0
-          ? await getPaymentsForPropertyIds(propertyIds)
-          : await getAllPayments();
-      setPayments(allPayments);
-    } catch (error) {
-      console.error("Failed to load payments", error);
-      setPayments([]);
-    }
-  };
+  useEffect(() => {
+    setTransactions(expenses);
+  }, [expenses]);
 
   useEffect(() => {
-    // load server-backed expenses for display
-    (async () => {
-      try {
-        const serverExpenses = await getAllExpenses();
-        setTransactions(serverExpenses);
-      } catch (e) {
-        // fallback to empty list if API fails
-        setTransactions([]);
-      } finally {
-        setIsExpensesLoading(false);
-      }
-    })();
-
-    loadPayments();
-    const onTxUpdate = () => refreshTransactions();
-    const onPaymentsUpdated = () => loadPayments();
-    window.addEventListener("transactionsUpdated", onTxUpdate);
-    window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () => {
-      window.removeEventListener("transactionsUpdated", onTxUpdate);
-      window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+    const refreshHandler = () => {
+      refetchAll();
     };
-  }, [allProperties.length]);
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("transactionsUpdated", refreshHandler);
+      window.addEventListener("paymentsUpdated", refreshHandler);
+      window.addEventListener("expensesUpdated", refreshHandler);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("transactionsUpdated", refreshHandler);
+        window.removeEventListener("paymentsUpdated", refreshHandler);
+        window.removeEventListener("expensesUpdated", refreshHandler);
+      }
+    };
+  }, [refetchAll]);
 
   // Enrich transactions with tenant and property data from real lists
   const enrichedTransactions = (transactions || []).map((transaction) => {
@@ -203,6 +180,132 @@ export default function FinancesPage() {
   const netLabel = netProfit >= 0 ? "Net Profit" : "Net Loss";
   const netColorClass = netProfit >= 0 ? "text-green-600" : "text-red-600";
 
+  const chartData = useMemo(() => {
+    const months = 6;
+    const now = new Date();
+    const monthKeys = Array.from({ length: months }).map((_, index) => {
+      const d = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth() - (months - 1 - index),
+          1,
+        ),
+      );
+      const key = d.toISOString().slice(0, 7);
+      const label = d.toLocaleString("default", {
+        month: "short",
+        year: "numeric",
+      });
+      return { key, label };
+    });
+
+    const map: Record<string, { revenue: number; expenses: number }> = {};
+    monthKeys.forEach(({ key }) => {
+      map[key] = { revenue: 0, expenses: 0 };
+    });
+
+    const normalizeAmount = (value: any) => {
+      const raw = value ?? 0;
+      return Number(String(raw).replace(/[^0-9.-]+/g, "")) || 0;
+    };
+
+    const paymentMonth = (payment: any) => {
+      const dateString =
+        payment.date ||
+        payment.paymentDate ||
+        payment.paidOn ||
+        payment.createdAt;
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return null;
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+        .toISOString()
+        .slice(0, 7);
+    };
+
+    const expenseMonth = (expense: any) => {
+      const dateString =
+        expense.date ||
+        expense.createdAt ||
+        expense.transactionDate ||
+        expense.postedAt ||
+        expense.entryDate;
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return null;
+      return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+        .toISOString()
+        .slice(0, 7);
+    };
+
+    payments.forEach((payment) => {
+      const monthKey = paymentMonth(payment);
+      if (!monthKey || !map[monthKey]) return;
+      const status = String(payment.status || "").toLowerCase();
+      const amount = normalizeAmount(
+        payment.amount ??
+          payment.total ??
+          payment.value ??
+          payment.paymentAmount ??
+          payment.amountPaid,
+      );
+      const completeStatuses = [
+        "complete",
+        "completed",
+        "paid",
+        "recorded",
+        "confirmed",
+        "settled",
+        "success",
+      ];
+      if (completeStatuses.includes(status) || status === "") {
+        map[monthKey].revenue += amount;
+      }
+    });
+
+    expenses.forEach((expense) => {
+      const monthKey = expenseMonth(expense);
+      if (!monthKey || !map[monthKey]) return;
+      const amount = normalizeAmount(
+        expense.amount ??
+          expense.total ??
+          expense.value ??
+          expense.paymentAmount ??
+          expense.expenseAmount,
+      );
+      map[monthKey].expenses += amount;
+    });
+
+    return monthKeys.map(({ key, label }) => ({
+      month: label,
+      revenue: Math.round(map[key].revenue),
+      expenses: Math.round(map[key].expenses),
+    }));
+  }, [payments, expenses]);
+
+  const expenseBreakdown = useMemo(() => {
+    const categoryMap: Record<string, number> = {};
+    expenses.forEach((expense) => {
+      const category = (expense.category || "Other").toString();
+      categoryMap[category] =
+        (categoryMap[category] || 0) + Number(expense.amount || 0);
+    });
+
+    const colorMap: Record<string, string> = {
+      maintenance: "#8884d8",
+      utilities: "#82ca9d",
+      insurance: "#ffc658",
+      rent: "#ff7c7c",
+      repairs: "#a4de6c",
+      cleaning: "#d084d0",
+      management: "#ffc069",
+    };
+
+    return Object.entries(categoryMap).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase(),
+      value: Math.round(value),
+      color: colorMap[name.toLowerCase()] || "#8884d8",
+    }));
+  }, [expenses]);
+
   const occupiedPropertyIds = new Set(
     allTenants.filter((t) => t.propertyId).map((t) => t.propertyId),
   );
@@ -244,17 +347,11 @@ export default function FinancesPage() {
   };
 
   const refreshTransactions = () => {
-    (async () => {
-      try {
-        const serverExpenses = await getAllExpenses();
-        setTransactions(serverExpenses);
-      } catch (e) {
-        setTransactions([]);
-      }
-    })();
+    refetchAll();
+    setTransactions(expenses);
   };
   const refreshPayments = () => {
-    void loadPayments();
+    refetchAll();
   };
 
   const isPageLoading = isLoading || isExpensesLoading;
@@ -370,6 +467,15 @@ export default function FinancesPage() {
           </p>
         </Card>
       </div>
+
+      {(paymentsError || expensesError) && (
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
+          {paymentsError && (
+            <p className="mb-1">Payments load error: {paymentsError}</p>
+          )}
+          {expensesError && <p>Expenses load error: {expensesError}</p>}
+        </div>
+      )}
 
       {/* Tabs */}
 

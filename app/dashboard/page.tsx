@@ -37,15 +37,6 @@ import {
   Users,
   MapPin,
 } from "lucide-react";
-import { createTransaction } from "@/app/lib/transactions-client";
-import {
-  getAllPayments,
-  getPaymentsForPropertyIds,
-} from "@/lib/services/payments";
-import {
-  getMaintenanceRequests,
-  fetchAllMaintenanceRequests,
-} from "@/lib/services/maintenance";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import PropertyPerformanceGrouped from "@/components/charts/property-performance-grouped";
@@ -60,9 +51,18 @@ export default function DashboardPage() {
   const router = useRouter();
 
   // State for real data
-  const { properties, tenants, isLoading, isFetching } = useAppData();
-  const [payments, setPayments] = useState<any[]>([]);
-  const [maintenanceRequests, setMaintenanceRequests] = useState<any[]>([]);
+  const {
+    properties,
+    tenants,
+    payments,
+    expenses,
+    maintenanceRequests,
+    isLoading,
+    isFetching,
+    refetchAll,
+    paymentsError,
+    expensesError,
+  } = useAppData();
   const [isHydrated, setIsHydrated] = useState(false);
   const activeCurrency = useActiveCurrency();
   const [viewMode, setViewMode] = useState<"occupancy" | "performance">(
@@ -80,72 +80,37 @@ export default function DashboardPage() {
   useEffect(() => {
     setIsHydrated(true);
 
-    const loadPayments = async () => {
-      try {
-        const propertyIds = properties
-          .map((property) => property.id)
-          .filter(Boolean);
-        const allPayments =
-          propertyIds.length > 0
-            ? await getPaymentsForPropertyIds(propertyIds)
-            : await getAllPayments();
-        setPayments(allPayments);
-      } catch (error) {
-        console.error("Failed to load payments", error);
-        setPayments([]);
-      }
+    const refreshHandler = () => {
+      refetchAll();
     };
 
-    loadPayments();
-
-    const onPaymentsUpdated = () => {
-      loadPayments();
-    };
-
-    if (typeof window !== "undefined")
-      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-
-    const loadMaintenanceRequests = async () => {
-      const localRequests = getMaintenanceRequests();
-      try {
-        const requests = await fetchAllMaintenanceRequests();
-        const mergedRequests = [...localRequests];
-
-        requests.forEach((req) => {
-          if (!mergedRequests.some((localReq) => localReq.id === req.id)) {
-            mergedRequests.push(req);
-          }
-        });
-
-        setMaintenanceRequests(
-          mergedRequests.length > 0 ? mergedRequests : localRequests,
-        );
-      } catch (error) {
-        console.error("Failed to load maintenance requests", error);
-        setMaintenanceRequests(localRequests);
-      }
-    };
-
-    loadMaintenanceRequests();
+    if (typeof window !== "undefined") {
+      window.addEventListener("paymentsUpdated", refreshHandler);
+      window.addEventListener("expensesUpdated", refreshHandler);
+      window.addEventListener("maintenanceUpdated", refreshHandler);
+    }
 
     return () => {
-      if (typeof window !== "undefined")
-        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("paymentsUpdated", refreshHandler);
+        window.removeEventListener("expensesUpdated", refreshHandler);
+        window.removeEventListener("maintenanceUpdated", refreshHandler);
+      }
     };
-  }, [properties.length]);
+  }, [refetchAll]);
 
   // Calculate metrics from real data
   const metrics = useMemo(() => {
     const totalProperties = properties.length;
     const totalUnits = properties.reduce(
-      (sum, p) => sum + (p.units.length || 0),
+      (sum, p) => sum + Number(p.units?.length ?? p.units_available ?? 0),
       0,
     );
 
     // Calculate monthly revenue based on properties and tenants
     const totalMonthlyRevenue = properties.reduce((sum, p) => {
       const propertyTenants = tenants.filter((t) => t.propertyId === p.id);
-      return sum + propertyTenants.length * (p.price_per_unit || 0);
+      return sum + propertyTenants.length * Number(p.price_per_unit ?? 0);
     }, 0);
 
     // Calculate occupancy rate
@@ -164,14 +129,17 @@ export default function DashboardPage() {
       (req) => req.status === "pending",
     ).length;
 
-    // Calculate YTD profit (simplified - successful payments minus some estimated expenses)
+    // Calculate YTD profit using actual expenses
     const successfulPayments = payments.filter((p) => p.status === "complete");
     const totalRevenue = successfulPayments.reduce(
-      (sum, p) => sum + p.amount,
+      (sum, p) => sum + Number(p.amount || 0),
       0,
     );
-    const estimatedExpenses = totalRevenue * 0.3; // Assume 30% expenses
-    const ytdProfit = totalRevenue - estimatedExpenses;
+    const totalExpenses = expenses.reduce(
+      (sum, expense) => sum + Number(expense.amount || 0),
+      0,
+    );
+    const ytdProfit = totalRevenue - totalExpenses;
 
     return {
       totalProperties,
@@ -180,11 +148,12 @@ export default function DashboardPage() {
       averageOccupancy,
       pendingPayments,
       openMaintenanceRequests,
+      totalExpenses,
       ytdProfit,
       expectedRent: totalMonthlyRevenue,
       collectedRent: totalRevenue,
     };
-  }, [properties, tenants, payments, maintenanceRequests]);
+  }, [properties, tenants, payments, maintenanceRequests, expenses]);
 
   // Prepare chart data from real data: monthly revenue/expenses, fill missing months
   const chartData = useMemo(() => {
@@ -207,17 +176,66 @@ export default function DashboardPage() {
     const map: Record<string, { revenue: number; expenses: number }> = {};
 
     payments.forEach((payment) => {
-      if (!payment || !payment.date) return;
-      const d = new Date(payment.date);
+      if (!payment) return;
+      const paymentDate =
+        payment.date ||
+        payment.paymentDate ||
+        payment.paidOn ||
+        payment.createdAt;
+      if (!paymentDate) return;
+      const d = new Date(paymentDate);
       if (isNaN(d.getTime())) return;
       const k = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
         .toISOString()
         .slice(0, 7);
       if (!map[k]) map[k] = { revenue: 0, expenses: 0 };
-      if (payment.status === "complete") {
-        map[k].revenue += Number(payment.amount || 0);
-        map[k].expenses += Number(payment.amount || 0) * 0.3;
+      const normalizedStatus = String(payment.status || "").toLowerCase();
+      const isComplete = [
+        "complete",
+        "completed",
+        "paid",
+        "recorded",
+        "confirmed",
+        "settled",
+        "success",
+      ].includes(normalizedStatus);
+      if (isComplete) {
+        const rawAmount =
+          (payment as any).amount ??
+          (payment as any).total ??
+          (payment as any).value ??
+          (payment as any).paymentAmount ??
+          (payment as any).amountPaid ??
+          0;
+        const amount = Number(String(rawAmount).replace(/[^0-9.-]+/g, "")) || 0;
+        map[k].revenue += amount;
       }
+    });
+
+    expenses.forEach((expense) => {
+      if (!expense) return;
+      const expenseDate =
+        expense.date ||
+        expense.createdAt ||
+        (expense as any).transactionDate ||
+        (expense as any).postedAt ||
+        (expense as any).entryDate;
+      if (!expenseDate) return;
+      const d = new Date(expenseDate);
+      if (isNaN(d.getTime())) return;
+      const k = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1))
+        .toISOString()
+        .slice(0, 7);
+      if (!map[k]) map[k] = { revenue: 0, expenses: 0 };
+      const rawAmount =
+        (expense as any).amount ??
+        (expense as any).total ??
+        (expense as any).value ??
+        (expense as any).paymentAmount ??
+        (expense as any).expenseAmount ??
+        0;
+      const amount = Number(String(rawAmount).replace(/[^0-9.-]+/g, "")) || 0;
+      map[k].expenses += amount;
     });
 
     const result = monthKeys.map(({ key, label }) => ({
@@ -227,7 +245,11 @@ export default function DashboardPage() {
     }));
 
     return result;
-  }, [payments, revenueWindow]);
+  }, [payments, expenses, revenueWindow]);
+
+  const hasCashFlowData = chartData.some(
+    (item) => item.revenue > 0 || item.expenses > 0,
+  );
 
   // Helper: moving average
   function movingAverage(values: number[], windowSize = 3) {
@@ -260,34 +282,21 @@ export default function DashboardPage() {
 
   // Prepare occupancy data for chart
   const occupancyData = useMemo(() => {
-    const data = properties.map((property) => {
+    return properties.map((property) => {
       const propertyTenants = tenants.filter(
         (t) => t.propertyId === property.id,
       );
+      const units = Number(
+        property.units_available ?? property.units?.length ?? 0,
+      );
       const occupancyRate =
-        property.units_available > 0
-          ? Math.round(
-              (propertyTenants.length / property.units_available) * 100,
-            )
-          : 0;
+        units > 0 ? Math.round((propertyTenants.length / units) * 100) : 0;
 
       return {
         property: property.name || "Property",
         occupancy: occupancyRate,
       };
     });
-
-    // If no properties, show sample data for demo
-    if (data.length === 0) {
-      return [
-        { property: "Sunset Apartments", occupancy: 85 },
-        { property: "Downtown Plaza", occupancy: 72 },
-        { property: "Green Valley", occupancy: 95 },
-        { property: "Riverside Complex", occupancy: 60 },
-      ];
-    }
-
-    return data;
   }, [properties, tenants]);
 
   // Prepare combined occupancy + performance data
@@ -356,46 +365,46 @@ export default function DashboardPage() {
     return breakdown;
   }, [maintenanceRequests]);
 
-  // Prepare expense breakdown (simplified categories)
+  // Prepare expense breakdown from real expenses grouped by category
   const expenseBreakdown = useMemo(() => {
-    const totalExpenses = payments
-      .filter((p) => p.status === "complete")
-      .reduce((sum, p) => sum + p.amount * 0.3, 0);
+    const categoryMap: Record<string, number> = {};
 
-    // Only show data if there are actual expenses from localStorage
+    expenses.forEach((expense) => {
+      const category = expense.category || "Other";
+      categoryMap[category] =
+        (categoryMap[category] || 0) + Number(expense.amount || 0);
+    });
+
+    if (Object.keys(categoryMap).length === 0) {
+      return [];
+    }
+
+    const totalExpenses = Object.values(categoryMap).reduce(
+      (sum, val) => sum + val,
+      0,
+    );
     if (totalExpenses === 0) {
       return [];
     }
 
-    // Calculate based on maintenance requests
-    const maintenanceCost = maintenanceRequests
-      .filter((req) => req.cost)
-      .reduce((sum, req) => sum + req.cost, 0);
+    const colorMap: Record<string, string> = {
+      maintenance: "#8884d8",
+      utilities: "#82ca9d",
+      insurance: "#ffc658",
+      rent: "#ff7c7c",
+      repairs: "#a4de6c",
+      cleaning: "#d084d0",
+      management: "#ffc069",
+    };
 
-    const maintenancePercent = Math.max(
-      0,
-      Math.round((maintenanceCost / totalExpenses) * 100),
-    );
-    const utilitiesPercent = Math.max(
-      0,
-      Math.round(((totalExpenses * 0.25) / totalExpenses) * 100),
-    );
-    const insurancePercent = Math.max(
-      0,
-      Math.round(((totalExpenses * 0.15) / totalExpenses) * 100),
-    );
-    const otherPercent = Math.max(
-      0,
-      100 - maintenancePercent - utilitiesPercent - insurancePercent,
-    );
-
-    return [
-      { name: "Maintenance", value: maintenancePercent, fill: "#8884d8" },
-      { name: "Utilities", value: utilitiesPercent, fill: "#82ca9d" },
-      { name: "Insurance", value: insurancePercent, fill: "#ffc658" },
-      { name: "Other", value: otherPercent, fill: "#ff7300" },
-    ].filter((item) => item.value > 0); // Only show categories with values
-  }, [payments, maintenanceRequests]);
+    return Object.entries(categoryMap)
+      .map(([name, amount]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value: Math.round(amount),
+        fill: colorMap[name.toLowerCase()] || "#8884d8",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses]);
 
   // Prepare recent activity from real payments
   const recentActivity = useMemo(() => {
@@ -588,6 +597,15 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {(paymentsError || expensesError) && (
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
+          {paymentsError && (
+            <p className="mb-1">Payments load error: {paymentsError}</p>
+          )}
+          {expensesError && <p>Expenses load error: {expensesError}</p>}
+        </div>
+      )}
+
       {/* Quick Actions */}
       <Card className="border border-border p-6">
         <h2 className="text-lg font-bold text-foreground mb-6">
@@ -625,14 +643,14 @@ export default function DashboardPage() {
             <Users className="w-4 h-4 mr-2" />
             Add Tenant
           </Button>
-          <Button
+          {/* <Button
             variant="outline"
             className="w-full border-border text-foreground justify-start bg-transparent"
             onClick={() => router.push("/dashboard/map")}
           >
             <MapPin className="w-4 h-4 mr-2" />
             View Properties Map
-          </Button>
+          </Button> */}
         </div>
       </Card>
 
@@ -653,7 +671,7 @@ export default function DashboardPage() {
           Cash Flow Trend
         </h2>
 
-        {chartData.length === 0 ? (
+        {!hasCashFlowData ? (
           <div className="flex items-center justify-center h-[300px] text-muted-foreground">
             <div className="text-center">
               <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -684,6 +702,7 @@ export default function DashboardPage() {
                   height={50}
                 />
                 <YAxis
+                  yAxisId="left"
                   stroke="var(--border)"
                   tickLine={{ stroke: "var(--border)" }}
                   axisLine={{ stroke: "var(--border)" }}
@@ -692,15 +711,29 @@ export default function DashboardPage() {
                     fontSize: 10,
                   }}
                   tickFormatter={(value) =>
-                    `${getCurrencySymbol(activeCurrency)}${(value / 1000).toFixed(0)}k`
+                    formatCurrency(Number(value ?? 0), activeCurrency)
+                  }
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="var(--border)"
+                  tickLine={{ stroke: "var(--border)" }}
+                  axisLine={{ stroke: "var(--border)" }}
+                  tick={{
+                    fill: "var(--muted-foreground)",
+                    fontSize: 10,
+                  }}
+                  tickFormatter={(value) =>
+                    formatCurrency(Number(value ?? 0), activeCurrency)
                   }
                 />
                 <Tooltip
                   formatter={(value, name) => [
-                    typeof value === "number"
-                      ? formatCurrency(value, activeCurrency)
-                      : value,
-                    name === "revenue" ? "Revenue" : "Expenses",
+                    formatCurrency(Number(value ?? 0), activeCurrency),
+                    String(name).toLowerCase().includes("revenue")
+                      ? "Revenue"
+                      : "Expenses",
                   ]}
                   contentStyle={{
                     background: "var(--card)",
@@ -719,6 +752,7 @@ export default function DashboardPage() {
                   wrapperStyle={{ color: "var(--muted-foreground)" }}
                 />
                 <Line
+                  yAxisId="left"
                   type="monotone"
                   dataKey="revenue"
                   name="Revenue"
@@ -728,6 +762,7 @@ export default function DashboardPage() {
                   activeDot={{ r: 6 }}
                 />
                 <Line
+                  yAxisId="right"
                   type="monotone"
                   dataKey="expenses"
                   name="Expenses"
@@ -777,7 +812,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {chartData.length === 0 ? (
+            {!hasCashFlowData ? (
               <div className="flex items-center justify-center h-[250px] text-muted-foreground">
                 <div className="text-center">
                   <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -811,6 +846,7 @@ export default function DashboardPage() {
                       height={50}
                     />
                     <YAxis
+                      yAxisId="left"
                       stroke="var(--border)"
                       tickLine={{ stroke: "var(--border)" }}
                       axisLine={{ stroke: "var(--border)" }}
@@ -818,12 +854,27 @@ export default function DashboardPage() {
                         fill: "var(--muted-foreground)",
                         fontSize: 10,
                       }}
+                      tickFormatter={(value) =>
+                        formatCurrency(Number(value ?? 0), activeCurrency)
+                      }
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="var(--border)"
+                      tickLine={{ stroke: "var(--border)" }}
+                      axisLine={{ stroke: "var(--border)" }}
+                      tick={{
+                        fill: "var(--muted-foreground)",
+                        fontSize: 10,
+                      }}
+                      tickFormatter={(value) =>
+                        formatCurrency(Number(value ?? 0), activeCurrency)
+                      }
                     />
                     <Tooltip
                       formatter={(value, name) => [
-                        typeof value === "number"
-                          ? formatCurrency(value, activeCurrency)
-                          : value,
+                        formatCurrency(Number(value ?? 0), activeCurrency),
                         name,
                       ]}
                       contentStyle={{
@@ -843,6 +894,7 @@ export default function DashboardPage() {
                       wrapperStyle={{ color: "var(--muted-foreground)" }}
                     />
                     <Line
+                      yAxisId="left"
                       type="monotone"
                       dataKey={
                         revenueMode === "monthly"
@@ -860,6 +912,7 @@ export default function DashboardPage() {
                     />
                     {showMovingAverage && revenueMode === "monthly" && (
                       <Line
+                        yAxisId="left"
                         type="monotone"
                         dataKey="revenueMA"
                         name="Moving Average"
@@ -870,6 +923,7 @@ export default function DashboardPage() {
                       />
                     )}
                     <Line
+                      yAxisId="right"
                       type="monotone"
                       dataKey="expenses"
                       name="Expenses"

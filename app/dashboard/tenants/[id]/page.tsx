@@ -14,11 +14,7 @@ import {
   updateTenantApi,
 } from "@/lib/services/tenants";
 import { useAppData } from "@/lib/data-context";
-import {
-  listTransactions,
-  createTransaction,
-} from "@/app/lib/transactions-client";
-import { getPaymentsForTenant } from "@/lib/services/payments";
+import { createTransaction } from "@/app/lib/transactions-client";
 import TenantForm from "@/components/forms/tenant-form";
 import {
   DropdownMenu,
@@ -76,7 +72,7 @@ interface TenantDetailPageProps {
 
 export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const { id } = use(params);
-  const { properties, tenants } = useAppData();
+  const { properties, tenants, payments } = useAppData();
   const activeCurrency = useActiveCurrency();
   const [tenant, setTenant] = useState<any | null>(null);
   const [property, setProperty] = useState<any | null>(null);
@@ -86,9 +82,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   );
   const [copiedPassword, setCopiedPassword] = useState(false);
   const router = useRouter();
-
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
 
   // Edit form state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -151,42 +144,24 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     }
   }, [id]);
 
+  const tenantPayments = useMemo(
+    () =>
+      payments.filter((payment: any) =>
+        tenant
+          ? payment.tenantId === tenant.id || payment.tenantId === tenant._id
+          : false,
+      ),
+    [payments, tenant?.id, tenant?._id],
+  );
+
   const latestRentPaymentDate = useMemo(
-    () => getLatestRentPaymentDate(payments),
-    [payments],
+    () => getLatestRentPaymentDate(tenantPayments),
+    [tenantPayments],
   );
 
   const leaseRenewalHint = latestRentPaymentDate
     ? "Set from most recent rent payment."
     : "No rent payment made yet.";
-
-  useEffect(() => {
-    if (!tenant) return;
-    const list = listTransactions(tenant.id, "rent");
-    setTransactions(list);
-
-    const loadTenantPayments = async () => {
-      try {
-        const tenantPayments = await getPaymentsForTenant(tenant.id);
-        setPayments(tenantPayments);
-      } catch (error) {
-        console.error("Failed to load tenant payments", error);
-        setPayments([]);
-      }
-    };
-
-    loadTenantPayments();
-
-    const onPaymentsUpdated = () => {
-      loadTenantPayments();
-    };
-
-    window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () => {
-      if (typeof window !== "undefined")
-        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
-    };
-  }, [tenant?.id]);
 
   const generatePassword = async (length = 8) => {
     const chars =
@@ -1057,7 +1032,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                     </tbody>
                   </table>
                 </div>
-              ) : transactions.length > 0 ? (
+              ) : tenantPayments.length > 0 ? (
                 <div className="border border-border rounded-lg overflow-hidden">
                   <table className="w-full">
                     <thead className="bg-secondary/50 border-b border-border">
@@ -1077,7 +1052,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {transactions.map((transaction) => (
+                      {tenantPayments.map((transaction) => (
                         <tr
                           key={transaction.id}
                           className="border-b border-border hover:bg-secondary/30 transition-colors"
@@ -1115,8 +1090,10 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                               {transaction.status === "failed" && (
                                 <XCircle className="w-3 h-3" />
                               )}
-                              {transaction.status.charAt(0).toUpperCase() +
-                                transaction.status.slice(1)}
+                              {(transaction.status || "pending")
+                                .charAt(0)
+                                .toUpperCase() +
+                                (transaction.status || "pending").slice(1)}
                             </span>
                           </td>
                         </tr>

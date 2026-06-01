@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  fetchAllMaintenanceRequests,
   updateMaintenanceRequestById,
   deleteMaintenanceRequestById,
   type MaintenanceRequest,
@@ -58,31 +57,35 @@ interface MaintenanceRequestDisplay {
 export default function MaintenancePage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const activeCurrency = useActiveCurrency();
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [rawRequests, setRawRequests] = useState<MaintenanceRequest[]>([]);
-  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
-  const { tenants: allTenants, properties: allProperties } = useAppData();
-
-  const loadMaintenanceRequests = useCallback(async () => {
-    setIsLoadingRequests(true);
-    try {
-      const requests = await fetchAllMaintenanceRequests();
-      setRawRequests(requests);
-    } catch (error) {
-      console.error("Failed to load maintenance requests:", error);
-      setRawRequests([]);
-    } finally {
-      setIsLoadingRequests(false);
-    }
-  }, []);
+  const {
+    tenants: allTenants,
+    properties: allProperties,
+    maintenanceRequests,
+    isLoading,
+    isFetching,
+    refetchAll,
+  } = useAppData();
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    loadMaintenanceRequests();
-  }, [loadMaintenanceRequests, refreshTrigger]);
+    const refreshHandler = () => refetchAll();
+    if (typeof window !== "undefined") {
+      window.addEventListener("maintenanceUpdated", refreshHandler);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("maintenanceUpdated", refreshHandler);
+      }
+    };
+  }, [refetchAll]);
 
   const enrichedRequests: MaintenanceRequestDisplay[] = useMemo(
     () =>
-      rawRequests.map((req) => {
+      maintenanceRequests.map((req) => {
         const tenant = req.tenantId
           ? allTenants.find((t) => t.id === req.tenantId)
           : null;
@@ -111,16 +114,8 @@ export default function MaintenancePage() {
           transactionId: req.transactionId,
         };
       }),
-    [rawRequests, allTenants],
+    [maintenanceRequests, allTenants, allProperties],
   );
-
-  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
-    null,
-  );
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const openExpenseDialog = (requestId: string) => {
     setSelectedRequestId(requestId);
@@ -143,7 +138,7 @@ export default function MaintenancePage() {
 
       // Close dialog and refresh
       setExpenseDialogOpen(false);
-      setRefreshTrigger((t) => t + 1);
+      refetchAll();
     } catch (err) {
       console.error("Failed to approve maintenance", err);
     }
@@ -160,8 +155,7 @@ export default function MaintenancePage() {
         status: "completed",
         completedDate: new Date(),
       });
-      // Trigger a re-render to update the UI
-      setRefreshTrigger((prev) => prev + 1);
+      refetchAll();
     } catch (error) {
       console.error("Error completing maintenance request:", error);
       alert("Failed to complete maintenance request. Please try again.");
@@ -174,7 +168,7 @@ export default function MaintenancePage() {
     setDeletingId(requestToDelete);
     try {
       await deleteMaintenanceRequestById(requestToDelete);
-      setRefreshTrigger((prev) => prev + 1);
+      refetchAll();
     } catch (error) {
       console.error("Error deleting maintenance request:", error);
       alert("Failed to delete maintenance request. Please try again.");

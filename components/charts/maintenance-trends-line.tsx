@@ -12,6 +12,8 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
+import { formatCurrency } from "@/lib/currency";
+import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
 type Props = {
   maintenanceRequests: Array<{
@@ -23,6 +25,7 @@ type Props = {
 };
 
 export default function MaintenanceTrendsLine({ maintenanceRequests }: Props) {
+  const activeCurrency = useActiveCurrency();
   const data = useMemo(() => {
     // Build monthly counts and identify trend
     const monthMap: Record<string, number> = {};
@@ -60,6 +63,23 @@ export default function MaintenanceTrendsLine({ maintenanceRequests }: Props) {
     return chartData;
   }, [maintenanceRequests]);
 
+  // Debug: log incoming requests and computed chart data
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.log(
+      "MaintenanceTrendsLine - maintenanceRequests",
+      maintenanceRequests,
+    );
+    // eslint-disable-next-line no-console
+    console.log("MaintenanceTrendsLine - data", data);
+    // expose for external debugging
+    try {
+      (window as any).__MAINT_TRENDS_DATA__ = data;
+    } catch (e) {
+      // ignore
+    }
+  }
+
   const averageRequests = useMemo(() => {
     if (data.length === 0) return 0;
     const sum = data.reduce((acc, d) => acc + d.requests, 0);
@@ -84,7 +104,7 @@ export default function MaintenanceTrendsLine({ maintenanceRequests }: Props) {
           </p>
           {payload[0].payload.cost > 0 && (
             <p className="text-sm text-muted-foreground">
-              Cost: ${payload[0].payload.cost.toLocaleString()}
+              Cost: {formatCurrency(payload[0].payload.cost, activeCurrency)}
             </p>
           )}
         </div>

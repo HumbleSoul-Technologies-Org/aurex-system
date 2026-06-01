@@ -55,7 +55,6 @@ import {
   Eye,
 } from "lucide-react";
 import { uploadToCloudinary } from "@/lib/cloudinary";
-import { listTransactions } from "@/app/lib/transactions-client";
 import { deleteMessageApi } from "@/lib/services/messages";
 import {
   getSpecificationsForType,
@@ -84,7 +83,7 @@ export default function PropertyDetailPage({
   params,
 }: PropertyDetailPageProps) {
   const { id } = use(params);
-  const { properties, tenants } = useAppData();
+  const { properties, tenants, payments } = useAppData();
   const activeCurrency = useActiveCurrency();
   const [property, setProperty] = useState<any>(() =>
     properties.find((item) => item.id === id),
@@ -149,20 +148,18 @@ export default function PropertyDetailPage({
   const [transactions, setTransactions] = useState<any[]>([]);
 
   useEffect(() => {
-    let mounted = true;
-    const list = listTransactions();
-    if (!mounted) return;
+    if (!property) {
+      setTransactions([]);
+      return;
+    }
     const tenantIds = propertyTenants.map((t: any) => t.id);
-    const filtered = list.filter(
+    const filtered = payments.filter(
       (tx: any) =>
-        tx.propertyId === property?.id ||
+        tx.propertyId === property.id ||
         (tx.tenantId && tenantIds.includes(tx.tenantId)),
     );
     setTransactions(filtered);
-    return () => {
-      mounted = false;
-    };
-  }, [property?.id]);
+  }, [property, payments, propertyTenants]);
 
   // Income Calculations
   const tenantMonthly = propertyTenants.reduce(
@@ -189,7 +186,7 @@ export default function PropertyDetailPage({
   const availableUnits = Math.max(0, totalUnits - occupiedUnits);
 
   const totalUnitRent = unitRecords.reduce(
-    (sum, unit) => sum + (Number(unit.rent) || 0),
+    (sum: number, unit: any) => sum + (Number(unit.rent) || 0),
     0,
   );
 

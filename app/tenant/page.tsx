@@ -13,39 +13,28 @@ import {
   Clock,
   ArrowRight,
 } from "lucide-react";
-import { useAuth } from "@/lib/auth-context";
-import { useAppData } from "@/lib/data-context";
-import { listTransactions } from "@/app/lib/transactions-client";
-import { getMaintenanceRequests } from "@/lib/services/maintenance";
+import { useTenantContext } from "@/lib/tenant-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
-import { useState, useEffect } from "react";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import { useTenantPortalFeatures } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function TenantDashboard() {
-  const { user } = useAuth();
-  const { tenants, properties } = useAppData();
+  const {
+    currentTenant: tenant,
+    currentProperty: propertyInfo,
+    payments: tenantPayments,
+    maintenanceRequests: tenantMaintenanceData,
+  } = useTenantContext();
   const activeCurrency = useActiveCurrency();
   const { features, isLoaded } = useTenantPortalFeatures();
   const showPaymentAndMaintenance =
     isLoaded && features.paymentPortal && features.maintenanceRequests;
 
-  // Find the tenant record for the current user
-  const tenant = user ? tenants.find((t) => t.email === user.email) : null;
-
-  // Get property info
-  const propertyInfo = tenant?.propertyId
-    ? properties.find((p) => p.id === tenant.propertyId)
-    : null;
-
   // Get payment history (transactions)
-  const paymentHistory = tenant ? listTransactions(tenant.id, "rent") : [];
+  const paymentHistory = tenantPayments || [];
 
   // Get maintenance requests
-  const allMaintenance = getMaintenanceRequests();
-  const tenantMaintenance = tenant
-    ? allMaintenance.filter((m) => m.tenantId === tenant.id)
-    : [];
+  const tenantMaintenance = tenant ? tenantMaintenanceData : [];
 
   const latestPayment = paymentHistory.length > 0 ? paymentHistory[0] : null;
   const pendingMaintenance = tenantMaintenance.filter(
@@ -164,7 +153,7 @@ export default function TenantDashboard() {
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 {latestPayment?.status === "completed"
-                  ? `Paid on: ${new Date(latestPayment?.paidOn).toLocaleDateString()}`
+                  ? `Paid on: ${latestPayment?.paidOn ? new Date(latestPayment.paidOn).toLocaleDateString() : "N/A"}`
                   : `Due: ${tenant?.leaseStartDate ? new Date(new Date(tenant?.leaseStartDate).getFullYear(), new Date(tenant?.leaseStartDate).getMonth() + 1, new Date(tenant?.leaseStartDate).getDate()).toLocaleDateString() : "N/A"}`}
               </p>
             </div>
@@ -304,7 +293,7 @@ export default function TenantDashboard() {
                       </p>
                       <Badge
                         className={`${
-                          payment.status === "Paid"
+                          String(payment.status).toLowerCase() === "paid"
                             ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                             : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                         }`}

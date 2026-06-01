@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { useTenantContext } from "@/lib/tenant-context";
+import { useAppData } from "@/lib/data-context";
 import { notifyNewMaintenanceRequest } from "@/lib/services/notifications";
 import {
   MaintenanceRequest,
@@ -59,9 +59,9 @@ export default function MaintenancePage() {
   const {
     currentTenant: tenant,
     currentProperty: propertyInfo,
-    maintenanceRequests: contextMaintenanceRequests,
-    refetch,
-  } = useTenantContext();
+    maintenanceRequests,
+    refetchAll,
+  } = useAppData();
   const activeCurrency = useActiveCurrency();
   const router = useRouter();
   const { enabled: maintenanceEnabled, isLoaded: featuresLoaded } =
@@ -73,8 +73,13 @@ export default function MaintenancePage() {
     (tenant as any)?.unit_no ||
     "Unknown Unit";
 
-  // Use maintenance requests from context
-  const tenantMaintenance = contextMaintenanceRequests || maintenanceRequests;
+  const tenantMaintenance = useMemo(
+    () =>
+      tenant
+        ? maintenanceRequests.filter((req) => req.tenantId === tenant.id)
+        : maintenanceRequests,
+    [maintenanceRequests, tenant],
+  );
 
   const [formData, setFormData] = useState({
     description: "",
@@ -167,8 +172,7 @@ export default function MaintenancePage() {
 
       setSubmitSuccess(true);
       setShowForm(false);
-
-      await refetch("maintenance");
+      await refetchAll();
 
       // Reset success message after 3 seconds
       setTimeout(() => setSubmitSuccess(false), 3000);
@@ -192,7 +196,7 @@ export default function MaintenancePage() {
     setDeletingId(requestId);
     try {
       await deleteMaintenanceRequestById(requestId);
-      await refetch("maintenance");
+      await refetchAll();
     } catch (error) {
       console.error("Error deleting maintenance request:", error);
       alert("Failed to delete maintenance request. Please try again.");

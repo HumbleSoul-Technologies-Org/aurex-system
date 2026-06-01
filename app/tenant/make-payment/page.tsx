@@ -5,14 +5,9 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
-import { getCurrentUser } from "@/lib/services/auth";
-import { getTenant } from "@/lib/services/tenants";
+import { useAuth } from "@/lib/auth-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
-import {
-  createManualPayment,
-  getPaymentsForTenant,
-  RentPayment,
-} from "@/lib/services/payments";
+import { createManualPayment, RentPayment } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
@@ -25,12 +20,25 @@ export default function MakePaymentPage() {
   const router = useRouter();
   const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("paymentPortal");
+  const { user } = useAuth();
+  const { properties, payments, currentTenant, currentProperty } = useAppData();
 
-  const user = useMemo(() => getCurrentUser(), []);
-  const tenant = useMemo(
-    () => (user?.role === "tenant" ? getTenant(user.id) : null),
-    [user],
-  );
+  const tenant =
+    currentTenant ??
+    useMemo(() => {
+      if (!user) return null;
+      const email = user.email?.toLowerCase();
+      return (
+        properties
+          .flatMap((p) => p.tenants ?? [])
+          .find(
+            (t: any) =>
+              t.id === user.id ||
+              t._id === user.id ||
+              t.email?.toLowerCase() === email,
+          ) || null
+      );
+    }, [user, properties]);
 
   useEffect(() => {
     if (!featuresLoaded) return;
@@ -38,14 +46,15 @@ export default function MakePaymentPage() {
       router.replace("/tenant/feature-disabled?feature=payments");
     }
   }, [featuresLoaded, paymentEnabled, router]);
-  const { properties } = useAppData();
-  const property = useMemo(
-    () =>
-      tenant?.propertyId
-        ? properties.find((p) => p.id === tenant.propertyId)
-        : null,
-    [tenant, properties],
-  );
+  const property =
+    currentProperty ??
+    useMemo(
+      () =>
+        tenant?.propertyId
+          ? properties.find((p) => p.id === tenant.propertyId)
+          : null,
+      [tenant, properties],
+    );
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
   const [amount, setAmount] = useState<number>(defaultRent);
@@ -54,39 +63,11 @@ export default function MakePaymentPage() {
   >("bank_transfer");
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
-  const [tenantPayments, setTenantPayments] = useState<RentPayment[]>([]);
+  const tenantPayments = tenant
+    ? payments.filter((p) => p.tenantId === tenant.id)
+    : [];
 
   const nextPayment = tenantPayments.find((p) => p.status === "pending");
-
-  useEffect(() => {
-    const loadTenantPayments = async () => {
-      if (!tenant?.id) {
-        setTenantPayments([]);
-        return;
-      }
-
-      try {
-        const payments = await getPaymentsForTenant(tenant.id);
-        setTenantPayments(payments);
-      } catch (error) {
-        console.error("Failed to load tenant payment history", error);
-        setTenantPayments([]);
-      }
-    };
-
-    loadTenantPayments();
-
-    const onPaymentsUpdated = () => {
-      loadTenantPayments();
-    };
-
-    if (typeof window !== "undefined")
-      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () => {
-      if (typeof window !== "undefined")
-        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
-    };
-  }, [tenant?.id]);
 
   const handleSubmit = async () => {
     if (step === "amount") setStep("method");

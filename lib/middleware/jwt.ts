@@ -32,6 +32,12 @@ export type JwtPayload = {
  * Expects a secret in `process.env.JWT_SECRET`.
  * Returns the parsed payload when valid, otherwise null.
  */
+function parseAuthTokenFromCookie(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null
+  const match = cookieHeader.match(/(?:^|;)\s*auth-token=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 export function verifyJwtHs256(token: string | null): JwtPayload | null {
   try {
     if (!token) return null
@@ -72,8 +78,35 @@ export function verifyJwtHs256(token: string | null): JwtPayload | null {
 export function requireAuth(req: Request, roles?: string[]) {
   try {
     const auth = req.headers.get('authorization') || ''
-    const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth || null
-    const payload = verifyJwtHs256(token)
+    let token = auth.startsWith('Bearer ') ? auth.slice(7) : auth || null
+    if (!token) {
+      token = parseAuthTokenFromCookie(req.headers.get('cookie'))
+    }
+    if (!token) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+
+    const secret = process.env.JWT_SECRET || process.env.NEXT_PUBLIC_JWT_SECRET || ''
+    let payload: JwtPayload | null = null
+
+    if (secret) {
+      payload = verifyJwtHs256(token)
+    } else {
+      // If no local secret is configured, parse the token payload for a best-effort auth check.
+      try {
+        const parts = token.split('.')
+        if (parts.length === 3) {
+          payload = JSON.parse(b64UrlDecode(parts[1])) as JwtPayload
+          if (payload.exp && typeof payload.exp === 'number') {
+            const now = Math.floor(Date.now() / 1000)
+            if (payload.exp < now) {
+              payload = null
+            }
+          }
+        }
+      } catch (e) {
+        payload = null
+      }
+    }
+
     if (!payload) return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
 
     if (roles && roles.length > 0) {

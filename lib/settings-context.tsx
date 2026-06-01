@@ -36,7 +36,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(
 );
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, token } = useAuth();
   const [settings, setSettings] = useState<SettingsPayload | null>(null);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,11 +45,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Fetch settings from API
   const fetchSettings = useCallback(async () => {
-    if (!user) {
-      setSettings(null);
-      setSettingsId(null);
-      return;
-    }
+    // Always attempt to load system/settings payload so the app can render
+    // UI that depends on settings (e.g. currency) even when no user is signed in.
 
     setIsLoading(true);
     setError(null);
@@ -58,10 +55,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       // If user has settingsId, use it directly; otherwise fall back to user ID lookup
       let apiSettings: SettingsPayload | null = null;
 
-      if (user?.settingsId) {
-        apiSettings = await fetchSettingsByIdFromApi(user.settingsId);
+      if (user && user?.settingsId) {
+        apiSettings = await fetchSettingsByIdFromApi(
+          user.settingsId,
+          token ? token : undefined,
+        );
         setSettingsId(user.settingsId);
-      } else if (user.role === "tenant") {
+      } else if (user && user?.role === "tenant") {
         apiSettings = await fetchSettingsByTenantId(user.id);
         if (apiSettings?._id) {
           setSettingsId(apiSettings._id);

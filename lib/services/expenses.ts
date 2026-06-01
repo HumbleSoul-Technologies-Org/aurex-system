@@ -1,4 +1,11 @@
 import { apiRequest } from '@/lib/query-client'
+import { getCollection } from '@/lib/local-store'
+
+function dispatchExpensesUpdatedEvent() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('expensesUpdated'))
+  }
+}
 
 export interface ExpenseRecord {
   id: string
@@ -31,6 +38,10 @@ export interface ExpenseRecord {
   createdBy?: string
   createdAt?: string
   updatedAt?: string
+  total?: number
+  value?: number
+  paymentAmount?: number
+  expenseAmount?: number
 }
 
 function normalizeExpenseRecord(expense: any): ExpenseRecord {
@@ -48,31 +59,66 @@ export async function createExpenseApi(
   const res = await apiRequest('POST', '/expenses/create', payload, token)
   const json = await res.json()
   const exp = json.expense || json
-  return normalizeExpenseRecord(exp)
+  const record = normalizeExpenseRecord(exp)
+  dispatchExpensesUpdatedEvent()
+  return record
+}
+
+function normalizeExpenseList(json: any): any[] {
+  if (Array.isArray(json)) return json
+  if (Array.isArray(json?.data)) return json.data
+  if (Array.isArray(json?.expenses)) return json.expenses
+  return []
 }
 
 export async function getExpensesByProperty(
   propertyId: string,
   token?: string,
 ): Promise<ExpenseRecord[]> {
-  const res = await apiRequest('GET', `/expenses/property/${propertyId}/all`, undefined, token)
+  const res = await apiRequest(
+    'GET',
+    `/expenses/property/${encodeURIComponent(propertyId)}/all`,
+    undefined,
+    token,
+  )
   const json = await res.json()
-  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
+  return normalizeExpenseList(json).map(normalizeExpenseRecord) as ExpenseRecord[]
 }
 
 export async function getExpensesByTenant(
   tenantId: string,
   token?: string,
 ): Promise<ExpenseRecord[]> {
-  const res = await apiRequest('GET', `/expenses/tenant/${tenantId}/all`, undefined, token)
+  const res = await apiRequest(
+    'GET',
+    `/expenses/tenant/${encodeURIComponent(tenantId)}/all`,
+    undefined,
+    token,
+  )
   const json = await res.json()
-  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
+  return normalizeExpenseList(json).map(normalizeExpenseRecord) as ExpenseRecord[]
 }
 
 export async function getAllExpenses(token?: string): Promise<ExpenseRecord[]> {
-  const res = await apiRequest('GET', `/expenses/all`, undefined, token)
-  const json = await res.json()
-  return (json || []).map(normalizeExpenseRecord) as ExpenseRecord[]
+  try {
+    const res = await apiRequest('GET', `/expenses/all`, undefined, token)
+    const json = await res.json()
+    return normalizeExpenseList(json).map(normalizeExpenseRecord) as ExpenseRecord[]
+  } catch (err) {
+    console.warn('Failed to fetch all expenses, falling back to local store:', err)
+    try {
+      const local = getCollection('expenses') as any[]
+      if (!Array.isArray(local) || local.length === 0) {
+        throw new Error(
+          `Failed to fetch all expenses and no local fallback available: ${String(err)}`,
+        )
+      }
+      return local.map((expense) => normalizeExpenseRecord(expense))
+    } catch (fallbackErr) {
+      console.error('Local expense fallback failed:', fallbackErr)
+      throw fallbackErr
+    }
+  }
 }
 
 export async function updateExpenseApi(
@@ -80,14 +126,18 @@ export async function updateExpenseApi(
   patch: Partial<ExpenseRecord>,
   token?: string,
 ): Promise<ExpenseRecord> {
-  const res = await apiRequest('PUT', `/expenses/${id}/update`, patch, token)
+  const res = await apiRequest('PUT', `/expenses?id=${encodeURIComponent(id)}`, patch, token)
   const json = await res.json()
   const exp = json.expense || json
-  return normalizeExpenseRecord(exp)
+  const record = normalizeExpenseRecord(exp)
+  dispatchExpensesUpdatedEvent()
+  return record
 }
 
 export async function deleteExpenseApi(id: string, token?: string): Promise<boolean> {
-  const res = await apiRequest('DELETE', `/expenses/${id}/delete`, undefined, token)
+  const res = await apiRequest('DELETE', `/expenses?id=${encodeURIComponent(id)}`, undefined, token)
   const json = await res.json()
-  return res.ok && (json?.message || json?.success)
+  const result = res.ok && (json?.message || json?.success)
+  if (result) dispatchExpensesUpdatedEvent()
+  return result
 }

@@ -1,183 +1,205 @@
-import { apiRequest } from '@/lib/query-client'
-import { insertIntoCollection, getCollection, updateInCollection, generateId, removeFromCollection } from '@/lib/local-store'
-import { SystemSettings } from '@/lib/local-store'
-import { getCurrentUser } from '@/lib/services/auth'
+import { apiRequest } from "@/lib/query-client";
+import {
+  insertIntoCollection,
+  getCollection,
+  updateInCollection,
+  generateId,
+  removeFromCollection,
+} from "@/lib/local-store";
+import { SystemSettings } from "@/lib/local-store";
+import { getCurrentUser } from "@/lib/services/auth";
+
+function normalizeSettingsResponse<T = any>(raw: any): T | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw === "object") {
+    if (raw.success === true) {
+      return raw.data !== undefined ? raw.data : raw;
+    }
+    if (raw.settings !== undefined) {
+      return raw.settings;
+    }
+    if (raw.data !== undefined) {
+      return raw.data;
+    }
+  }
+  return raw as T;
+}
 
 export interface CompanyAddress {
-  address?: string
-  estate?: string
-  street?: string
-  city?: string
-  country?: string
+  address?: string;
+  estate?: string;
+  street?: string;
+  city?: string;
+  country?: string;
 }
 
 export interface CompanyLogo {
-  url?: string
-  public_id?: string
+  url?: string;
+  public_id?: string;
 }
 
 export interface CompanyInfo {
-  name?: string
-  address?: CompanyAddress
-  phone?: string
-  email?: string
-  logo?: CompanyLogo
-  licenseNumber?: string
+  name?: string;
+  address?: CompanyAddress;
+  phone?: string;
+  email?: string;
+  logo?: CompanyLogo;
+  licenseNumber?: string;
 }
 
 export interface PropertyLeaseTerms {
-  duration: string
-  renewal: string
-  noticePeriod: string
+  duration: string;
+  renewal: string;
+  noticePeriod: string;
 }
 
 export interface PropertyFinancialRules {
-  securityDeposit: string
-  lateFee: string
-  gracePeriod: string
+  securityDeposit: string;
+  lateFee: string;
+  gracePeriod: string;
 }
 
 export interface PropertyTypeDefaults {
-  requiredFields: string[]
-  optionalFields: string[]
-  defaultLeaseTerms: PropertyLeaseTerms
-  financialRules: PropertyFinancialRules
-  validationRules: Record<string, any>
+  requiredFields: string[];
+  optionalFields: string[];
+  defaultLeaseTerms: PropertyLeaseTerms;
+  financialRules: PropertyFinancialRules;
+  validationRules: Record<string, any>;
 }
 
 export interface TenantTypeConfiguration {
-  requiredFields: string[]
-  optionalFields?: string[]
-  validationRules: Record<string, any>
+  requiredFields: string[];
+  optionalFields?: string[];
+  validationRules: Record<string, any>;
   defaultSettings: {
-    preferredContactMethod: 'email' | 'phone' | 'sms'
-    applicationFee: number
-    screeningRequirements?: string[]
-  }
+    preferredContactMethod: "email" | "phone" | "sms";
+    applicationFee: number;
+    screeningRequirements?: string[];
+  };
 }
 
 export interface NotificationTemplate {
-  subject: string
-  body: string
-  channels: Array<'email' | 'sms' | 'in_app' | 'portal'>
+  subject: string;
+  body: string;
+  channels: Array<"email" | "sms" | "in_app" | "portal">;
 }
 
 export interface NotificationSchedule {
-  enabled: boolean
-  timing: string
-  conditions: string[]
+  enabled: boolean;
+  timing: string;
+  conditions: string[];
 }
 
 export interface NotificationsConfig {
-  templates: Record<string, NotificationTemplate>
-  schedules: Record<string, NotificationSchedule>
+  templates: Record<string, NotificationTemplate>;
+  schedules: Record<string, NotificationSchedule>;
 }
 
 // Tenant Portal Settings Interfaces
 export interface NotificationPreferences {
-  email: boolean
-  sms: boolean
-  inApp: boolean
-  smsProvider?: string
-  emailTemplate?: string
+  email: boolean;
+  sms: boolean;
+  inApp: boolean;
+  smsProvider?: string;
+  emailTemplate?: string;
 }
 
 export interface PaymentMethod {
-  type: string
-  enabled: boolean
-  processingFee: number
+  type: string;
+  enabled: boolean;
+  processingFee: number;
 }
 
 export interface PaymentProvider {
-  name: string
-  apiKey?: string
-  config?: Record<string, any>
+  name: string;
+  apiKey?: string;
+  config?: Record<string, any>;
 }
 
 export interface PaymentSettings {
-  enableAutopay: boolean
-  autopayThreshold?: number
-  acceptedMethods: PaymentMethod[]
-  paymentProviders: PaymentProvider[]
+  enableAutopay: boolean;
+  autopayThreshold?: number;
+  acceptedMethods: PaymentMethod[];
+  paymentProviders: PaymentProvider[];
 }
 
 export interface DocumentAccess {
-  allowUploads: boolean
-  maxFileSize?: number
-  allowedFileTypes: string[]
-  requireApproval: boolean
-  retentionDays?: number
+  allowUploads: boolean;
+  maxFileSize?: number;
+  allowedFileTypes: string[];
+  requireApproval: boolean;
+  retentionDays?: number;
 }
 
 export interface PriorityLevel {
-  name: string
-  responseTime: number
+  name: string;
+  responseTime: number;
 }
 
 export interface MaintenancePreferences {
-  enableRequests: boolean
-  requireTenantApproval?: boolean
-  estimatedResponseTime?: number
-  allowEmergencyAfterHours: boolean
-  priorityLevels: PriorityLevel[]
+  enableRequests: boolean;
+  requireTenantApproval?: boolean;
+  estimatedResponseTime?: number;
+  allowEmergencyAfterHours: boolean;
+  priorityLevels: PriorityLevel[];
 }
 
 export interface FeatureToggles {
-  paymentPortal: boolean
-  maintenanceRequests: boolean
-  documentAccess: boolean
-  messages: boolean
-  evictionNotice?: boolean
+  paymentPortal: boolean;
+  maintenanceRequests: boolean;
+  documentAccess: boolean;
+  messages: boolean;
+  evictionNotice?: boolean;
 }
 
 export interface FinanceSettings {
-  currency: string
-  exchangeRates: Record<string, number>
-  paymentMethods: PaymentMethod[]
+  currency: string;
+  exchangeRates: Record<string, number>;
+  paymentMethods: PaymentMethod[];
 }
 
 export interface SystemFeatureToggles {
-  map: boolean
-  messaging: boolean
-  analytics: boolean
-  reporting: boolean
-  auditing: boolean
+  map: boolean;
+  messaging: boolean;
+  analytics: boolean;
+  reporting: boolean;
+  auditing: boolean;
 }
 
 export interface DoNotDisturb {
-  enabled: boolean
-  startTime?: string
-  endTime?: string
+  enabled: boolean;
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface CommunicationPreferences {
-  preferredContactMethod: 'email' | 'sms' | 'in-app'
-  languages: string[]
-  timezone?: string
-  doNotDisturb?: DoNotDisturb
+  preferredContactMethod: "email" | "sms" | "in-app";
+  languages: string[];
+  timezone?: string;
+  doNotDisturb?: DoNotDisturb;
 }
 
 export interface SecuritySettings {
-  allowPasswordChange: boolean
-  autoLogoutEnabled?: boolean
-  autoLogoutInactivityMinutes?: number
-  allowAccountDeletion: boolean
-  requirePasswordReset?: boolean
-  passwordExpirationDays?: number
-  allowProfileEditing?: boolean
-  autoLockEnabled?: boolean
-  failedLoginThreshold?: number
+  allowPasswordChange: boolean;
+  autoLogoutEnabled?: boolean;
+  autoLogoutInactivityMinutes?: number;
+  allowAccountDeletion: boolean;
+  requirePasswordReset?: boolean;
+  passwordExpirationDays?: number;
+  allowProfileEditing?: boolean;
+  autoLockEnabled?: boolean;
+  failedLoginThreshold?: number;
 }
 
 export interface TenantPortalSettings {
-  notificationPreferences: NotificationPreferences | any
-  paymentSettings: PaymentSettings | any
-  documentAccess: DocumentAccess | any
-  maintenancePreferences: MaintenancePreferences | any
-  featureToggles: FeatureToggles | any
-  communicationPreferences: CommunicationPreferences | any
-  securitySettings: SecuritySettings | any
-  financeSettings?: FinanceSettings | any
+  notificationPreferences: NotificationPreferences | any;
+  paymentSettings: PaymentSettings | any;
+  documentAccess: DocumentAccess | any;
+  maintenancePreferences: MaintenancePreferences | any;
+  featureToggles: FeatureToggles | any;
+  communicationPreferences: CommunicationPreferences | any;
+  securitySettings: SecuritySettings | any;
+  financeSettings?: FinanceSettings | any;
 }
 
 const defaultTenantPortalSettings: TenantPortalSettings = {
@@ -185,26 +207,26 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     email: true,
     sms: false,
     inApp: true,
-    smsProvider: '',
-    emailTemplate: ''
+    smsProvider: "",
+    emailTemplate: "",
   },
   paymentSettings: {
     enableAutopay: false,
     autopayThreshold: 0,
     acceptedMethods: [
-      { type: 'credit_card', enabled: false, processingFee: 2.9 },
-      { type: 'bank_transfer', enabled: false, processingFee: 0.5 },
-      { type: 'mpesa', enabled: false, processingFee: 0.5 },
-      { type: 'mobile money', enabled: false, processingFee: 0.5 },
+      { type: "credit_card", enabled: false, processingFee: 2.9 },
+      { type: "bank_transfer", enabled: false, processingFee: 0.5 },
+      { type: "mpesa", enabled: false, processingFee: 0.5 },
+      { type: "mobile money", enabled: false, processingFee: 0.5 },
     ],
-    paymentProviders: []
+    paymentProviders: [],
   },
   documentAccess: {
     allowUploads: true,
     maxFileSize: 10485760,
-    allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+    allowedFileTypes: ["pdf", "doc", "docx", "jpg", "png"],
     requireApproval: false,
-    retentionDays: 365
+    retentionDays: 365,
   },
   maintenancePreferences: {
     enableRequests: true,
@@ -212,11 +234,11 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     estimatedResponseTime: 48,
     allowEmergencyAfterHours: true,
     priorityLevels: [
-      { name: 'Low', responseTime: 7 },
-      { name: 'Medium', responseTime: 72 },
-      { name: 'High', responseTime: 24 },
-      { name: 'Emergency', responseTime: 2 }
-    ]
+      { name: "Low", responseTime: 7 },
+      { name: "Medium", responseTime: 72 },
+      { name: "High", responseTime: 24 },
+      { name: "Emergency", responseTime: 2 },
+    ],
   },
   featureToggles: {
     paymentPortal: true,
@@ -226,14 +248,14 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     evictionNotice: false,
   },
   communicationPreferences: {
-    preferredContactMethod: 'email',
-    languages: ['en'],
-    timezone: 'UTC',
+    preferredContactMethod: "email",
+    languages: ["en"],
+    timezone: "UTC",
     doNotDisturb: {
       enabled: false,
-      startTime: '',
-      endTime: ''
-    }
+      startTime: "",
+      endTime: "",
+    },
   },
   securitySettings: {
     allowPasswordChange: true,
@@ -243,11 +265,10 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
     autoLockEnabled: false,
     failedLoginThreshold: 5,
     requirePasswordReset: false,
-    passwordExpirationDays: 90
-  }
-  ,
+    passwordExpirationDays: 90,
+  },
   financeSettings: {
-    currency: 'USD',
+    currency: "USD",
     exchangeRates: {
       USD: 1,
       EUR: 0.92,
@@ -255,17 +276,17 @@ const defaultTenantPortalSettings: TenantPortalSettings = {
       KES: 140,
     },
     paymentMethods: [
-      { type: 'credit_card', enabled: false, processingFee: 2.9 },
-      { type: 'bank_transfer', enabled: false, processingFee: 0.5 },
-      { type: 'mpesa', enabled: false, processingFee: 0.5 },
-      { type: 'mobile_money', enabled: false, processingFee: 0.5 },
-    ]
-  }
-}
+      { type: "credit_card", enabled: false, processingFee: 2.9 },
+      { type: "bank_transfer", enabled: false, processingFee: 0.5 },
+      { type: "mpesa", enabled: false, processingFee: 0.5 },
+      { type: "mobile_money", enabled: false, processingFee: 0.5 },
+    ],
+  },
+};
 
 function ensureTenantPortalSettings(settings: SystemSettings): SystemSettings {
   const existing: Partial<TenantPortalSettings> =
-    settings.tenantPortalSettings || {}
+    settings.tenantPortalSettings || {};
 
   const normalized: TenantPortalSettings = {
     notificationPreferences: {
@@ -309,197 +330,274 @@ function ensureTenantPortalSettings(settings: SystemSettings): SystemSettings {
       ...defaultTenantPortalSettings.securitySettings,
       ...existing.securitySettings,
     },
-  }
+  };
 
   return {
     ...settings,
     tenantPortalSettings: normalized,
-  }
+  };
 }
 
 export function getSystemSettings(): SystemSettings | null {
-  const settings = getCollection<SystemSettings>('system-settings')
-  return settings.length > 0 ? ensureTenantPortalSettings(settings[0]) : null
+  const settings = getCollection<SystemSettings>("system-settings");
+  return settings.length > 0 ? ensureTenantPortalSettings(settings[0]) : null;
 }
 
 /**
  * Load settings from API for a specific user (by settingsId)
  * Used when admin has their own settings record linked to their user account
  */
-export async function getAdminSettingsByUserId(userId?: string): Promise<SettingsPayload | null> {
+export async function getAdminSettingsByUserId(
+  userId?: string,
+): Promise<SettingsPayload | null> {
   if (!userId) {
-    return await fetchSettingsFromApi() // Fall back to default (authenticated user's settings)
+    return await fetchSettingsFromApi(); // Fall back to default (authenticated user's settings)
   }
-  
+
   // Get the user to access their settingsId
-  const user = (await getCurrentUser()) as any
+  const user = (await getCurrentUser()) as any;
   if (!user?.settingsId) {
     // User doesn't have a linked settings record, use default
-    return await fetchSettingsFromApi()
+    return await fetchSettingsFromApi();
   }
-  
+
   // Fetch the user's specific settings by settingsId
-  return await fetchSettingsByIdFromApi(user.settingsId)
+  return await fetchSettingsByIdFromApi(user.settingsId);
 }
 
 export function createDefaultSystemSettings(): SystemSettings {
   const defaultSettings: SystemSettings = {
-    id: generateId('settings'),
-    version: '2.0.0',
+    id: generateId("settings"),
+    version: "2.0.0",
     propertyTypeDefaults: {
       residential: {
-        requiredFields: ['name', 'address', 'city', 'country', 'units_available', 'price_per_unit'],
-        optionalFields: ['bedrooms', 'bathrooms', 'petPolicy', 'residentialFeatures', 'description'],
+        requiredFields: [
+          "name",
+          "address",
+          "city",
+          "country",
+          "units_available",
+          "price_per_unit",
+        ],
+        optionalFields: [
+          "bedrooms",
+          "bathrooms",
+          "petPolicy",
+          "residentialFeatures",
+          "description",
+        ],
         defaultLeaseTerms: {
-          duration: '12 months',
-          renewal: 'automatic',
-          noticePeriod: '30 days'
+          duration: "12 months",
+          renewal: "automatic",
+          noticePeriod: "30 days",
         },
         financialRules: {
-          securityDeposit: 'one month rent',
-          lateFee: '50',
-          gracePeriod: '5 days'
+          securityDeposit: "one month rent",
+          lateFee: "50",
+          gracePeriod: "5 days",
         },
         validationRules: {
           minRent: 500,
-          maxRent: 10000
-        }
+          maxRent: 10000,
+        },
       },
       commercial: {
-        requiredFields: ['name', 'address', 'city', 'country', 'units_available', 'price_per_unit', 'propertyType'],
-        optionalFields: ['zoning', 'permittedUses', 'loadingDocks', 'ceilingHeight', 'powerCapacity', 'commercialFeatures', 'annualPropertyTaxes', 'annualInsurance', 'appraisedValue', 'noi', 'capRate'],
+        requiredFields: [
+          "name",
+          "address",
+          "city",
+          "country",
+          "units_available",
+          "price_per_unit",
+          "propertyType",
+        ],
+        optionalFields: [
+          "zoning",
+          "permittedUses",
+          "loadingDocks",
+          "ceilingHeight",
+          "powerCapacity",
+          "commercialFeatures",
+          "annualPropertyTaxes",
+          "annualInsurance",
+          "appraisedValue",
+          "noi",
+          "capRate",
+        ],
         defaultLeaseTerms: {
-          duration: '36 months',
-          renewal: 'negotiated',
-          noticePeriod: '90 days'
+          duration: "36 months",
+          renewal: "negotiated",
+          noticePeriod: "90 days",
         },
         financialRules: {
-          securityDeposit: 'two months rent',
-          lateFee: '100',
-          gracePeriod: '10 days'
+          securityDeposit: "two months rent",
+          lateFee: "100",
+          gracePeriod: "10 days",
         },
         validationRules: {
           minRent: 1000,
-          maxRent: 50000
-        }
+          maxRent: 50000,
+        },
       },
       mixed_use: {
-        requiredFields: ['name', 'address', 'city', 'country', 'units_available', 'price_per_unit', 'propertyType'],
-        optionalFields: ['zoning', 'permittedUses', 'residentialFeatures', 'commercialFeatures', 'annualPropertyTaxes', 'annualInsurance'],
+        requiredFields: [
+          "name",
+          "address",
+          "city",
+          "country",
+          "units_available",
+          "price_per_unit",
+          "propertyType",
+        ],
+        optionalFields: [
+          "zoning",
+          "permittedUses",
+          "residentialFeatures",
+          "commercialFeatures",
+          "annualPropertyTaxes",
+          "annualInsurance",
+        ],
         defaultLeaseTerms: {
-          duration: '24 months',
-          renewal: 'negotiated',
-          noticePeriod: '60 days'
+          duration: "24 months",
+          renewal: "negotiated",
+          noticePeriod: "60 days",
         },
         financialRules: {
-          securityDeposit: 'one and half months rent',
-          lateFee: '75',
-          gracePeriod: '7 days'
+          securityDeposit: "one and half months rent",
+          lateFee: "75",
+          gracePeriod: "7 days",
         },
         validationRules: {
           minRent: 750,
-          maxRent: 25000
-        }
-      }
+          maxRent: 25000,
+        },
+      },
     },
     tenantTypeConfigurations: {
       residential: {
-        requiredFields: ['name', 'email', 'phone', 'leaseStartDate', 'monthlyRent'],
+        requiredFields: [
+          "name",
+          "email",
+          "phone",
+          "leaseStartDate",
+          "monthlyRent",
+        ],
         validationRules: {
           minAge: 18,
           maxOccupants: 6,
-          creditCheck: 'required'
+          creditCheck: "required",
         },
         defaultSettings: {
-          preferredContactMethod: 'email',
-          applicationFee: 50
-        }
+          preferredContactMethod: "email",
+          applicationFee: 50,
+        },
       },
       commercial: {
-        requiredFields: ['name', 'email', 'phone', 'businessInfo', 'leaseStartDate', 'monthlyRent'],
+        requiredFields: [
+          "name",
+          "email",
+          "phone",
+          "businessInfo",
+          "leaseStartDate",
+          "monthlyRent",
+        ],
         validationRules: {
-          businessLicense: 'required',
-          financialStatements: 'required',
-          references: 'required'
+          businessLicense: "required",
+          financialStatements: "required",
+          references: "required",
         },
         defaultSettings: {
-          preferredContactMethod: 'email',
-          applicationFee: 100
-        }
+          preferredContactMethod: "email",
+          applicationFee: 100,
+        },
       },
       mixed: {
-        requiredFields: ['name', 'email', 'phone', 'leaseStartDate', 'monthlyRent'],
+        requiredFields: [
+          "name",
+          "email",
+          "phone",
+          "leaseStartDate",
+          "monthlyRent",
+        ],
         validationRules: {
           minAge: 18,
-          businessLicense: 'optional',
-          creditCheck: 'required'
+          businessLicense: "optional",
+          creditCheck: "required",
         },
         defaultSettings: {
-          preferredContactMethod: 'email',
-          applicationFee: 75
-        }
-      }
+          preferredContactMethod: "email",
+          applicationFee: 75,
+        },
+      },
     },
     complianceSettings: {
       default: {
-        commercialRequirements: ['business_license', 'insurance_certificate', 'financial_statements'],
-        residentialRequirements: ['identification', 'income_verification', 'rental_history'],
+        commercialRequirements: [
+          "business_license",
+          "insurance_certificate",
+          "financial_statements",
+        ],
+        residentialRequirements: [
+          "identification",
+          "income_verification",
+          "rental_history",
+        ],
         reportingRequirements: {
-          frequency: 'monthly',
+          frequency: "monthly",
           includeFinancials: true,
-          includeOccupancy: true
-        }
-      }
+          includeOccupancy: true,
+        },
+      },
     },
     notifications: {
       templates: {
         rentReminder: {
-          subject: 'Rent payment reminder',
-          body: 'Your rent payment is due soon. Please pay on time to avoid late fees.',
-          channels: ['email', 'in_app']
+          subject: "Rent payment reminder",
+          body: "Your rent payment is due soon. Please pay on time to avoid late fees.",
+          channels: ["email", "in_app"],
         },
         maintenanceRequest: {
-          subject: 'Maintenance request received',
-          body: 'Your maintenance request has been received and will be reviewed shortly.',
-          channels: ['email', 'in_app']
-        }
+          subject: "Maintenance request received",
+          body: "Your maintenance request has been received and will be reviewed shortly.",
+          channels: ["email", "in_app"],
+        },
       },
       schedules: {
         dailySummary: {
           enabled: true,
-          timing: '08:00',
-          conditions: ['overdue', 'pending_requests']
+          timing: "08:00",
+          conditions: ["overdue", "pending_requests"],
         },
         monthlyStatement: {
           enabled: true,
-          timing: '01:00',
-          conditions: ['payment_history']
-        }
-      }
+          timing: "01:00",
+          conditions: ["payment_history"],
+        },
+      },
     },
     tenantPortalSettings: {
       notificationPreferences: {
         email: true,
         sms: false,
         inApp: true,
-        smsProvider: '',
-        emailTemplate: ''
+        smsProvider: "",
+        emailTemplate: "",
       },
       paymentSettings: {
         enableAutopay: false,
         autopayThreshold: 0,
         acceptedMethods: [
-          { type: 'credit_card', enabled: true, processingFee: 2.9 },
-          { type: 'bank_transfer', enabled: true, processingFee: 0.5 }
+          { type: "credit_card", enabled: true, processingFee: 2.9 },
+          { type: "bank_transfer", enabled: true, processingFee: 0.5 },
         ],
-        paymentProviders: []
+        paymentProviders: [],
       },
       documentAccess: {
         allowUploads: true,
         maxFileSize: 10485760,
-        allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+        allowedFileTypes: ["pdf", "doc", "docx", "jpg", "png"],
         requireApproval: false,
-        retentionDays: 365
+        retentionDays: 365,
       },
       maintenancePreferences: {
         enableRequests: true,
@@ -507,11 +605,11 @@ export function createDefaultSystemSettings(): SystemSettings {
         estimatedResponseTime: 48,
         allowEmergencyAfterHours: true,
         priorityLevels: [
-          { name: 'Low', responseTime: 7 },
-          { name: 'Medium', responseTime: 72 },
-          { name: 'High', responseTime: 24 },
-          { name: 'Emergency', responseTime: 2 }
-        ]
+          { name: "Low", responseTime: 7 },
+          { name: "Medium", responseTime: 72 },
+          { name: "High", responseTime: 24 },
+          { name: "Emergency", responseTime: 2 },
+        ],
       },
       featureToggles: {
         paymentPortal: true,
@@ -519,17 +617,17 @@ export function createDefaultSystemSettings(): SystemSettings {
         documentAccess: true,
         messages: true,
         announcements: true,
-        leaseInfo: true
+        leaseInfo: true,
       },
       communicationPreferences: {
-        preferredContactMethod: 'email',
-        languages: ['en'],
-        timezone: 'UTC',
+        preferredContactMethod: "email",
+        languages: ["en"],
+        timezone: "UTC",
         doNotDisturb: {
           enabled: false,
-          startTime: '',
-          endTime: ''
-        }
+          startTime: "",
+          endTime: "",
+        },
       },
       securitySettings: {
         allowPasswordChange: true,
@@ -537,24 +635,24 @@ export function createDefaultSystemSettings(): SystemSettings {
         autoLogoutInactivityMinutes: 30,
         allowAccountDeletion: false,
         requirePasswordReset: false,
-        passwordExpirationDays: 90
-      }
+        passwordExpirationDays: 90,
+      },
     },
     companyInfo: {
-      name: 'Tenant Manager',
+      name: "Tenant Manager",
       address: {
-        address: '123 Main St',
-        estate: '',
-        city: 'Nairobi',
-        country: 'Kenya',
+        address: "123 Main St",
+        estate: "",
+        city: "Nairobi",
+        country: "Kenya",
       },
-      phone: '+1 (555) 123-4567',
-      email: 'support@tenantmanager.com',
+      phone: "+1 (555) 123-4567",
+      email: "support@tenantmanager.com",
       logo: {
-        url: '',
-        public_id: '',
+        url: "",
+        public_id: "",
       },
-      licenseNumber: ''
+      licenseNumber: "",
     },
     systemFeatures: {
       map: true,
@@ -565,143 +663,168 @@ export function createDefaultSystemSettings(): SystemSettings {
     },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    lastMigrationDate: new Date().toISOString()
-  }
+    lastMigrationDate: new Date().toISOString(),
+  };
 
-  return insertIntoCollection('system-settings', defaultSettings)
+  return insertIntoCollection("system-settings", defaultSettings);
 }
 
-export function updateSystemSettings(updates: Partial<SystemSettings>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings) return null
+export function updateSystemSettings(
+  updates: Partial<SystemSettings>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings) return null;
 
-  return updateInCollection('system-settings', settings.id, updates)
+  return updateInCollection("system-settings", settings.id, updates);
 }
 
 export function deleteSystemSettings(id: string): boolean {
-  return removeFromCollection('system-settings', id)
+  return removeFromCollection("system-settings", id);
 }
 
 export function getPropertyTypeConfig(propertyType: string): any {
-  const settings = getSystemSettings()
-  return settings?.propertyTypeDefaults[propertyType] || settings?.propertyTypeDefaults.residential
+  const settings = getSystemSettings();
+  return (
+    settings?.propertyTypeDefaults[propertyType] ||
+    settings?.propertyTypeDefaults.residential
+  );
 }
 
 export function getTenantTypeConfig(tenantType: string): any {
-  const settings = getSystemSettings()
-  return settings?.tenantTypeConfigurations[tenantType] || settings?.tenantTypeConfigurations.residential
+  const settings = getSystemSettings();
+  return (
+    settings?.tenantTypeConfigurations[tenantType] ||
+    settings?.tenantTypeConfigurations.residential
+  );
 }
 
 export function initializeSystemSettings(): SystemSettings {
-  let settings = getSystemSettings()
+  let settings = getSystemSettings();
   if (!settings) {
-    settings = createDefaultSystemSettings()
+    settings = createDefaultSystemSettings();
   }
-  return settings
+  return settings;
 }
 
 // Tenant Portal Settings Helpers
 export function getTenantPortalSettings(): TenantPortalSettings | null {
-  const settings = getSystemSettings()
-  return (settings?.tenantPortalSettings || null) as TenantPortalSettings | null
+  const settings = getSystemSettings();
+  return (settings?.tenantPortalSettings ||
+    null) as TenantPortalSettings | null;
 }
 
-export function updateTenantPortalSettings(updates: Partial<TenantPortalSettings>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings) return null
+export function updateTenantPortalSettings(
+  updates: Partial<TenantPortalSettings>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings) return null;
 
   const updated = {
     tenantPortalSettings: {
       ...settings.tenantPortalSettings,
-      ...updates
-    }
-  }
+      ...updates,
+    },
+  };
 
-  return updateSystemSettings(updated)
+  return updateSystemSettings(updated);
 }
 
-export function updateTenantPortalNotifications(updates: Partial<NotificationPreferences>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateTenantPortalNotifications(
+  updates: Partial<NotificationPreferences>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     notificationPreferences: {
       ...settings.tenantPortalSettings.notificationPreferences,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updatePaymentSettings(updates: Partial<PaymentSettings>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updatePaymentSettings(
+  updates: Partial<PaymentSettings>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     paymentSettings: {
       ...settings.tenantPortalSettings.paymentSettings,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updateDocumentAccess(updates: Partial<DocumentAccess>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateDocumentAccess(
+  updates: Partial<DocumentAccess>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     documentAccess: {
       ...settings.tenantPortalSettings.documentAccess,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updateMaintenancePreferences(updates: Partial<MaintenancePreferences>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateMaintenancePreferences(
+  updates: Partial<MaintenancePreferences>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     maintenancePreferences: {
       ...settings.tenantPortalSettings.maintenancePreferences,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updateFeatureToggles(updates: Partial<FeatureToggles>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateFeatureToggles(
+  updates: Partial<FeatureToggles>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     featureToggles: {
       ...settings.tenantPortalSettings.featureToggles,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updateCommunicationPreferences(updates: Partial<CommunicationPreferences>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateCommunicationPreferences(
+  updates: Partial<CommunicationPreferences>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     communicationPreferences: {
       ...settings.tenantPortalSettings.communicationPreferences,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
-export function updateSecuritySettings(updates: Partial<SecuritySettings>): SystemSettings | null {
-  const settings = getSystemSettings()
-  if (!settings?.tenantPortalSettings) return null
+export function updateSecuritySettings(
+  updates: Partial<SecuritySettings>,
+): SystemSettings | null {
+  const settings = getSystemSettings();
+  if (!settings?.tenantPortalSettings) return null;
 
   return updateTenantPortalSettings({
     securitySettings: {
       ...settings.tenantPortalSettings.securitySettings,
-      ...updates
-    }
-  })
+      ...updates,
+    },
+  });
 }
 
 // ============================================================================
@@ -713,118 +836,120 @@ export function updateSecuritySettings(updates: Partial<SecuritySettings>): Syst
 // ============================================================================
 
 export interface SettingsPayload {
-  _id?: string
-  ownerId?: string
-  schemaVersion?: number
+  _id?: string;
+  ownerId?: string;
+  schemaVersion?: number;
   companyInfo?: {
-    name?: string
+    name?: string;
     address?: {
-      street?: string
-      city?: string
-      state?: string
-      country?: string
-    }
-    phone?: string
-    email?: string
+      street?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+    };
+    phone?: string;
+    email?: string;
     logo?: {
-      url?: string
-      public_id?: string
-    }
-    licenseNumber?: string
-  }
+      url?: string;
+      public_id?: string;
+    };
+    licenseNumber?: string;
+  };
   tenantPortal?: {
     portalFeatures?: {
-      rentPayment?: boolean
-      maintenanceRequests?: boolean
-      documentAccess?: boolean
-      messages?: boolean
-      announcements?: boolean
-      evictionNotice?: boolean
-    }
-  }
+      rentPayment?: boolean;
+      maintenanceRequests?: boolean;
+      documentAccess?: boolean;
+      messages?: boolean;
+      announcements?: boolean;
+      evictionNotice?: boolean;
+    };
+  };
   finance?: {
     currency?: {
-      code?: string
-      country?: string
-      symbol?: string
-    }
-  }
+      code?: string;
+      country?: string;
+      symbol?: string;
+    };
+  };
   notifications?: {
     rentDue?: {
-      email?: boolean
-      inApp?: boolean
-      sms?: boolean
-    }
+      email?: boolean;
+      inApp?: boolean;
+      sms?: boolean;
+    };
     maintenanceRequest?: {
-      email?: boolean
-      inApp?: boolean
-      sms?: boolean
-    }
+      email?: boolean;
+      inApp?: boolean;
+      sms?: boolean;
+    };
     announcements?: {
-      email?: boolean
-      inApp?: boolean
-      sms?: boolean
-    }
-  }
+      email?: boolean;
+      inApp?: boolean;
+      sms?: boolean;
+    };
+  };
   features?: {
-    map?: boolean
-    messaging?: boolean
-    analytics?: boolean
-    reporting?: boolean
-    auditing?: boolean
-  }
+    map?: boolean;
+    messaging?: boolean;
+    analytics?: boolean;
+    reporting?: boolean;
+    auditing?: boolean;
+  };
   security?: {
     autoLogout?: {
-      enabled?: boolean
-      durationMinutes?: number
-    }
+      enabled?: boolean;
+      durationMinutes?: number;
+    };
     autoLockout?: {
-      enabled?: boolean
-      threshold?: number
-    }
-    allowProfileEditing?: boolean
-  }
-  createdAt?: string
-  updatedAt?: string
+      enabled?: boolean;
+      threshold?: number;
+    };
+    allowProfileEditing?: boolean;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // Legacy flat format (for backwards compatibility during migration)
 interface FlatSettingsData {
-  ownerId?: string
-  _id?: string
-  companyInfo_name?: string
-  companyInfo_address?: string
-  companyInfo_city?: string
-  companyInfo_country?: string
-  companyInfo_phone?: string
-  companyInfo_email?: string
-  tenantPortalFeatures_rentPayment?: boolean
-  tenantPortalFeatures_maintenanceRequests?: boolean
-  tenantPortalFeatures_documentAccess?: boolean
-  tenantPortalFeatures_messages?: boolean
-  tenantPortalFeatures_announcements?: boolean
-  tenantPortalFeatures_evictionNotice?: boolean
-  financeSettings_currency?: string
-  notificationSettings_emailNotifications?: boolean
-  notificationSettings_smsNotifications?: boolean
-  systemFeatures_map?: boolean
-  systemFeatures_messaging?: boolean
-  systemFeatures_analytics?: boolean
-  systemFeatures_reporting?: boolean
-  systemFeatures_auditing?: boolean
-  tenantPortalSecurity_autoLogoutInactivityMinutes?: number
-  tenantPortalSecurity_allowProfileEditing?: boolean
-  tenantPortalSecurity_autoLockEnabled?: boolean
-  tenantPortalSecurity_failedLoginThreshold?: number
-  createdAt?: string
-  updatedAt?: string
+  ownerId?: string;
+  _id?: string;
+  companyInfo_name?: string;
+  companyInfo_address?: string;
+  companyInfo_city?: string;
+  companyInfo_country?: string;
+  companyInfo_phone?: string;
+  companyInfo_email?: string;
+  tenantPortalFeatures_rentPayment?: boolean;
+  tenantPortalFeatures_maintenanceRequests?: boolean;
+  tenantPortalFeatures_documentAccess?: boolean;
+  tenantPortalFeatures_messages?: boolean;
+  tenantPortalFeatures_announcements?: boolean;
+  tenantPortalFeatures_evictionNotice?: boolean;
+  financeSettings_currency?: string;
+  notificationSettings_emailNotifications?: boolean;
+  notificationSettings_smsNotifications?: boolean;
+  systemFeatures_map?: boolean;
+  systemFeatures_messaging?: boolean;
+  systemFeatures_analytics?: boolean;
+  systemFeatures_reporting?: boolean;
+  systemFeatures_auditing?: boolean;
+  tenantPortalSecurity_autoLogoutInactivityMinutes?: number;
+  tenantPortalSecurity_allowProfileEditing?: boolean;
+  tenantPortalSecurity_autoLockEnabled?: boolean;
+  tenantPortalSecurity_failedLoginThreshold?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
  * Convert settings to nested API payload format
  * Used when sending updates to server
  */
-export function convertToSettingsPayload(settings: Partial<TenantPortalSettings> & any): Partial<SettingsPayload> {
+export function convertToSettingsPayload(
+  settings: Partial<TenantPortalSettings> & any,
+): Partial<SettingsPayload> {
   return {
     companyInfo: {
       name: settings.companyInfo?.name,
@@ -878,29 +1003,33 @@ export function convertToSettingsPayload(settings: Partial<TenantPortalSettings>
         enabled:
           settings.securitySettings?.autoLogoutEnabled ??
           settings.securitySettings?.autoLogoutInactivityMinutes !== undefined,
-        durationMinutes: settings.securitySettings?.autoLogoutInactivityMinutes ?? 30,
+        durationMinutes:
+          settings.securitySettings?.autoLogoutInactivityMinutes ?? 30,
       },
       autoLockout: {
         enabled: settings.securitySettings?.autoLockEnabled ?? false,
         threshold: settings.securitySettings?.failedLoginThreshold ?? 5,
       },
-      allowProfileEditing: settings.securitySettings?.allowProfileEditing ?? true,
+      allowProfileEditing:
+        settings.securitySettings?.allowProfileEditing ?? true,
     },
-  }
+  };
 }
 
 /**
  * Convert API nested payload to internal TenantPortalSettings format
  * The API now returns nested structure, this ensures compatibility with UI components
  */
-export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): TenantPortalSettings {
+export function convertPayloadToTenantPortalSettings(
+  payload: SettingsPayload,
+): TenantPortalSettings {
   return {
     notificationPreferences: {
       email: payload.notifications?.rentDue?.email ?? true,
       sms: payload.notifications?.rentDue?.sms ?? false,
       inApp: payload.notifications?.rentDue?.inApp ?? true,
-      smsProvider: '',
-      emailTemplate: '',
+      smsProvider: "",
+      emailTemplate: "",
     },
     paymentSettings: {
       enableAutopay: false,
@@ -911,7 +1040,7 @@ export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): 
     documentAccess: {
       allowUploads: true,
       maxFileSize: 10485760,
-      allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+      allowedFileTypes: ["pdf", "doc", "docx", "jpg", "png"],
       requireApproval: false,
       retentionDays: 365,
     },
@@ -924,26 +1053,31 @@ export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): 
     },
     featureToggles: {
       paymentPortal: payload.tenantPortal?.portalFeatures?.rentPayment ?? true,
-      maintenanceRequests: payload.tenantPortal?.portalFeatures?.maintenanceRequests ?? true,
-      documentAccess: payload.tenantPortal?.portalFeatures?.documentAccess ?? true,
+      maintenanceRequests:
+        payload.tenantPortal?.portalFeatures?.maintenanceRequests ?? true,
+      documentAccess:
+        payload.tenantPortal?.portalFeatures?.documentAccess ?? true,
       messages: payload.tenantPortal?.portalFeatures?.messages ?? true,
-      announcements: payload.tenantPortal?.portalFeatures?.announcements ?? true,
-      evictionNotice: payload.tenantPortal?.portalFeatures?.evictionNotice ?? false,
+      announcements:
+        payload.tenantPortal?.portalFeatures?.announcements ?? true,
+      evictionNotice:
+        payload.tenantPortal?.portalFeatures?.evictionNotice ?? false,
     },
     communicationPreferences: {
-      preferredContactMethod: 'email',
-      languages: ['en'],
-      timezone: 'UTC',
+      preferredContactMethod: "email",
+      languages: ["en"],
+      timezone: "UTC",
       doNotDisturb: {
         enabled: false,
-        startTime: '',
-        endTime: '',
+        startTime: "",
+        endTime: "",
       },
     },
     securitySettings: {
       allowPasswordChange: true,
       autoLogoutEnabled: payload.security?.autoLogout?.enabled ?? true,
-      autoLogoutInactivityMinutes: payload.security?.autoLogout?.durationMinutes ?? 30,
+      autoLogoutInactivityMinutes:
+        payload.security?.autoLogout?.durationMinutes ?? 30,
       allowAccountDeletion: false,
       allowProfileEditing: payload.security?.allowProfileEditing ?? true,
       autoLockEnabled: payload.security?.autoLockout?.enabled ?? false,
@@ -952,7 +1086,7 @@ export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): 
       passwordExpirationDays: 90,
     },
     financeSettings: {
-      currency: payload.finance?.currency?.code || 'USD',
+      currency: payload.finance?.currency?.code || "USD",
       exchangeRates: {
         USD: 1,
         EUR: 0.92,
@@ -961,21 +1095,23 @@ export function convertPayloadToTenantPortalSettings(payload: SettingsPayload): 
       },
       paymentMethods: [],
     },
-  }
+  };
 }
 
 /**
  * Legacy conversion function - kept for backwards compatibility
  * DEPRECATED: Use convertPayloadToTenantPortalSettings instead
  */
-export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantPortalSettings {
+export function convertToNestedSettings(
+  flatSettings: FlatSettingsData,
+): TenantPortalSettings {
   return {
     notificationPreferences: {
       email: flatSettings.notificationSettings_emailNotifications ?? true,
       sms: flatSettings.notificationSettings_smsNotifications ?? false,
       inApp: true,
-      smsProvider: '',
-      emailTemplate: '',
+      smsProvider: "",
+      emailTemplate: "",
     },
     paymentSettings: {
       enableAutopay: false,
@@ -986,7 +1122,7 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
     documentAccess: {
       allowUploads: true,
       maxFileSize: 10485760,
-      allowedFileTypes: ['pdf', 'doc', 'docx', 'jpg', 'png'],
+      allowedFileTypes: ["pdf", "doc", "docx", "jpg", "png"],
       requireApproval: false,
       retentionDays: 365,
     },
@@ -999,35 +1135,41 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
     },
     featureToggles: {
       paymentPortal: flatSettings.tenantPortalFeatures_rentPayment ?? true,
-      maintenanceRequests: flatSettings.tenantPortalFeatures_maintenanceRequests ?? true,
+      maintenanceRequests:
+        flatSettings.tenantPortalFeatures_maintenanceRequests ?? true,
       documentAccess: flatSettings.tenantPortalFeatures_documentAccess ?? true,
       messages: flatSettings.tenantPortalFeatures_messages ?? true,
       evictionNotice: flatSettings.tenantPortalFeatures_evictionNotice ?? false,
     },
     communicationPreferences: {
-      preferredContactMethod: 'email',
-      languages: ['en'],
-      timezone: 'UTC',
+      preferredContactMethod: "email",
+      languages: ["en"],
+      timezone: "UTC",
       doNotDisturb: {
         enabled: false,
-        startTime: '',
-        endTime: '',
+        startTime: "",
+        endTime: "",
       },
     },
     securitySettings: {
       allowPasswordChange: true,
       autoLogoutEnabled:
-        flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes !== undefined,
-      autoLogoutInactivityMinutes: flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
+        flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes !==
+        undefined,
+      autoLogoutInactivityMinutes:
+        flatSettings.tenantPortalSecurity_autoLogoutInactivityMinutes ?? 30,
       allowAccountDeletion: false,
-      allowProfileEditing: flatSettings.tenantPortalSecurity_allowProfileEditing ?? true,
-      autoLockEnabled: flatSettings.tenantPortalSecurity_autoLockEnabled ?? false,
-      failedLoginThreshold: flatSettings.tenantPortalSecurity_failedLoginThreshold ?? 5,
+      allowProfileEditing:
+        flatSettings.tenantPortalSecurity_allowProfileEditing ?? true,
+      autoLockEnabled:
+        flatSettings.tenantPortalSecurity_autoLockEnabled ?? false,
+      failedLoginThreshold:
+        flatSettings.tenantPortalSecurity_failedLoginThreshold ?? 5,
       requirePasswordReset: false,
       passwordExpirationDays: 90,
     },
     financeSettings: {
-      currency: flatSettings.financeSettings_currency || 'USD',
+      currency: flatSettings.financeSettings_currency || "USD",
       exchangeRates: {
         USD: 1,
         EUR: 0.92,
@@ -1036,7 +1178,7 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
       },
       paymentMethods: [],
     },
-  }
+  };
 }
 
 /**
@@ -1044,64 +1186,255 @@ export function convertToNestedSettings(flatSettings: FlatSettingsData): TenantP
  */
 export async function fetchSettingsFromApi(): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest('GET', '/settings')
-    const data = await res.json()
-    return data || null
+    const res = await apiRequest("GET", "/settings");
+    const data = await res.json();
+    return data || null;
   } catch (error) {
-    console.warn('Failed to fetch settings from API, falling back to localStorage:', error)
-    return null
+    console.warn(
+      "Failed to fetch settings from API, falling back to local storage:",
+      error,
+    );
+    // Local fallback: use system settings stored in local DB
+    try {
+      const sys = initializeSystemSettings();
+      if (!sys) return null;
+      const payload: SettingsPayload = {
+        _id: sys.id,
+        createdAt: sys.createdAt,
+        updatedAt: sys.updatedAt,
+        // map tenant portal feature toggles
+        tenantPortal: {
+          portalFeatures: {
+            rentPayment:
+              !!sys.tenantPortalSettings?.featureToggles?.paymentPortal,
+            maintenanceRequests:
+              !!sys.tenantPortalSettings?.featureToggles?.maintenanceRequests,
+            documentAccess:
+              !!sys.tenantPortalSettings?.featureToggles?.documentAccess,
+            messages: !!sys.tenantPortalSettings?.featureToggles?.messages,
+            announcements:
+              !!sys.tenantPortalSettings?.featureToggles?.announcements,
+            evictionNotice:
+              !!sys.tenantPortalSettings?.featureToggles?.evictionNotice,
+          },
+        },
+        finance: {
+          currency: {
+            code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
+          },
+        },
+      };
+
+      return payload;
+    } catch (e) {
+      return null;
+    }
   }
 }
 
 /**
  * Fetch settings by ID from API
  */
-export async function fetchSettingsByIdFromApi(id: string): Promise<SettingsPayload | null> {
+export async function fetchSettingsByIdFromApi(
+  id: string,
+  token?: string,
+): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest('GET', `/settings/${id}`)
-    const data = await res.json()
-    return data || null
+    const res = await apiRequest("GET", `/settings/${id}`, undefined, token);
+    const data = await res.json();
+    return data || null;
   } catch (error) {
-    console.warn(`Failed to fetch settings ${id} from API:`, error)
-    return null
+    console.warn(
+      `Failed to fetch settings ${id} from API, falling back to local storage:`,
+      error,
+    );
+    try {
+      const sys = initializeSystemSettings();
+      if (!sys) return null;
+      // If local settings id matches requested id, return it, otherwise return local as fallback
+      const payload: SettingsPayload = {
+        _id: sys.id,
+        createdAt: sys.createdAt,
+        updatedAt: sys.updatedAt,
+        tenantPortal: {
+          portalFeatures: {
+            rentPayment:
+              !!sys.tenantPortalSettings?.featureToggles?.paymentPortal,
+            maintenanceRequests:
+              !!sys.tenantPortalSettings?.featureToggles?.maintenanceRequests,
+            documentAccess:
+              !!sys.tenantPortalSettings?.featureToggles?.documentAccess,
+            messages: !!sys.tenantPortalSettings?.featureToggles?.messages,
+            announcements:
+              !!sys.tenantPortalSettings?.featureToggles?.announcements,
+            evictionNotice:
+              !!sys.tenantPortalSettings?.featureToggles?.evictionNotice,
+          },
+        },
+        finance: {
+          currency: {
+            code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
+          },
+        },
+      };
+      return payload;
+    } catch (e) {
+      return null;
+    }
   }
 }
-export async function fetchSettingsByTenantId(id: string): Promise<SettingsPayload | null> {
+export async function fetchSettingsByTenantId(
+  id: string,
+): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest('GET', `/settings/tenant/${id}`)
-    const data = await res.json()
-    return data || null
+    const res = await apiRequest("GET", `/settings/tenant/${id}`);
+    const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
+    return data || null;
   } catch (error) {
-    console.warn(`Failed to fetch settings ${id} from API:`, error)
-    return null
+    console.warn(
+      `Failed to fetch settings ${id} from API, falling back to local storage:`,
+      error,
+    );
+    try {
+      const sys = initializeSystemSettings();
+      if (!sys) return null;
+      const payload: SettingsPayload = {
+        _id: sys.id,
+        createdAt: sys.createdAt,
+        updatedAt: sys.updatedAt,
+        tenantPortal: {
+          portalFeatures: {
+            rentPayment:
+              !!sys.tenantPortalSettings?.featureToggles?.paymentPortal,
+            maintenanceRequests:
+              !!sys.tenantPortalSettings?.featureToggles?.maintenanceRequests,
+            documentAccess:
+              !!sys.tenantPortalSettings?.featureToggles?.documentAccess,
+            messages: !!sys.tenantPortalSettings?.featureToggles?.messages,
+            announcements:
+              !!sys.tenantPortalSettings?.featureToggles?.announcements,
+            evictionNotice:
+              !!sys.tenantPortalSettings?.featureToggles?.evictionNotice,
+          },
+        },
+        finance: {
+          currency: {
+            code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
+          },
+        },
+      };
+      return payload;
+    } catch (e) {
+      return null;
+    }
   }
 }
 
 /**
  * Create settings on API
  */
-export async function createSettingsOnApi(settingsData: Partial<SettingsPayload>): Promise<SettingsPayload | null> {
+export async function createSettingsOnApi(
+  settingsData: Partial<SettingsPayload>,
+): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest('POST', '/settings', settingsData)
-    const data = await res.json()
-    return data?.settings || data || null
+    const res = await apiRequest("POST", "/settings", settingsData);
+    const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
+    return data || null;
   } catch (error) {
-    console.warn('Failed to create settings on API:', error)
-    return null
+    console.warn(
+      "Failed to create settings on API, falling back to local storage:",
+      error,
+    );
+    try {
+      // Ensure there is a system settings record
+      const sys = initializeSystemSettings();
+      // Map provided payload into tenantPortalSettings where possible
+      const tenantSettings = convertPayloadToTenantPortalSettings(
+        settingsData as SettingsPayload,
+      );
+      updateTenantPortalSettings(tenantSettings);
+      const payload: SettingsPayload = {
+        _id: sys.id,
+        createdAt: sys.createdAt,
+        updatedAt: sys.updatedAt,
+        tenantPortal: {
+          portalFeatures: {
+            rentPayment: !!tenantSettings.featureToggles.paymentPortal,
+            maintenanceRequests:
+              !!tenantSettings.featureToggles.maintenanceRequests,
+            documentAccess: !!tenantSettings.featureToggles.documentAccess,
+            messages: !!tenantSettings.featureToggles.messages,
+            announcements: !!tenantSettings.featureToggles.announcements,
+            evictionNotice: !!tenantSettings.featureToggles.evictionNotice,
+          },
+        },
+        finance: {
+          currency: {
+            code: tenantSettings.financeSettings?.currency || "USD",
+          },
+        },
+      };
+      return payload;
+    } catch (e) {
+      console.warn("Local fallback create failed:", e);
+      return null;
+    }
   }
 }
 
 /**
  * Update settings on API
  */
-export async function updateSettingsOnApi(id: string, settingsData: Partial<SettingsPayload>): Promise<SettingsPayload | null> {
+export async function updateSettingsOnApi(
+  id: string,
+  settingsData: Partial<SettingsPayload>,
+): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest('PUT', `/settings/${id}`, settingsData)
-    const data = await res.json()
-    return data?.settings || data || null
+    const res = await apiRequest("PUT", `/settings/${id}`, settingsData);
+    const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
+    return data || null;
   } catch (error) {
-    console.warn(`Failed to update settings ${id} on API:`, error)
-    return null
+    console.warn(
+      `Failed to update settings ${id} on API, falling back to local storage:`,
+      error,
+    );
+    try {
+      // Try updating local system settings
+      const sys = getSystemSettings();
+      if (!sys) {
+        // Create default then update
+        const created = createDefaultSystemSettings();
+        const tenantSettings = convertPayloadToTenantPortalSettings(
+          settingsData as SettingsPayload,
+        );
+        updateTenantPortalSettings(tenantSettings);
+        return {
+          _id: created.id,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+          tenantPortal: { portalFeatures: {} },
+        };
+      }
+
+      // Merge into tenant portal settings
+      const tenantSettings = convertPayloadToTenantPortalSettings(
+        settingsData as SettingsPayload,
+      );
+      const updated = updateTenantPortalSettings(tenantSettings);
+      if (!updated) return null;
+      return {
+        _id: updated.id,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+        tenantPortal: { portalFeatures: tenantSettings.featureToggles as any },
+        finance: {
+          currency: { code: tenantSettings.financeSettings?.currency || "USD" },
+        },
+      };
+    } catch (e) {
+      console.warn("Local fallback update failed:", e);
+      return null;
+    }
   }
 }
 
@@ -1110,11 +1443,11 @@ export async function updateSettingsOnApi(id: string, settingsData: Partial<Sett
  */
 export async function deleteSettingsOnApi(id: string): Promise<boolean> {
   try {
-    await apiRequest('DELETE', `/settings/${id}`)
-    return true
+    await apiRequest("DELETE", `/settings/${id}`);
+    return true;
   } catch (error) {
-    console.warn(`Failed to delete settings ${id} on API:`, error)
-    return false
+    console.warn(`Failed to delete settings ${id} on API:`, error);
+    return false;
   }
 }
 
@@ -1128,26 +1461,26 @@ export async function deleteSettingsOnApi(id: string): Promise<boolean> {
  */
 export function debounce<T extends (...args: any[]) => Promise<any>>(
   func: T,
-  delayMs: number
+  delayMs: number,
 ): (...args: Parameters<T>) => Promise<any> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   return (...args: Parameters<T>) => {
     return new Promise((resolve, reject) => {
       if (timeoutId !== null) {
-        clearTimeout(timeoutId)
+        clearTimeout(timeoutId);
       }
 
       timeoutId = setTimeout(async () => {
         try {
-          const result = await func(...args)
-          resolve(result)
+          const result = await func(...args);
+          resolve(result);
         } catch (error) {
-          reject(error)
+          reject(error);
         }
-      }, delayMs)
-    })
-  }
+      }, delayMs);
+    });
+  };
 }
 
 /**
@@ -1157,20 +1490,20 @@ export function debounce<T extends (...args: any[]) => Promise<any>>(
 export async function updateSettingFieldAsync(
   settingsId: string,
   flatKey: string,
-  value: any
+  value: any,
 ): Promise<boolean> {
   if (!settingsId) {
-    console.warn('Cannot update field without settingsId')
-    return false
+    console.warn("Cannot update field without settingsId");
+    return false;
   }
 
   try {
-    const flatUpdate = { [flatKey]: value }
-    const result = await updateSettingsOnApi(settingsId, flatUpdate)
-    return !!result
+    const flatUpdate = { [flatKey]: value };
+    const result = await updateSettingsOnApi(settingsId, flatUpdate);
+    return !!result;
   } catch (error) {
-    console.error(`Failed to update field ${flatKey}:`, error)
-    return false
+    console.error(`Failed to update field ${flatKey}:`, error);
+    return false;
   }
 }
 
@@ -1182,70 +1515,67 @@ export function createFieldUpdateHandler(
   settingsId: string | null,
   flatKey: string,
   onSettingsIdCreated?: (id: string) => void,
-  debounceMs: number = 500
+  debounceMs: number = 500,
 ): (value: any) => Promise<void> {
-  const debouncedUpdate = debounce(
-    async (value: any) => {
-      if (!settingsId) {
-        // Auto-create settings on first change
-        const created = await createSettingsOnApi({ [flatKey]: value })
-        if (created?._id && onSettingsIdCreated) {
-          onSettingsIdCreated(created._id)
-        }
-        return
+  const debouncedUpdate = debounce(async (value: any) => {
+    if (!settingsId) {
+      // Auto-create settings on first change
+      const created = await createSettingsOnApi({ [flatKey]: value });
+      if (created?._id && onSettingsIdCreated) {
+        onSettingsIdCreated(created._id);
       }
+      return;
+    }
 
-      await updateSettingFieldAsync(settingsId, flatKey, value)
-    },
-    debounceMs
-  )
+    await updateSettingFieldAsync(settingsId, flatKey, value);
+  }, debounceMs);
 
   return async (value: any) => {
     try {
-      await debouncedUpdate(value)
+      await debouncedUpdate(value);
     } catch (error) {
-      console.error(`Error updating field ${flatKey}:`, error)
+      console.error(`Error updating field ${flatKey}:`, error);
     }
-  }
+  };
 }
 
 /**
  * Field status type for UI feedback
  */
-export type FieldStatus = 'idle' | 'saving' | 'saved' | 'error'
+export type FieldStatus = "idle" | "saving" | "saved" | "error";
 
 /**
  * Helper to manage per-field saving status
  */
 export class FieldStatusManager {
-  private statusMap: Record<string, FieldStatus> = {}
+  private statusMap: Record<string, FieldStatus> = {};
 
   setStatus(flatKey: string, status: FieldStatus): void {
-    this.statusMap[flatKey] = status
+    this.statusMap[flatKey] = status;
   }
 
   getStatus(flatKey: string): FieldStatus {
-    return this.statusMap[flatKey] ?? 'idle'
+    return this.statusMap[flatKey] ?? "idle";
   }
 
   markSaving(flatKey: string): void {
-    this.setStatus(flatKey, 'saving')
+    this.setStatus(flatKey, "saving");
   }
 
   markSaved(flatKey: string): void {
-    this.setStatus(flatKey, 'saved')
+    this.setStatus(flatKey, "saved");
   }
 
   markError(flatKey: string): void {
-    this.setStatus(flatKey, 'error')
+    this.setStatus(flatKey, "error");
   }
 
   markIdle(flatKey: string): void {
-    this.setStatus(flatKey, 'idle')
+    this.setStatus(flatKey, "idle");
   }
 
   getAll(): Record<string, FieldStatus> {
-    return { ...this.statusMap }
+    return { ...this.statusMap };
   }
 }
 
@@ -1257,7 +1587,9 @@ export class FieldStatusManager {
  * Extract feature toggles from settings payload
  * Returns the featureToggles object with safe defaults
  */
-export function getFeatureToggles(payload: SettingsPayload | null): FeatureToggles {
+export function getFeatureToggles(
+  payload: SettingsPayload | null,
+): FeatureToggles {
   if (!payload) {
     return {
       paymentPortal: true,
@@ -1265,11 +1597,11 @@ export function getFeatureToggles(payload: SettingsPayload | null): FeatureToggl
       documentAccess: true,
       messages: true,
       evictionNotice: false,
-    }
+    };
   }
-  
-  const portalSettings = convertPayloadToTenantPortalSettings(payload)
-  return portalSettings.featureToggles || {}
+
+  const portalSettings = convertPayloadToTenantPortalSettings(payload);
+  return portalSettings.featureToggles || {};
 }
 
 /**
@@ -1278,8 +1610,8 @@ export function getFeatureToggles(payload: SettingsPayload | null): FeatureToggl
  */
 export function isFeatureEnabled(
   payload: SettingsPayload | null,
-  featureName: keyof FeatureToggles
+  featureName: keyof FeatureToggles,
 ): boolean {
-  const toggles = getFeatureToggles(payload)
-  return toggles[featureName] ?? true
+  const toggles = getFeatureToggles(payload);
+  return toggles[featureName] ?? true;
 }

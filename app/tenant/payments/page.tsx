@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,25 +24,18 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
-import { currentTenant } from "@/app/lib/tenant-data";
+import { useAuth } from "@/lib/auth-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
-import {
-  getPaymentsForTenant,
-  createManualPayment,
-  RentPayment,
-} from "@/lib/services/payments";
-import { getCurrentUser } from "@/lib/services/auth";
-import { getTenant } from "@/lib/services/tenants";
-import { getProperty } from "@/lib/services/properties";
+import { createManualPayment, RentPayment } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<any[]>([]);
   const router = useRouter();
   const activeCurrency = useActiveCurrency();
-  const { properties } = useAppData();
+  const { user } = useAuth();
+  const { properties, payments, currentTenant, currentProperty } = useAppData();
   const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("paymentPortal");
 
@@ -55,18 +48,32 @@ export default function PaymentsPage() {
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
-  const user = useMemo(() => getCurrentUser(), []);
-  const tenant = useMemo(
-    () => (user?.role === "tenant" ? getTenant(user.id) : null),
-    [user],
-  );
-  const property = useMemo(
-    () =>
-      tenant?.propertyId
-        ? properties.find((p) => p.id === tenant.propertyId)
-        : null,
-    [tenant, properties],
-  );
+  const tenant =
+    currentTenant ??
+    useMemo(() => {
+      if (!user) return null;
+      const email = user.email?.toLowerCase();
+      return (
+        properties
+          .flatMap((p) => p.tenants ?? [])
+          .find(
+            (t: any) =>
+              t.id === user.id ||
+              t._id === user.id ||
+              t.email?.toLowerCase() === email,
+          ) || null
+      );
+    }, [user, properties]);
+
+  const property =
+    currentProperty ??
+    useMemo(
+      () =>
+        tenant?.propertyId
+          ? properties.find((p) => p.id === tenant.propertyId)
+          : null,
+      [tenant, properties],
+    );
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
 
@@ -76,39 +83,15 @@ export default function PaymentsPage() {
   }, [defaultRent]);
 
   useEffect(() => {
-    const loadPayments = async () => {
-      if (tenant?.id) {
-        const paid = await getPaymentsForTenant(tenant.id);
-        setPayments(paid);
-      } else {
-        setPayments([]);
-      }
-    };
-
-    loadPayments();
-
-    const onPaymentsUpdated = () => {
-      loadPayments();
-    };
-
-    if (typeof window !== "undefined")
-      window.addEventListener("paymentsUpdated", onPaymentsUpdated);
-    return () => {
-      if (typeof window !== "undefined")
-        window.removeEventListener("paymentsUpdated", onPaymentsUpdated);
-    };
-  }, [tenant?.id]);
-
-  useEffect(() => {
     if (!featuresLoaded) return;
     if (!paymentEnabled) {
       router.replace("/tenant/feature-disabled?feature=payments");
     }
   }, [featuresLoaded, paymentEnabled, router]);
 
-  const tenantPayments = payments.filter(
-    (p) => !currentTenant || p.tenantId === currentTenant.id,
-  );
+  const tenantPayments = tenant
+    ? payments.filter((p) => p.tenantId === tenant.id)
+    : [];
   const totalPaid = tenantPayments
     .filter((p) => p.status === "complete")
     .reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -202,7 +185,7 @@ export default function PaymentsPage() {
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
                 {formatCurrency(
-                  currentTenant?.rentAmount ?? currentTenant?.monthlyRent ?? 0,
+                  tenant?.rentAmount ?? tenant?.monthlyRent ?? 0,
                   activeCurrency,
                 )}
               </p>
@@ -338,7 +321,7 @@ export default function PaymentsPage() {
                           ?.name || "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
-                        {currentTenant.unitNumber || "—"}
+                        {tenant?.unitNumber || "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4">
                         <DropdownMenu>

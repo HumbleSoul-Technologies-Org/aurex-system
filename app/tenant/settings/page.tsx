@@ -18,7 +18,7 @@ import {
   CalendarDays,
   ClipboardCheck,
 } from "lucide-react";
-import { useTenantContext } from "@/lib/tenant-context";
+import { useAppData } from "@/lib/data-context";
 import {
   TenantRecord,
   updateTenantApi,
@@ -73,7 +73,7 @@ const documentDeliveryOptions = [
 ];
 
 export default function TenantSettingsPage() {
-  const { currentTenant: tenant } = useTenantContext();
+  const { currentTenant: tenant } = useAppData();
 
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
