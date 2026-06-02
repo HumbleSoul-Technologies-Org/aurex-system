@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
-import { createManualPayment, RentPayment } from "@/lib/services/payments";
+import {
+  createManualPayment,
+  getTenantOutstandingBalance,
+  RentPayment,
+} from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
@@ -58,6 +62,12 @@ export default function MakePaymentPage() {
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
   const [amount, setAmount] = useState<number>(defaultRent);
+  const [paymentReason, setPaymentReason] = useState<
+    "rentPayment" | "balancePayment"
+  >("rentPayment");
+  const [outstandingBalance, setOutstandingBalance] = useState<number | null>(
+    null,
+  );
   const [method, setMethod] = useState<
     "bank_transfer" | "credit_card" | "debit_card"
   >("bank_transfer");
@@ -107,14 +117,15 @@ export default function MakePaymentPage() {
 
   const monthlyRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
   const leaseType = tenant?.leaseType || "monthly";
-  const outstandingBalance = Math.max(
+  const computedOutstandingBalance = Math.max(
     0,
     monthlyRent * getLeaseTermMonths(leaseType) -
       tenantPayments
         .filter(
           (p) =>
-            p.reasonForPayment === "rentPayment" &&
-            !["failed", "refunded"].includes(p.status ?? ""),
+            ["rentPayment", "balancePayment"].includes(
+              p.reasonForPayment || "",
+            ) && !["failed", "refunded"].includes(p.status ?? ""),
         )
         .reduce((sum, p) => sum + (p.amount || 0), 0),
   );
@@ -122,6 +133,20 @@ export default function MakePaymentPage() {
   useEffect(() => {
     setAmount(defaultRent);
   }, [defaultRent]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!tenant?.id) return;
+    getTenantOutstandingBalance(tenant.id).then((data) => {
+      if (cancelled) return;
+      if (data) {
+        setOutstandingBalance(data.outstandingBalance);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant?.id]);
 
   const handleSubmit = async () => {
     if (step === "amount") setStep("method");
@@ -142,8 +167,11 @@ export default function MakePaymentPage() {
           paidOn: new Date().toISOString(),
           paidBy: user?.name || user?.id || "tenant",
           leaseType,
-          reasonForPayment: "rentPayment",
-          notes: "Tenant-initiated rent payment",
+          reasonForPayment: paymentReason,
+          notes:
+            paymentReason === "balancePayment"
+              ? "Tenant-initiated balance payment"
+              : "Tenant-initiated rent payment",
         };
         const rec = await createManualPayment(payload);
         setSavedPayment(rec);
@@ -229,6 +257,47 @@ export default function MakePaymentPage() {
               Enter Payment Amount
             </h2>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Payment Type
+                </label>
+                <select
+                  value={paymentReason}
+                  onChange={(e) => {
+                    const next = e.target.value as
+                      | "rentPayment"
+                      | "balancePayment";
+                    setPaymentReason(next);
+                    if (next === "balancePayment") {
+                      setAmount(
+                        outstandingBalance ?? computedOutstandingBalance,
+                      );
+                    } else {
+                      setAmount(defaultRent);
+                    }
+                  }}
+                  className="w-full border border-border rounded-lg px-3 py-2 bg-background text-foreground"
+                >
+                  <option value="rentPayment">Rent Payment</option>
+                  <option value="balancePayment">Balance Payment</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Outstanding Balance
+                </label>
+                <div className="w-full rounded-lg border border-border px-3 py-3 bg-background text-foreground">
+                  {outstandingBalance !== null
+                    ? formatCurrency(outstandingBalance, activeCurrency)
+                    : formatCurrency(
+                        computedOutstandingBalance,
+                        activeCurrency,
+                      )}
+                </div>
+              </div>
+            </div>
+
             {/* Amount Quick Select */}
             <div className="space-y-4 md:space-y-6">
               <div>
@@ -239,6 +308,10 @@ export default function MakePaymentPage() {
                   {[
                     { label: "Monthly Rent", value: defaultRent },
                     { label: "Half", value: defaultRent / 2 },
+                    {
+                      label: "Full Balance",
+                      value: outstandingBalance ?? computedOutstandingBalance,
+                    },
                   ].map((option) => (
                     <Button
                       key={option.label}
@@ -253,21 +326,23 @@ export default function MakePaymentPage() {
                           : "border-border"
                       }`}
                       onClick={() => {
-                        if (option.value > 0) setAmount(option.value);
-                        else setAmount(0);
+                        if (option.value > 0) {
+                          setAmount(option.value);
+                          if (option.label === "Full Balance") {
+                            setPaymentReason("balancePayment");
+                          }
+                        } else {
+                          setAmount(0);
+                        }
                       }}
                     >
                       <div className="flex flex-col items-start">
                         <span className="font-semibold">
-                          {option.label === "Custom"
-                            ? option.label
-                            : formatCurrency(option.value, activeCurrency)}
+                          {formatCurrency(option.value, activeCurrency)}
                         </span>
-                        {option.label !== "Custom" && (
-                          <span className="text-xs opacity-70">
-                            {option.label}
-                          </span>
-                        )}
+                        <span className="text-xs opacity-70">
+                          {option.label}
+                        </span>
                       </div>
                     </Button>
                   ))}
@@ -307,8 +382,18 @@ export default function MakePaymentPage() {
                 </p>
                 <p className="text-xs md:text-sm text-muted-foreground mt-2">
                   Current outstanding balance for this lease term is{" "}
-                  {formatCurrency(outstandingBalance, activeCurrency)}.
+                  {formatCurrency(
+                    outstandingBalance ?? computedOutstandingBalance,
+                    activeCurrency,
+                  )}
+                  .
                 </p>
+                {paymentReason === "balancePayment" && (
+                  <p className="text-xs md:text-sm text-muted-foreground mt-2">
+                    You are paying toward the outstanding balance. The backend
+                    will record this as a balance payment.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -404,12 +489,33 @@ export default function MakePaymentPage() {
                           : "Debit Card"}
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Payment Type</span>
+                    <span className="font-semibold text-foreground">
+                      {paymentReason === "balancePayment"
+                        ? "Balance Payment"
+                        : "Rent Payment"}
+                    </span>
+                  </div>
                   <div className="border-t border-border pt-3 flex justify-between text-sm">
                     <span className="text-muted-foreground">Total</span>
                     <span className="font-bold text-foreground text-base md:text-lg">
                       {formatCurrency(amount, activeCurrency)}
                     </span>
                   </div>
+                  {paymentReason === "balancePayment" && (
+                    <div className="text-sm text-muted-foreground pt-3">
+                      Remaining balance after payment:{" "}
+                      {formatCurrency(
+                        Math.max(
+                          0,
+                          (outstandingBalance ?? computedOutstandingBalance) -
+                            amount,
+                        ),
+                        activeCurrency,
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -445,6 +551,19 @@ export default function MakePaymentPage() {
                 Your payment of {formatCurrency(amount, activeCurrency)} has
                 been processed successfully.
               </p>
+              {paymentReason === "balancePayment" && (
+                <p className="text-muted-foreground text-sm md:text-base">
+                  Remaining outstanding balance:{" "}
+                  {formatCurrency(
+                    Math.max(
+                      0,
+                      (outstandingBalance ?? computedOutstandingBalance) -
+                        amount,
+                    ),
+                    activeCurrency,
+                  )}
+                </p>
+              )}
             </div>
 
             <div className="bg-secondary p-4 rounded-lg border border-border space-y-2">

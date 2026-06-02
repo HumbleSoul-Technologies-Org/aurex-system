@@ -85,6 +85,8 @@ export default function PropertyDetailPage({
   const { id } = use(params);
   const { properties, tenants, payments } = useAppData();
   const activeCurrency = useActiveCurrency();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [property, setProperty] = useState<any>(() =>
     properties.find((item) => item.id === id),
   );
@@ -174,10 +176,7 @@ export default function PropertyDetailPage({
     if (tenantRent > 0) return sum + tenantRent;
 
     const matchingUnit = unitRecords.find(
-      (unit: any) =>
-        unit.unitNumber === tenant.unitNumber ||
-        unit.unitNumber === tenant.unit ||
-        unit.unitNumber === tenant.unit_no,
+      (unit: any) => unit.unitNumber === tenant?.unitNumber,
     );
 
     return sum + (matchingUnit?.rent || 0);
@@ -267,7 +266,7 @@ export default function PropertyDetailPage({
     ? Math.round(revenueLost / property?.units_available)
     : 0;
 
-  if (!property) {
+  if (!mounted || !property) {
     return (
       <div className="space-y-6">
         <div className="flex pb-2 items-center justify-center gap-4">
@@ -299,12 +298,21 @@ export default function PropertyDetailPage({
     setIsDeleting(true);
     setDeleteError("");
     try {
-      await deleteProperty(id, adminPassword);
-    } catch (error) {
-      console.log(error);
-    } finally {
+      const success = await deleteProperty(id, adminPassword);
+      if (!success) {
+        setDeleteError(
+          "Unable to delete the property. Please verify the admin password and try again.",
+        );
+        return;
+      }
       setIsDeleteOpen(false);
       window.location.href = "/dashboard/properties";
+    } catch (error) {
+      console.log(error);
+      setDeleteError(
+        "An unexpected error occurred while deleting the property.",
+      );
+    } finally {
       setIsDeleting(false);
     }
   };
@@ -383,7 +391,7 @@ export default function PropertyDetailPage({
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => setIsDeleteOpen(true)}
+              onClick={async () => setIsDeleteOpen(true)}
             >
               <Trash className="w-4 h-4 mr-2" />
               Delete Property

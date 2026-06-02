@@ -1,12 +1,16 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import axios from "axios";
+import { getAuthToken } from "@/lib/token-manager";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5454/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5454/api";
+
+// Normalize the base URL so it doesn't end with a slash
+const NORMALIZED_API_BASE_URL = API_BASE_URL.replace(/\/+$/, "");
 
 // ✅ Axios instance for GET only
 const axiosClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: NORMALIZED_API_BASE_URL,
 });
 
 // This wrapper returns a normalized response object and preserves parsed JSON/error payloads.
@@ -57,8 +61,9 @@ export async function apiRequest<T = any>(
   let body: BodyInit | undefined;
   let finalUrl = url;
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  const authToken = token || getAuthToken();
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
   }
 
   // For GET requests, convert data to query parameters and don't send body
@@ -87,7 +92,7 @@ export async function apiRequest<T = any>(
     body = JSON.stringify(data);
   }
 
-  const res = await fetch(`${API_BASE_URL}${finalUrl}`, {
+  const res = await fetch(`${NORMALIZED_API_BASE_URL}${finalUrl}`, {
     method,
     headers,
     ...(body !== undefined && { body }), // Only include body if it's defined

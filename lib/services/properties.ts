@@ -60,6 +60,7 @@ export interface PropertyRecord {
     | "medical"
     | "flex-space"
     | "other";
+  autoGenerateUnitNumbers?: boolean;
   geography?: string;
   images?: { url: string; public_id: string }[];
   features?: string[];
@@ -341,19 +342,175 @@ export async function updateProperty(
 export async function deleteProperty(
   id: string,
   adminPassword: string,
+  token: string,
 ): Promise<boolean> {
-  // return removeFromCollection('properties', id)
-  const res = await apiRequest("DELETE", `/property/${id}/delete`, {
-    password: adminPassword,
-  });
-  if (!res.ok) {
-    console.error("Failed to update property", await res.text());
+  try {
+    const res = await apiRequest(
+      "DELETE",
+      `/property/${id}/delete`,
+      {
+        password: adminPassword,
+      },
+      token,
+    );
+
+    if (!res.ok) {
+      const errorMessage = await res.text();
+      console.error("Failed to delete property", res.status, errorMessage);
+      return false;
+    }
+
+    // Get the property before deletion to find associated tenants
+    const propertyToDelete = getProperty(id);
+    if (!propertyToDelete) {
+      console.warn(
+        "Property not found in local store, skipping cascade delete",
+      );
+      removeFromCollection("properties", id);
+      return true;
+    }
+
+    // Get all associated tenant IDs
+    const allTenants = getCollection("tenants");
+    const associatedTenantIds = allTenants
+      .filter(
+        (t) =>
+          t.propertyId === id ||
+          t.propertyId === propertyToDelete._id ||
+          propertyToDelete.tenants?.includes(t?.id || t?._id || ""),
+      )
+      .map((t) => t.id);
+
+    // Delete all related data in correct order (children first, then property)
+
+    // 1. Delete messages related to this property or its tenants
+    const messages = getCollection("messages");
+    const filteredMessages = messages.filter(
+      (m: any) =>
+        m.propertyId !== id &&
+        !associatedTenantIds.includes(m.tenantId) &&
+        !associatedTenantIds.includes(m.senderId) &&
+        !associatedTenantIds.includes(m.recipientId),
+    );
+    if (filteredMessages.length < messages.length) {
+      (globalThis as any).__PROP_MAN_DB__.messages = filteredMessages;
+    }
+
+    // 2. Delete payments related to this property
+    const payments = getCollection("payments");
+    const filteredPayments = payments.filter((p: any) => p.propertyId !== id);
+    if (filteredPayments.length < payments.length) {
+      (globalThis as any).__PROP_MAN_DB__.payments = filteredPayments;
+    }
+
+    // 3. Delete transactions/expenses related to this property
+    const transactions = getCollection("transactions");
+    const filteredTransactions = transactions.filter(
+      (t: any) => t.propertyId !== id,
+    );
+    if (filteredTransactions.length < transactions.length) {
+      (globalThis as any).__PROP_MAN_DB__.transactions = filteredTransactions;
+    }
+
+    // 4. Delete maintenance requests related to this property
+    const maintenance = getCollection("maintenance");
+    const filteredMaintenance = maintenance.filter(
+      (m: any) => m.propertyId !== id,
+    );
+    if (filteredMaintenance.length < maintenance.length) {
+      (globalThis as any).__PROP_MAN_DB__.maintenance = filteredMaintenance;
+    }
+
+    // 5. Delete notifications for tenants in this property
+    const notifications = getCollection("notifications");
+    const filteredNotifications = notifications.filter(
+      (n: any) => !associatedTenantIds.includes(n.tenantId),
+    );
+    if (filteredNotifications.length < notifications.length) {
+      (globalThis as any).__PROP_MAN_DB__.notifications = filteredNotifications;
+    }
+
+    // 6. Delete replies associated with deleted messages
+    const replies = getCollection("replies");
+    const deletedMessageIds = messages
+      .filter(
+        (m: any) =>
+          m.propertyId === id ||
+          associatedTenantIds.includes(m.tenantId) ||
+          associatedTenantIds.includes(m.senderId) ||
+          associatedTenantIds.includes(m.recipientId),
+      )
+      .map((m: any) => m.id || m._id)
+      .filter(Boolean);
+    const filteredReplies = replies.filter(
+      (r: any) => !deletedMessageIds.includes(r.messageId),
+    );
+    if (filteredReplies.length < replies.length) {
+      (globalThis as any).__PROP_MAN_DB__.replies = filteredReplies;
+    }
+
+    // 7. Delete documents related to this property or its tenants
+    const documents = getCollection("documents");
+    const filteredDocuments = documents.filter((doc: any) => {
+      if (!doc) return true;
+      if (doc.ownerType === "property" && doc.ownerId === id) return false;
+      if (
+        doc.ownerType === "tenant" &&
+        associatedTenantIds.includes(doc.ownerId)
+      )
+        return false;
+      return true;
+    });
+    if (filteredDocuments.length < documents.length) {
+      (globalThis as any).__PROP_MAN_DB__.documents = filteredDocuments;
+    }
+
+    // 8. Delete all tenant profiles
+    const filteredTenants = allTenants.filter(
+      (t) => !associatedTenantIds.includes(t.id),
+    );
+    if (filteredTenants.length < allTenants.length) {
+      (globalThis as any).__PROP_MAN_DB__.tenants = filteredTenants;
+    }
+
+    // 9. Delete announcements related to this property
+    const announcements = getCollection("announcements");
+    const filteredAnnouncements = announcements.filter(
+      (a: any) => a.propertyId !== id,
+    );
+    if (filteredAnnouncements.length < announcements.length) {
+      (globalThis as any).__PROP_MAN_DB__.announcements = filteredAnnouncements;
+    }
+
+    // 10. Delete the property itself
+    removeFromCollection("properties", id);
+
+    // Update React Query cache
+    queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
+      current ? current.filter((property) => property.id !== id) : [],
+    );
+
+    // Invalidate related queries
+    queryClient.invalidateQueries({ queryKey: ["properties"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["tenants"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["payments"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["transactions"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["maintenance"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["messages"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["documents"], exact: false });
+    queryClient.invalidateQueries({
+      queryKey: ["announcements"],
+      exact: false,
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["notifications"],
+      exact: false,
+    });
+    queryClient.invalidateQueries({ queryKey: ["replies"], exact: false });
+
+    return true;
+  } catch (error) {
+    console.error("Error deleting property", error);
     return false;
   }
-
-  removeFromCollection("properties", id);
-  queryClient.setQueryData<PropertyRecord[]>(["properties"], (current) =>
-    current ? current.filter((property) => property.id !== id) : [],
-  );
-  return true;
 }

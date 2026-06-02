@@ -1184,9 +1184,11 @@ export function convertToNestedSettings(
 /**
  * Fetch settings from API - fetch admin's own settings
  */
-export async function fetchSettingsFromApi(): Promise<SettingsPayload | null> {
+export async function fetchSettingsFromApi(
+  token?: string,
+): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest("GET", "/settings");
+    const res = await apiRequest("GET", "/settings", undefined, token);
     const data = await res.json();
     return data || null;
   } catch (error) {
@@ -1285,9 +1287,15 @@ export async function fetchSettingsByIdFromApi(
 }
 export async function fetchSettingsByTenantId(
   id: string,
+  token?: string,
 ): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest("GET", `/settings/tenant/${id}`);
+    const res = await apiRequest(
+      "GET",
+      `/settings/tenant/${id}`,
+      undefined,
+      token,
+    );
     const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
     return data || null;
   } catch (error) {
@@ -1335,9 +1343,10 @@ export async function fetchSettingsByTenantId(
  */
 export async function createSettingsOnApi(
   settingsData: Partial<SettingsPayload>,
+  token?: string,
 ): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest("POST", "/settings", settingsData);
+    const res = await apiRequest("POST", "/settings", settingsData, token);
     const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
     return data || null;
   } catch (error) {
@@ -1388,9 +1397,10 @@ export async function createSettingsOnApi(
 export async function updateSettingsOnApi(
   id: string,
   settingsData: Partial<SettingsPayload>,
+  token?: string,
 ): Promise<SettingsPayload | null> {
   try {
-    const res = await apiRequest("PUT", `/settings/${id}`, settingsData);
+    const res = await apiRequest("PUT", `/settings/${id}`, settingsData, token);
     const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
     return data || null;
   } catch (error) {

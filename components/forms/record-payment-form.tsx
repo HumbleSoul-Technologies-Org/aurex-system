@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppData } from "@/lib/data-context";
-import { createManualPayment } from "@/lib/services/payments";
+import {
+  createManualPayment,
+  getTenantOutstandingBalance,
+} from "@/lib/services/payments";
 import { currencies } from "@/lib/data/currencies";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
@@ -41,6 +44,9 @@ export default function RecordPaymentForm({
   const [paidBy, setPaidBy] = useState<string>("");
   const [reasonForPayment, setReasonForPayment] =
     useState<string>("rentPayment");
+  const [outstandingBalance, setOutstandingBalance] = useState<number | null>(
+    null,
+  );
   const [balance, setBalance] = useState<string>("0");
   const [reference, setReference] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
@@ -58,6 +64,26 @@ export default function RecordPaymentForm({
     if (!propertyId && initialPropertyId)
       setPropertyId(initialPropertyId as string);
   }, [tenantId, initialTenantId, initialPropertyId, tenants, propertyId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tenantId && reasonForPayment === "balancePayment") {
+      getTenantOutstandingBalance(tenantId).then((data) => {
+        if (cancelled) return;
+        if (data) {
+          setOutstandingBalance(data.outstandingBalance);
+          setAmount(String(data.outstandingBalance));
+        } else {
+          setOutstandingBalance(null);
+        }
+      });
+    } else {
+      setOutstandingBalance(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, reasonForPayment]);
 
   useEffect(() => {
     setCurrency(activeCurrency);
@@ -87,7 +113,7 @@ export default function RecordPaymentForm({
       notes: notes || undefined,
     };
 
-    if (reasonForPayment !== "rentPayment") {
+    if (reasonForPayment === "securityDeposit") {
       payload.balance = Number(balance);
       payload.status = status;
     }
@@ -213,6 +239,7 @@ export default function RecordPaymentForm({
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="w-full border border-border rounded px-3 py-2 bg-transparent"
+            disabled={reasonForPayment === "balancePayment"}
           >
             <option value="complete">Complete</option>
             <option value="balance">Balance</option>
@@ -232,6 +259,7 @@ export default function RecordPaymentForm({
           >
             <option value="rentPayment">Rent Payment</option>
             <option value="securityDeposit">Security Deposit</option>
+            <option value="balancePayment">Balance Payment</option>
           </select>
         </div>
       </div>
@@ -257,16 +285,29 @@ export default function RecordPaymentForm({
             placeholder="Name of payer"
           />
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground block mb-1">
-            Balance
-          </label>
-          <Input
-            value={balance}
-            onChange={(e) => setBalance(e.target.value)}
-            placeholder="0.00"
-          />
-        </div>
+        {reasonForPayment !== "balancePayment" ? (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">
+              Balance
+            </label>
+            <Input
+              value={balance}
+              onChange={(e) => setBalance(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">
+              Outstanding Balance
+            </label>
+            <div className="w-full rounded border border-border px-3 py-2 bg-slate-50 text-sm">
+              {outstandingBalance !== null
+                ? `$${outstandingBalance.toFixed(2)}`
+                : "Loading outstanding balance..."}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* reference and receipt fields removed — handled by backend */}

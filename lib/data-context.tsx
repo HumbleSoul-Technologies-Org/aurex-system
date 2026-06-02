@@ -7,7 +7,7 @@ import { useAuth } from "./auth-context";
 import { listProperties, PropertyRecord } from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
 import { getPaymentsForPropertyIds, PaymentRecord } from "./services/payments";
-import { getAllExpenses, ExpenseRecord } from "./services/expenses";
+import { getExpensesForProperties, ExpenseRecord } from "./services/expenses";
 import {
   getMaintenanceRequests,
   fetchAllMaintenanceRequests,
@@ -131,12 +131,19 @@ async function fetchPayments(
   }
 }
 
-async function fetchExpenses(): Promise<ExpenseRecord[]> {
+async function fetchExpenses(
+  propertyIds: string[] | null,
+  token: string | null,
+): Promise<ExpenseRecord[]> {
+  if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
+    return [];
+  }
+
   try {
-    return await getAllExpenses();
+    return await getExpensesForProperties(propertyIds, token ?? undefined);
   } catch (err) {
     console.warn(
-      "Failed to fetch expenses from API, falling back to empty list:",
+      "Failed to fetch expenses from API, falling back to local store:",
       err,
     );
     return [];
@@ -188,10 +195,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function fetchExpensesWithErrorHandling(): Promise<ExpenseRecord[]> {
+  async function fetchExpensesWithErrorHandling(
+    propertyIds: string[] | null,
+    token: string | null,
+  ): Promise<ExpenseRecord[]> {
     try {
       setExpensesError(null);
-      return await fetchExpenses();
+      return await fetchExpenses(propertyIds, token);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error("Expense fetch error:", message);
@@ -207,13 +217,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     staleTime: 1000 * 60 * 2,
   });
 
-  const expensesQuery = useQuery({
-    queryKey: ["expenses"],
-    queryFn: fetchExpensesWithErrorHandling,
-    initialData: () => [] as ExpenseRecord[],
-    staleTime: 1000 * 60 * 2,
-  });
-
   const maintenanceRequestsQuery = useQuery({
     queryKey: ["maintenanceRequests"],
     queryFn: fetchMaintenanceRequests,
@@ -223,6 +226,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // derive tenants from properties (API now returns populated tenant subdocuments)
   const propertiesData = propertiesQuery.data ?? listProperties();
+
+  const expensePropertyIds = React.useMemo(() => {
+    return propertiesData
+      .map((property) => property.id || property._id || "")
+      .filter(Boolean);
+  }, [propertiesData]);
+
+  const expensesQuery = useQuery({
+    queryKey: ["expenses", expensePropertyIds, token || ""],
+    queryFn: () =>
+      fetchExpensesWithErrorHandling(expensePropertyIds, token ?? null),
+    enabled: expensePropertyIds.length > 0,
+    initialData: () => [] as ExpenseRecord[],
+    staleTime: 1000 * 60 * 2,
+  });
+
   const tenantsDerived: TenantRecord[] = (propertiesData as any[])
     .flatMap((p) => {
       const propertyId = p.id || p._id || "";

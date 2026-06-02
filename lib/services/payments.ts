@@ -6,6 +6,7 @@ import {
   removeFromCollection,
   updateInCollection,
 } from "@/lib/local-store";
+import { getProperty } from "@/lib/services/properties";
 import { getTenant, updateTenant } from "@/lib/services/tenants";
 
 function dispatchPaymentsUpdatedEvent() {
@@ -14,7 +15,10 @@ function dispatchPaymentsUpdatedEvent() {
   }
 }
 
-export type PaymentReasonFor = "securityDeposit" | "rentPayment";
+export type PaymentReasonFor =
+  | "securityDeposit"
+  | "rentPayment"
+  | "balancePayment";
 export type RentPaymentStatus =
   | "complete"
   | "balance"
@@ -38,6 +42,9 @@ export interface RentPayment {
   reasonForPayment?: PaymentReasonFor;
   notes?: string;
   balance?: number;
+  priorBalance?: number;
+  balanceAfterPayment?: number;
+  balancePeriod?: string;
   status?: RentPaymentStatus;
   currency?: string;
   monthlyRent?: number;
@@ -106,6 +113,109 @@ export async function deletePaymentApi(id: string): Promise<boolean> {
   } catch (err) {
     console.warn(`Failed to delete payment ${id}:`, err);
     return false;
+  }
+}
+
+export async function getTenantOutstandingBalance(tenantId: string): Promise<{
+  outstandingBalance: number;
+  totalPaid: number;
+  totalOwed: number;
+  expectedRent: number;
+  currency: string;
+} | null> {
+  const fallbackCompute = () => {
+    const tenant = getTenant(tenantId);
+    if (!tenant) return null;
+
+    const property = tenant.propertyId ? getProperty(tenant.propertyId) : null;
+    const monthlyRent = Number(
+      tenant.rentAmount ??
+        property?.price_per_unit ??
+        (property as any)?.monthlyRent ??
+        0,
+    );
+    const leaseType = tenant.leaseType || "monthly";
+    const normalizeLeaseTermMonths = (leaseTypeValue: string) => {
+      const normalized = String(leaseTypeValue).toLowerCase().trim();
+      if (
+        normalized === "monthly" ||
+        normalized === "month-to-month" ||
+        normalized === "month_to_month"
+      ) {
+        return 1;
+      }
+      if (
+        normalized === "3_months" ||
+        normalized === "3-months" ||
+        normalized === "3 months"
+      ) {
+        return 3;
+      }
+      if (
+        normalized === "half_year" ||
+        normalized === "half-year" ||
+        normalized === "6_months" ||
+        normalized === "6-months" ||
+        normalized === "6 months"
+      ) {
+        return 6;
+      }
+      if (
+        normalized === "full_year" ||
+        normalized === "full-year" ||
+        normalized === "12_months" ||
+        normalized === "12-months" ||
+        normalized === "12 months"
+      ) {
+        return 12;
+      }
+      const parsed = parseInt(normalized, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    };
+
+    const expectedRent = monthlyRent * normalizeLeaseTermMonths(leaseType);
+    const allPayments = getCollection<any>("payments");
+    const totalPaid = allPayments
+      .filter(
+        (payment) =>
+          payment.tenantId === tenantId &&
+          ["rentPayment", "balancePayment"].includes(
+            payment.reasonForPayment,
+          ) &&
+          !["failed", "refunded"].includes(payment.status),
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+    return {
+      outstandingBalance: Math.max(0, expectedRent - totalPaid),
+      totalPaid,
+      totalOwed: expectedRent,
+      expectedRent,
+      currency:
+        (tenant as any)?.currency || (property as any)?.currency || "USD",
+    };
+  };
+
+  try {
+    const res = await apiRequest(
+      "GET",
+      `/payments/tenant/${encodeURIComponent(tenantId)}/balance`,
+    );
+    const data = await res.json();
+    const raw = data?.data || data;
+    if (!res.ok || raw?.outstandingBalance == null) {
+      return fallbackCompute();
+    }
+    return {
+      outstandingBalance: Number(raw?.outstandingBalance ?? 0),
+      totalPaid: Number(raw?.totalPaid ?? 0),
+      totalOwed: Number(raw?.totalOwed ?? 0),
+      expectedRent: Number(raw?.expectedRent ?? 0),
+      currency: raw?.currency || "USD",
+    };
+  } catch (err) {
+    console.warn("Failed to fetch tenant outstanding balance:", err);
+    return fallbackCompute();
   }
 }
 
@@ -304,6 +414,9 @@ function mapServerPaymentToClient(p: any): any {
         ? "rentPayment"
         : undefined);
   const balance = Number(p.balance ?? 0);
+  const priorBalance = Number(p.priorBalance ?? 0);
+  const balanceAfterPayment = Number(p.balanceAfterPayment ?? 0);
+  const balancePeriod = p.balancePeriod || null;
   let status = p.status || "pending";
   if (["recorded", "confirmed", "completed", "paid"].includes(status))
     status = "complete";
@@ -324,6 +437,9 @@ function mapServerPaymentToClient(p: any): any {
     paidBy,
     reasonForPayment,
     balance,
+    priorBalance,
+    balanceAfterPayment,
+    balancePeriod,
     paymentMethod,
     method: paymentMethod,
     status,

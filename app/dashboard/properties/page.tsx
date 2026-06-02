@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,12 +33,14 @@ export default function PropertiesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingProperty, setIsCreatingProperty] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
   const { properties, isLoading, isFetching } = useAppData();
   const isPageLoading = isLoading || (isFetching && properties.length === 0);
 
-  if (isPageLoading) {
+  if (!mounted || isPageLoading) {
     return (
       <div className="space-y-6">
         <AdminSkeletonHeader />

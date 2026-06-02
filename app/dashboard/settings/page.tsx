@@ -268,6 +268,7 @@ export default function SettingsPage() {
     updateProfile,
     isLoading: authLoading,
     error: authError,
+    token,
   } = useAuth();
   const {
     settings: apiSettings,
@@ -600,7 +601,7 @@ export default function SettingsPage() {
 
           if (payloadToSend) {
             if (!settingsId) {
-              const created = await createSettingsOnApi(payloadToSend);
+              const created = await createSettingsOnApi(payloadToSend, token);
               // eslint-disable-next-line no-console
               console.debug("[Settings] createSettingsOnApi result:", created);
               // After creating settings, refresh the context to pick up the new settingsId
@@ -612,6 +613,7 @@ export default function SettingsPage() {
               const updated = await updateSettingsOnApi(
                 settingsId,
                 payloadToSend,
+                token,
               );
               // eslint-disable-next-line no-console
               console.debug("[Settings] updateSettingsOnApi result:", updated);

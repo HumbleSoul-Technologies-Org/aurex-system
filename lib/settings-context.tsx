@@ -62,12 +62,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         );
         setSettingsId(user.settingsId);
       } else if (user && user?.role === "tenant") {
-        apiSettings = await fetchSettingsByTenantId(user.id);
+        apiSettings = await fetchSettingsByTenantId(
+          user.id,
+          token ? token : undefined,
+        );
         if (apiSettings?._id) {
           setSettingsId(apiSettings._id);
         }
       } else {
-        apiSettings = await fetchSettingsFromApi();
+        apiSettings = await fetchSettingsFromApi(token ? token : undefined);
         if (apiSettings?._id) {
           setSettingsId(apiSettings._id);
         }

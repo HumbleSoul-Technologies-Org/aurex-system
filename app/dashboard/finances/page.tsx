@@ -847,6 +847,24 @@ export default function FinancesPage() {
                       <p className="text-sm text-muted-foreground">
                         <b>Reason:</b> {payment.reasonForPayment}
                       </p>
+                      {payment.reasonForPayment === "balancePayment" && (
+                        <p className="text-sm text-muted-foreground">
+                          <b>Balance:</b>{" "}
+                          {payment.priorBalance != null
+                            ? formatCurrency(
+                                payment.priorBalance,
+                                activeCurrency,
+                              )
+                            : "—"}{" "}
+                          →{" "}
+                          {payment.balanceAfterPayment != null
+                            ? formatCurrency(
+                                payment.balanceAfterPayment,
+                                activeCurrency,
+                              )
+                            : "—"}
+                        </p>
+                      )}
                     </div>
                   </div>
 
