@@ -257,7 +257,9 @@ export default function PropertyDetailPage({
 
   // Tenant-collected rent for this property (completed rent transactions)
   const tenantCollected = transactions
-    .filter((t) => t?.type === "rent" && t.status === "completed")
+    .filter(
+      (t) => t?.reasonForPayment === "rentPayment" && t.status === "completed",
+    )
     .reduce((s, t) => s + (Number(t.amount) || 0), 0);
 
   // revenue lost compared to potential monthly income
@@ -298,7 +300,11 @@ export default function PropertyDetailPage({
     setIsDeleting(true);
     setDeleteError("");
     try {
-      const success = await deleteProperty(id, adminPassword);
+      const success = await deleteProperty(
+        id,
+        adminPassword,
+        token ? token : "",
+      );
       if (!success) {
         setDeleteError(
           "Unable to delete the property. Please verify the admin password and try again.",

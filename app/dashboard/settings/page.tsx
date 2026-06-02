@@ -49,8 +49,9 @@ import {
   updateTenantPortalSettings,
   FieldStatus,
   debounce,
+  AdminPaymentMethod,
 } from "@/lib/services/settings";
-import { SystemSettings, clearDB } from "@/lib/local-store";
+import { SystemSettings, clearDB, generateId } from "@/lib/local-store";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { currencies } from "@/lib/data/currencies";
@@ -61,6 +62,8 @@ import {
   CommandItem,
   CommandEmpty,
 } from "@/components/ui/command";
+import { PaymentMethodsModal } from "./payment-methods-modal";
+import { PaymentMethodsList } from "./payment-methods-list";
 
 function PasswordChangeForm({ settings, updateSettings }: any) {
   const [current, setCurrent] = useState("");
@@ -282,6 +285,21 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  // Payment methods modal state
+  const [isPaymentMethodsModalOpen, setIsPaymentMethodsModalOpen] =
+    useState(false);
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<
+    AdminPaymentMethod | undefined
+  >(undefined);
+  // loading states for payment method actions
+  const [paymentMethodsSaving, setPaymentMethodsSaving] = useState(false);
+  const [paymentMethodDeletingId, setPaymentMethodDeletingId] = useState<
+    string | null
+  >(null);
+  const [paymentMethodTogglingId, setPaymentMethodTogglingId] = useState<
+    string | null
+  >(null);
+
   // Profile edit state
   const [localProfile, setLocalProfile] = useState({
     firstName: user?.firstName || "",
@@ -468,6 +486,23 @@ export default function SettingsPage() {
     }
   };
 
+  const normalizePaymentMethodForApi = (method: AdminPaymentMethod) => {
+    const { _id, ...rest } = method;
+    const hasValidObjectId =
+      typeof _id === "string" && /^[0-9a-fA-F]{24}$/.test(_id);
+    return hasValidObjectId ? { _id, ...rest } : rest;
+  };
+
+  const buildPaymentMethodsPayload = (methods: AdminPaymentMethod[]) => ({
+    finance: {
+      currency: {
+        code:
+          settings?.tenantPortalSettings?.financeSettings?.currency || "USD",
+      },
+      paymentMethods: methods.map(normalizePaymentMethodForApi),
+    },
+  });
+
   // Per-field status tracking: { 'companyInfo_name': 'saving', ... }
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>(
     {},
@@ -601,7 +636,10 @@ export default function SettingsPage() {
 
           if (payloadToSend) {
             if (!settingsId) {
-              const created = await createSettingsOnApi(payloadToSend, token);
+              const created = await createSettingsOnApi(
+                payloadToSend,
+                token ?? undefined,
+              );
               // eslint-disable-next-line no-console
               console.debug("[Settings] createSettingsOnApi result:", created);
               // After creating settings, refresh the context to pick up the new settingsId
@@ -613,7 +651,7 @@ export default function SettingsPage() {
               const updated = await updateSettingsOnApi(
                 settingsId,
                 payloadToSend,
-                token,
+                token ?? undefined,
               );
               // eslint-disable-next-line no-console
               console.debug("[Settings] updateSettingsOnApi result:", updated);
@@ -1079,7 +1117,6 @@ export default function SettingsPage() {
                             city: localCompanyInfo.address.city,
                             country: localCompanyInfo.address.country,
                           },
-                          owner: user?.id,
                         },
                       });
                       setSettings((prev) =>
@@ -1219,72 +1256,130 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Payment Methods
+                <label className="block text-sm font-medium text-foreground mb-4">
+                  Payment Methods Configuration
                 </label>
-                <div className="space-y-2">
-                  {(
-                    settings.tenantPortalSettings?.financeSettings
-                      ?.paymentMethods || ([] as any[])
-                  ).map((method: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-muted p-2 rounded"
-                    >
-                      <div className="text-sm capitalize">{method.type}</div>
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          checked={method.enabled}
-                          disabled={
-                            !(
-                              settings.tenantPortalSettings?.featureToggles
-                                ?.paymentPortal ?? true
-                            )
-                          }
-                          onCheckedChange={(checked) => {
-                            const updatedMethods = [
-                              ...(
-                                settings.tenantPortalSettings?.financeSettings
-                                  ?.paymentMethods || []
-                              ).slice(0, idx),
-                              { ...method, enabled: checked },
-                              ...(
-                                settings.tenantPortalSettings?.financeSettings
-                                  ?.paymentMethods || []
-                              ).slice(idx + 1),
-                            ];
+                <PaymentMethodsList
+                  paymentMethods={
+                    (apiSettings?.finance?.paymentMethods ||
+                      []) as AdminPaymentMethod[]
+                  }
+                  onAddNew={() => {
+                    setEditingPaymentMethod(undefined);
+                    setIsPaymentMethodsModalOpen(true);
+                  }}
+                  onEdit={(method) => {
+                    setEditingPaymentMethod(method);
+                    setIsPaymentMethodsModalOpen(true);
+                  }}
+                  deletingId={paymentMethodDeletingId}
+                  togglingId={paymentMethodTogglingId}
+                  isSaving={paymentMethodsSaving}
+                  onDelete={async (methodId) => {
+                    const updated = (
+                      apiSettings?.finance?.paymentMethods || []
+                    ).filter((m) => m._id !== methodId);
+                    setPaymentMethodDeletingId(methodId);
+                    try {
+                      setPaymentMethodsSaving(true);
+                      await createIndependentFieldHandler(
+                        "finance_paymentMethods",
+                        () => undefined,
+                        buildPaymentMethodsPayload(updated),
+                      )(updated);
+                    } catch (e) {
+                      console.error("Failed to delete payment method", e);
+                      alert("Failed to delete payment method");
+                    } finally {
+                      setPaymentMethodDeletingId(null);
+                      setPaymentMethodsSaving(false);
+                    }
+                  }}
+                  onToggleEnable={async (methodId, enabled) => {
+                    const updated = (
+                      apiSettings?.finance?.paymentMethods || []
+                    ).map((m) => (m._id === methodId ? { ...m, enabled } : m));
+                    setPaymentMethodTogglingId(methodId);
+                    try {
+                      setPaymentMethodsSaving(true);
+                      await createIndependentFieldHandler(
+                        "finance_paymentMethods",
+                        () => undefined,
+                        buildPaymentMethodsPayload(updated),
+                      )(updated);
+                    } catch (e) {
+                      console.error("Failed to toggle payment method", e);
+                      alert("Failed to update payment method");
+                    } finally {
+                      setPaymentMethodTogglingId(null);
+                      setPaymentMethodsSaving(false);
+                    }
+                  }}
+                />
 
-                            updateSettings({
-                              tenantPortalSettings: {
-                                ...settings.tenantPortalSettings,
-                                financeSettings: {
-                                  ...settings.tenantPortalSettings
-                                    ?.financeSettings,
-                                  paymentMethods: updatedMethods,
-                                },
-                              },
-                            });
+                <PaymentMethodsModal
+                  isOpen={isPaymentMethodsModalOpen}
+                  onClose={() => {
+                    setIsPaymentMethodsModalOpen(false);
+                    setEditingPaymentMethod(undefined);
+                  }}
+                  editingMethod={editingPaymentMethod}
+                  isSaving={paymentMethodsSaving}
+                  isDeleting={Boolean(paymentMethodDeletingId)}
+                  onSave={async (method) => {
+                    const updated = editingPaymentMethod?._id
+                      ? (apiSettings?.finance?.paymentMethods || []).map((m) =>
+                          m._id === editingPaymentMethod?._id
+                            ? { ...method, _id: m._id }
+                            : m,
+                        )
+                      : [
+                          ...(apiSettings?.finance?.paymentMethods || []),
+                          {
+                            ...method,
+                            _id: generateId("payment-method"),
+                          },
+                        ];
 
-                            createIndependentFieldHandler(
-                              "financeSettings_paymentMethods",
-                              (v) =>
-                                updateSettings({
-                                  tenantPortalSettings: {
-                                    ...settings.tenantPortalSettings,
-                                    financeSettings: {
-                                      ...settings.tenantPortalSettings
-                                        ?.financeSettings,
-                                      paymentMethods: v,
-                                    },
-                                  },
-                                }),
-                            )(updatedMethods);
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    try {
+                      setPaymentMethodsSaving(true);
+                      await createIndependentFieldHandler(
+                        "finance_paymentMethods",
+                        () => undefined,
+                        buildPaymentMethodsPayload(updated),
+                      )(updated);
+                      setIsPaymentMethodsModalOpen(false);
+                      setEditingPaymentMethod(undefined);
+                    } catch (e) {
+                      console.error("Failed to save payment method", e);
+                      alert("Failed to save payment method");
+                    } finally {
+                      setPaymentMethodsSaving(false);
+                    }
+                  }}
+                  onDelete={async (methodId) => {
+                    const updated = (
+                      apiSettings?.finance?.paymentMethods || []
+                    ).filter((m) => m._id !== methodId);
+                    setPaymentMethodDeletingId(methodId);
+                    try {
+                      setPaymentMethodsSaving(true);
+                      await createIndependentFieldHandler(
+                        "finance_paymentMethods",
+                        () => undefined,
+                        buildPaymentMethodsPayload(updated),
+                      )(updated);
+                      setIsPaymentMethodsModalOpen(false);
+                      setEditingPaymentMethod(undefined);
+                    } catch (e) {
+                      console.error("Failed to delete payment method", e);
+                      alert("Failed to delete payment method");
+                    } finally {
+                      setPaymentMethodDeletingId(null);
+                      setPaymentMethodsSaving(false);
+                    }
+                  }}
+                />
               </div>
             </div>
           </TabsContent>

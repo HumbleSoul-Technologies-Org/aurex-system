@@ -87,6 +87,19 @@ export default function MaintenanceAnalyticsRing({
     return null;
   };
 
+  const renderPieLabel = ({ name, percent, x, y }: any) => (
+    <text
+      x={x}
+      y={y}
+      fill="var(--foreground)"
+      fontSize={10}
+      textAnchor="middle"
+      dominantBaseline="central"
+    >
+      {`${name}: ${Math.round((percent || 0) * 100)}%`}
+    </text>
+  );
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[300px] text-muted-foreground">
@@ -148,10 +161,8 @@ export default function MaintenanceAnalyticsRing({
               outerRadius={110}
               paddingAngle={3}
               dataKey="value"
-              label={({ name, percent }) =>
-                `${name}: ${(percent * 100).toFixed(0)}%`
-              }
-              labelLine={true}
+              label={renderPieLabel}
+              labelLine={{ stroke: "var(--border)" }}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />

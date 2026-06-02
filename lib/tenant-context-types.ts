@@ -25,6 +25,9 @@ export interface TenantMessage {
   subject?: string;
   type?: "message" | "announcement";
   originalId?: string;
+  toUserId?: string;
+  toUserName?: string;
+  propertyId?: string;
 }
 
 export interface TenantLoadingState {

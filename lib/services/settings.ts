@@ -104,6 +104,33 @@ export interface NotificationPreferences {
   emailTemplate?: string;
 }
 
+// Admin Payment Method Configuration
+export type PaymentMethodType =
+  | "MTN_MoMo"
+  | "Airtel_Money"
+  | "M-Pesa"
+  | "Orange_Money"
+  | "Visa_Mastercard"
+  | "Bank_Transfer";
+
+export interface BankDetails {
+  accountHolder?: string;
+  accountNumber?: string;
+  bankName?: string;
+  swiftCode?: string;
+  routingNumber?: string;
+}
+
+export interface AdminPaymentMethod {
+  _id?: string;
+  type: PaymentMethodType;
+  enabled: boolean;
+  transactionNumber?: string;
+  bankDetails?: BankDetails;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface PaymentMethod {
   type: string;
   enabled: boolean;
@@ -871,6 +898,7 @@ export interface SettingsPayload {
       country?: string;
       symbol?: string;
     };
+    paymentMethods?: AdminPaymentMethod[];
   };
   notifications?: {
     rentDue?: {
@@ -950,6 +978,14 @@ interface FlatSettingsData {
 export function convertToSettingsPayload(
   settings: Partial<TenantPortalSettings> & any,
 ): Partial<SettingsPayload> {
+  const formatPaymentMethodForPayload = (method: AdminPaymentMethod) => {
+    if (!method) return method;
+    const { _id, ...rest } = method;
+    const hasValidObjectId =
+      typeof _id === "string" && /^[0-9a-fA-F]{24}$/.test(_id);
+    return hasValidObjectId ? { _id, ...rest } : rest;
+  };
+
   return {
     companyInfo: {
       name: settings.companyInfo?.name,
@@ -971,8 +1007,11 @@ export function convertToSettingsPayload(
     },
     finance: {
       currency: {
-        code: settings.financeSettings?.currency,
+        code: settings.financeSettings?.currency || "USD",
       },
+      paymentMethods: settings.financeSettings?.paymentMethods?.map(
+        formatPaymentMethodForPayload,
+      ),
     },
     notifications: {
       rentDue: {
@@ -1093,7 +1132,7 @@ export function convertPayloadToTenantPortalSettings(
         GBP: 0.79,
         KES: 140,
       },
-      paymentMethods: [],
+      paymentMethods: payload.finance?.paymentMethods || [],
     },
   };
 }
@@ -1383,6 +1422,12 @@ export async function createSettingsOnApi(
           },
         },
       };
+      if (tenantSettings.financeSettings?.paymentMethods) {
+        payload.finance = {
+          ...payload.finance,
+          paymentMethods: tenantSettings.financeSettings.paymentMethods,
+        };
+      }
       return payload;
     } catch (e) {
       console.warn("Local fallback create failed:", e);
@@ -1423,6 +1468,13 @@ export async function updateSettingsOnApi(
           createdAt: created.createdAt,
           updatedAt: created.updatedAt,
           tenantPortal: { portalFeatures: {} },
+          finance: {
+            currency: {
+              code: tenantSettings.financeSettings?.currency || "USD",
+            },
+            paymentMethods:
+              tenantSettings.financeSettings?.paymentMethods || [],
+          },
         };
       }
 
@@ -1439,6 +1491,7 @@ export async function updateSettingsOnApi(
         tenantPortal: { portalFeatures: tenantSettings.featureToggles as any },
         finance: {
           currency: { code: tenantSettings.financeSettings?.currency || "USD" },
+          paymentMethods: tenantSettings.financeSettings?.paymentMethods || [],
         },
       };
     } catch (e) {

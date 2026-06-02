@@ -1,7 +1,10 @@
 "use client";
 
 import { useSettings } from "@/lib/settings-context";
-import { convertPayloadToTenantPortalSettings, FeatureToggles } from "@/lib/services/settings";
+import {
+  convertPayloadToTenantPortalSettings,
+  FeatureToggles,
+} from "@/lib/services/settings";
 
 const defaultTenantPortalFeatures: FeatureToggles = {
   paymentPortal: false,
@@ -26,9 +29,12 @@ export interface TenantPortalFeatureState {
  * if (isLoaded && features.messages) { ... }
  */
 export function useTenantPortalFeatures(): TenantPortalFeatureState {
-  const { settings, isLoading, isLoaded } = useSettings();
+  const { settings, /* isLoading, */ isLoaded } = useSettings();
 
-  if (!isLoaded || isLoading || !settings) {
+  // Only consider the settings "loaded" state — ignore transient isLoading
+  // so background refreshes don't temporarily flip feature flags off and
+  // cause UI skeleton flicker.
+  if (!isLoaded || !settings) {
     return {
       features: defaultTenantPortalFeatures,
       isLoaded: false,

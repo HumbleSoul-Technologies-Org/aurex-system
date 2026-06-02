@@ -29,7 +29,8 @@ import AnnouncementCard from "@/components/announcement-card";
 interface Message {
   id: string;
   fromUserId?: string;
-  toUserId?: string[];
+  toUserId?: string;
+  toUserName?: string;
   sender: string;
   senderType: "tenant" | "manager";
   content: string;
@@ -156,12 +157,19 @@ export default function TenantMessagesPage() {
     return typeof ref === "string" ? ref : ref.id || ref._id || "";
   };
 
-  const normalizeRecipientIds = (value: any): string[] => {
-    if (!value) return [];
+  const getUserReferenceName = (ref: any): string => {
+    if (!ref) return "";
+    if (typeof ref === "string") return "";
+    return ref.name || ref.email || ref.id || ref._id || "";
+  };
+
+  const normalizeRecipientId = (value: any): string => {
+    if (!value) return "";
     if (Array.isArray(value)) {
-      return value.map((item) => getUserReferenceId(item)).filter(Boolean);
+      const first = value.find((item) => !!item);
+      return first ? getUserReferenceId(first) : "";
     }
-    return [getUserReferenceId(value)].filter(Boolean);
+    return getUserReferenceId(value);
   };
 
   const flattenConversationMessages = (items: any[]): any[] => {
@@ -245,7 +253,7 @@ export default function TenantMessagesPage() {
         {
           category: "message",
           fromUserId: tenant.id,
-          toUserId: [ownerId],
+          toUserId: ownerId,
           message: messageText.trim(),
         },
         token,
@@ -298,7 +306,8 @@ export default function TenantMessagesPage() {
     const normalizeIncoming = (m: any): Message => {
       const id = m._id || m.id || m.originalId || "";
       const fromUserId = m.fromUserId || "";
-      const toUserId = normalizeRecipientIds(m.toUserId || m.to);
+      const toUserId = normalizeRecipientId(m.toUserId || m.to);
+      const toUserName = getUserReferenceName(m.toUserId || m.to);
       const timestamp =
         m.sentAt ||
         m.sent_at ||
@@ -327,9 +336,7 @@ export default function TenantMessagesPage() {
         id,
         fromUserId,
         toUserId,
-        sender: fromUserId || "",
-        senderType: isTenantSender ? "tenant" : "manager",
-        content,
+        toUserName,
         timestamp,
         isRead,
         sent: isTenantSender,
@@ -448,14 +455,11 @@ export default function TenantMessagesPage() {
         typeof fromIdRaw === "string"
           ? fromIdRaw
           : fromIdRaw.id || fromIdRaw._id || "";
-      const toRaw = (m as any).toUserId || [];
-      const toIds: string[] = Array.isArray(toRaw)
-        ? toRaw
-            .map((t) => (typeof t === "string" ? t : t.id || t._id || ""))
-            .filter(Boolean)
-        : [];
+      const toId = normalizeRecipientId(
+        (m as any).toUserId || (m as any).to || "",
+      );
       const isManagerMessage = m.senderType === "manager";
-      const isBroadcastMessage = isManagerMessage && toIds.length === 0;
+      const isBroadcastMessage = isManagerMessage && !toId;
 
       if (!currentId) return true;
 
@@ -465,7 +469,7 @@ export default function TenantMessagesPage() {
 
       if (filter === "inbox") {
         if (isBroadcastMessage) return true;
-        return toIds.includes(currentId) && fromId !== currentId;
+        return toId === currentId && fromId !== currentId;
       }
       if (filter === "sent") return fromId === currentId;
       if (filter === "starred") return !!m.isStarred;
@@ -721,6 +725,13 @@ export default function TenantMessagesPage() {
                         {m.senderType === "manager" ? "Management" : "You"}
                       </div>
                       <div className="text-xs text-gray-500 truncate">
+                        To:{" "}
+                        {m.toUserName ||
+                          (m.toUserId === currentTenant?.id
+                            ? "You"
+                            : "Management")}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
                         {m.subject || m.content.substring(0, 50)}
                       </div>
                     </div>
@@ -790,6 +801,24 @@ export default function TenantMessagesPage() {
 
               {/* Content */}
               <div className="flex-1 overflow-auto p-4">
+                {!isSelectedAnnouncement && (
+                  <div className="space-y-1 text-xs text-gray-500 mb-4">
+                    <div>
+                      From:{" "}
+                      {(selected as any).senderType === "manager"
+                        ? "Management"
+                        : "You"}
+                    </div>
+                    <div>
+                      To:{" "}
+                      {(selected as any).toUserName
+                        ? (selected as any).toUserName
+                        : (selected as any).toUserId === currentTenant?.id
+                          ? "You"
+                          : "Management"}
+                    </div>
+                  </div>
+                )}
                 <div className="whitespace-pre-wrap text-sm">
                   {isSelectedAnnouncement
                     ? (selected as any).message

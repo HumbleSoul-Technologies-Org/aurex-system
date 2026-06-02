@@ -6,7 +6,7 @@ import { apiRequest } from "./query-client";
 import { useAuth } from "./auth-context";
 import { listProperties, PropertyRecord } from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
-import { getPaymentsForPropertyIds, PaymentRecord } from "./services/payments";
+import { getPaymentsForProperty, PaymentRecord } from "./services/payments";
 import { getExpensesForProperties, ExpenseRecord } from "./services/expenses";
 import {
   getMaintenanceRequests,
@@ -118,7 +118,7 @@ async function fetchPayments(
   }
 
   try {
-    return (await getPaymentsForPropertyIds(
+    return (await getPaymentsForProperty(
       propertyIds,
       token ?? undefined,
     )) as unknown as PaymentRecord[];

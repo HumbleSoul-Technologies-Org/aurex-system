@@ -1,99 +1,100 @@
-﻿import { apiRequest } from '@/lib/query-client'
+﻿import { apiRequest } from "@/lib/query-client";
+import type { TenantMessage } from "@/lib/tenant-context-types";
 
 /**
  * Message nested schema (for new Conversation structure)
  */
 export interface ConversationMessage {
-  _id?: string
-  id?: string
-  category: 'message' | 'announcement'
-  fromUserId: string
-  toUserId: string[] // multi-recipient
-  message: string
-  sentAt: string
-  seenBy: string[] // array of user IDs who have seen this
-  replies: ConversationReply[]
+  _id?: string;
+  id?: string;
+  category: "message" | "announcement";
+  fromUserId: string;
+  toUserId: string;
+  toUserName?: string;
+  message: string;
+  sentAt: string;
+  seenBy: string[]; // array of user IDs who have seen this
+  replies: ConversationReply[];
 }
 
 export interface ConversationReply {
-  _id?: string
-  id?: string
-  messageId: string
-  fromUserId: string
-  toUserId: string
-  message: string
-  sentAt: string
+  _id?: string;
+  id?: string;
+  messageId: string;
+  fromUserId: string;
+  toUserId: string;
+  message: string;
+  sentAt: string;
 }
 
 export interface PropertyInfo {
-  _id?: string
-  id?: string
-  name?: string
-  address?: string
-  [key: string]: any
+  _id?: string;
+  id?: string;
+  name?: string;
+  address?: string;
+  [key: string]: any;
 }
 
 export type UserReference =
   | string
   | {
-      _id?: string
-      id?: string
-      name?: string
-      email?: string
-      [key: string]: any
-    }
+      _id?: string;
+      id?: string;
+      name?: string;
+      email?: string;
+      [key: string]: any;
+    };
 
-export type PropertyReference = string | PropertyInfo
+export type PropertyReference = string | PropertyInfo;
 
 export interface PropertyConversation {
-  _id?: string
-  id?: string
-  propertyId: PropertyReference
-  messages: ConversationMessage[]
+  _id?: string;
+  id?: string;
+  propertyId: PropertyReference;
+  messages: ConversationMessage[];
 }
 
-
 export interface Conversation {
-  _id?: string
-  id?: string
-  ownerId: string
-  propertyId: PropertyReference
-  participants: string[]
-  conversations: PropertyConversation[]
-  createdAt?: string
-  updatedAt?: string
+  _id?: string;
+  id?: string;
+  ownerId: string;
+  propertyId: PropertyReference;
+  participants: string[];
+  conversations: PropertyConversation[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
  * Legacy MessageRecord for backward compatibility
  */
 export interface MessageRecord {
-  id: string
-  fromUserId?: string
-  toUserId?: string | string[]
-  tenantId?: string
-  propertyId?: string
-  to?: string
-  subject?: string
-  message: string
-  seen?: boolean
-  replyId?: string
-  createdBy?: string
-  createdAt?: string
-  updatedAt?: string
+  id: string;
+  fromUserId?: string;
+  toUserId?: string;
+  tenantId?: string;
+  propertyId?: string;
+  to?: string;
+  subject?: string;
+  message: string;
+  seen?: boolean;
+  replyId?: string;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ============ NEW NESTED CONVERSATION ENDPOINTS ============
 
 function getPropertyRefId(propertyId: PropertyReference | undefined): string {
-  if (!propertyId) return ''
-  return typeof propertyId === 'string'
+  if (!propertyId) return "";
+  return typeof propertyId === "string"
     ? propertyId
-    : propertyId.id || propertyId._id || ''
+    : propertyId.id || propertyId._id || "";
 }
 
 function getMessagePropertyId(message: any): string {
-  if (!message) return ""
+  if (!message) return "";
   return (
     message.propertyId ||
     message.property_id ||
@@ -102,17 +103,22 @@ function getMessagePropertyId(message: any): string {
     message.property?.propertyId ||
     message.property?.property_id ||
     ""
-  )
+  );
 }
 
-function getMessageRecipientIds(message: any): string[] {
-  if (!message) return []
-  const ids = Array.isArray(message.toUserId)
-    ? message.toUserId
-    : message.toUserId
-      ? [message.toUserId]
-      : []
-  return ids.map(getUserRefId).filter(Boolean)
+function getMessageRecipientName(userRef: any): string {
+  if (!userRef) return "";
+  if (typeof userRef === "string") return "";
+  return userRef.name || userRef.email || userRef.id || userRef._id || "";
+}
+
+function getSingleMessageRecipientId(message: any): string {
+  if (!message) return "";
+  if (Array.isArray(message.toUserId)) {
+    const first = message.toUserId.find((item: any) => !!item);
+    return getUserRefId(first);
+  }
+  return getUserRefId(message.toUserId);
 }
 
 export async function getTenantPropertyMessages(
@@ -120,30 +126,34 @@ export async function getTenantPropertyMessages(
   ownerId: string,
   propertyId: string,
   token?: string | null,
-) {
+): Promise<ConversationMessage[]> {
   try {
-    const conversation = await getConversationByProperty(ownerId, propertyId, token)
-   
+    const conversation = await getConversationByProperty(
+      ownerId,
+      propertyId,
+      token,
+    );
+
     if (!conversation) {
-      console.debug(`No conversation found for property ${propertyId}`)
-      return []
+      console.debug(`No conversation found for property ${propertyId}`);
+      return [];
     }
+
     const filteredConversationsByProperty = conversation.conversations.filter(
-      (conv) => getPropertyRefId(conv.propertyId) === propertyId
-    )
-    
-      
-    
-    return  filteredConversationsByProperty.flatMap((conv) => conv?.messages) || []
-     
+      (conv) => getPropertyRefId(conv.propertyId) === propertyId,
+    );
+
+    return (
+      filteredConversationsByProperty.flatMap((conv) => conv?.messages) || []
+    );
   } catch (err) {
-    console.debug("getTenantPropertyMessages: property fetch failed, falling back", err)
+    console.debug(
+      "getTenantPropertyMessages: property fetch failed, falling back",
+      err,
+    );
+    return [];
   }
-
-   
-    
-  }
-
+}
 
 /**
  * Helper: fetch tenant-scoped messages for a property and map to a UI-friendly shape.
@@ -154,24 +164,32 @@ export async function getTenantPropertyMessagesForUI(
   ownerId: string,
   propertyId: string,
   token?: string | null,
-) {
+): Promise<TenantMessage[]> {
   const convMessages = await getTenantPropertyMessages(
     tenantId,
     ownerId,
     propertyId,
     token,
-  )
+  );
   return (convMessages || []).map((msg: any) => {
-    const fromUserId = msg.fromUserId || ""
-    const isTenantSender = fromUserId === tenantId
-    const isRead = Array.isArray(msg.seenBy) ? msg.seenBy.includes(tenantId) : false
+    const fromUserId = getUserRefId(msg.fromUserId);
+    const toUserId = getSingleMessageRecipientId(msg);
+    const toUserName = getMessageRecipientName(msg.toUserId);
+    const isTenantSender = fromUserId === tenantId;
+    const senderType: "tenant" | "manager" = isTenantSender
+      ? "tenant"
+      : "manager";
+    const isRead = Array.isArray(msg.seenBy)
+      ? msg.seenBy.includes(tenantId)
+      : false;
 
     return {
       id: msg._id || msg.id || "",
       sender: fromUserId,
-      fromUserId: fromUserId,
-      toUserId: Array.isArray(msg.toUserId) ? msg.toUserId : (msg.toUserId ? [msg.toUserId] : []),
-      senderType: isTenantSender ? "tenant" : "manager",
+      fromUserId,
+      toUserId,
+      toUserName,
+      senderType,
       content: msg.message || "",
       timestamp: msg.sentAt || "",
       isRead,
@@ -183,109 +201,119 @@ export async function getTenantPropertyMessagesForUI(
       type: msg.category === "announcement" ? "announcement" : "message",
       originalId: msg._id || msg.id,
       propertyId: msg.propertyId || "",
-    }
-  })
+    };
+  });
 }
 
 function getUserRefId(userRef: UserReference | undefined): string {
-  if (!userRef) return ''
-  return typeof userRef === 'string'
+  if (!userRef) return "";
+  return typeof userRef === "string"
     ? userRef
-    : userRef.id || userRef._id || ''
+    : userRef.id || userRef._id || "";
 }
 
 function normalizeConversationReply(reply: any): ConversationReply {
   return {
     ...reply,
-    messageId: reply.messageId || reply.id || '',
+    messageId: reply.messageId || reply.id || "",
     fromUserId: getUserRefId(reply.fromUserId),
     toUserId: getUserRefId(reply.toUserId),
-    message: reply.message || '',
-    sentAt: reply.sentAt || '',
-  }
+    message: reply.message || "",
+    sentAt: reply.sentAt || "",
+  };
 }
 
 function normalizeConversationMessage(message: any): ConversationMessage {
-  const fromUserId = getUserRefId(message.fromUserId)
-  const toUserId = Array.isArray(message.toUserId)
-    ? message.toUserId.map(getUserRefId).filter(Boolean)
-    : [getUserRefId(message.toUserId)].filter(Boolean)
+  const fromUserId = getUserRefId(message.fromUserId);
+  const toUserId = getSingleMessageRecipientId(message);
+  const toUserName = getMessageRecipientName(message.toUserId);
   const seenBy = Array.isArray(message.seenBy)
     ? message.seenBy.map(getUserRefId).filter(Boolean)
-    : []
+    : [];
 
   return {
     ...message,
     fromUserId,
     toUserId,
+    toUserName,
     seenBy,
     replies: Array.isArray(message.replies)
       ? message.replies.map(normalizeConversationReply)
       : [],
-    message: message.message || '',
-    sentAt: message.sentAt || '',
-  }
+    message: message.message || "",
+    sentAt: message.sentAt || "",
+  };
 }
 
 function normalizeConversation(conv: any): Conversation {
   const normalizedPropertyId: PropertyReference = conv.propertyId
-    ? typeof conv.propertyId === 'string'
+    ? typeof conv.propertyId === "string"
       ? conv.propertyId
       : {
           ...conv.propertyId,
           id: conv.propertyId.id || conv.propertyId._id || undefined,
         }
-    : ''
+    : "";
 
   const participants = Array.isArray(conv.participants)
     ? conv.participants
         .map((participant: any) =>
-          typeof participant === 'string'
+          typeof participant === "string"
             ? participant
-            : participant?.id || participant?._id || '',
+            : participant?.id || participant?._id || "",
         )
         .filter(Boolean)
-    : []
+    : [];
 
   const conversations = Array.isArray(conv.conversations)
     ? conv.conversations.map((conversation: any) => ({
         ...conversation,
         propertyId: conversation.propertyId
-          ? typeof conversation.propertyId === 'string'
+          ? typeof conversation.propertyId === "string"
             ? conversation.propertyId
             : {
                 ...conversation.propertyId,
                 id:
-                  conversation.propertyId.id || conversation.propertyId._id || undefined,
+                  conversation.propertyId.id ||
+                  conversation.propertyId._id ||
+                  undefined,
               }
-          : '',
+          : "",
         messages: Array.isArray(conversation.messages)
           ? conversation.messages.map(normalizeConversationMessage)
           : [],
       }))
-    : []
+    : [];
 
   return {
     ...conv,
     propertyId: normalizedPropertyId,
     participants,
     conversations,
-  }
+  };
 }
 
 function normalizeConversationResponse(response: any): Conversation[] {
-  if (!response) return []
-  const list = Array.isArray(response) ? response : [response]
-  return list.map(normalizeConversation)
+  if (!response) return [];
+  const list = Array.isArray(response) ? response : [response];
+  return list.map(normalizeConversation);
 }
 
 /**
  * Get all conversations for an owner (admin)
  */
-export async function getConversationsByOwner(ownerId: string, token?: string | null) {
-  const res = await apiRequest('GET', `/messages/owner/${ownerId}/all`, undefined, token)
-  const json = await res.json()
-  return normalizeConversationResponse(json)
+export async function getConversationsByOwner(
+  ownerId: string,
+  token?: string | null,
+) {
+  const res = await apiRequest(
+    "GET",
+    `/messages/owner/${ownerId}/all`,
+    undefined,
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return normalizeConversationResponse(json);
 }
 
 /**
@@ -294,28 +322,36 @@ export async function getConversationsByOwner(ownerId: string, token?: string | 
 export async function getConversationByProperty(
   ownerId: string,
   propertyId: string,
-  token?: string | null
+  token?: string | null,
 ) {
   // Try to reuse the owner's conversations list first to avoid duplicate
   // requests when the caller already needs the full set.
   try {
-    const ownerConvs = await getConversationsByOwner(ownerId, token)
+    const ownerConvs = await getConversationsByOwner(ownerId, token);
     const match = ownerConvs.find(
       (c) => getPropertyRefId(c.propertyId) === propertyId,
-    )
-    if (match) return match
+    );
+    if (match) return match;
   } catch (err) {
     // If owner-level fetch fails, fall back to the single-property endpoint.
     // Do not rethrow here â€” we'll attempt the direct fetch below.
     // eslint-disable-next-line no-console
-    console.debug('getConversationByProperty: owner fetch failed, falling back', err)
+    console.debug(
+      "getConversationByProperty: owner fetch failed, falling back",
+      err,
+    );
   }
 
-  const res = await apiRequest('GET', `/messages/owner/${ownerId}/property/${propertyId}`, undefined, token)
-  const json = await res.json()
-  console.debug('getConversationByProperty: fetched conversation', json)
-  const convs = normalizeConversationResponse(json)
-  return convs[0] ?? null
+  const res = await apiRequest(
+    "GET",
+    `/messages/owner/${ownerId}/property/${propertyId}`,
+    undefined,
+    token ?? undefined,
+  );
+  const json = await res.json();
+  console.debug("getConversationByProperty: fetched conversation", json);
+  const convs = normalizeConversationResponse(json);
+  return convs[0] ?? null;
 }
 
 /**
@@ -325,16 +361,21 @@ export async function createConversationMessage(
   ownerId: string,
   propertyId: string,
   payload: {
-    category?: 'message' | 'announcement'
-    fromUserId: string
-    toUserId: string | string[]
-    message: string
+    category?: "message" | "announcement";
+    fromUserId: string;
+    toUserId: string;
+    message: string;
   },
-  token?: string | null
+  token?: string | null,
 ) {
-  const res = await apiRequest('POST', `/messages/owner/${ownerId}/property/${propertyId}/create`, payload, token)
-  const json = await res.json()
-  return json
+  const res = await apiRequest(
+    "POST",
+    `/messages/owner/${ownerId}/property/${propertyId}/create`,
+    payload,
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return json;
 }
 
 /**
@@ -345,20 +386,20 @@ export async function createConversationReply(
   propertyId: string,
   messageId: string,
   payload: {
-    fromUserId: string
-    toUserId: string
-    message: string
+    fromUserId: string;
+    toUserId: string;
+    message: string;
   },
-  token?: string | null
+  token?: string | null,
 ) {
   const res = await apiRequest(
-    'POST',
+    "POST",
     `/messages/owner/${ownerId}/property/${propertyId}/${messageId}/reply`,
     payload,
-    token
-  )
-  const json = await res.json()
-  return json
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return json;
 }
 
 /**
@@ -369,16 +410,16 @@ export async function markConversationMessageSeen(
   propertyId: string,
   messageId: string,
   userId: string,
-  token?: string | null
+  token?: string | null,
 ) {
   const res = await apiRequest(
-    'PUT',
+    "PUT",
     `/messages/owner/${ownerId}/property/${propertyId}/${messageId}/seen`,
     { userId },
-    token
-  )
-  const json = await res.json()
-  return json
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return json;
 }
 
 /**
@@ -388,16 +429,16 @@ export async function deleteConversationMessage(
   ownerId: string,
   propertyId: string,
   messageId: string,
-  token?: string | null
+  token?: string | null,
 ) {
   const res = await apiRequest(
-    'DELETE',
+    "DELETE",
     `/messages/owner/${ownerId}/property/${propertyId}/${messageId}`,
     undefined,
-    token
-  )
-  const json = await res.json()
-  return json
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return json;
 }
 
 /**
@@ -408,16 +449,16 @@ export async function deleteConversationReply(
   propertyId: string,
   messageId: string,
   replyId: string,
-  token?: string | null
+  token?: string | null,
 ) {
   const res = await apiRequest(
-    'DELETE',
+    "DELETE",
     `/messages/owner/${ownerId}/property/${propertyId}/${messageId}/reply/${replyId}`,
     undefined,
-    token
-  )
-  const json = await res.json()
-  return json
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return json;
 }
 
 // ============ LEGACY ENDPOINTS (BACKWARD COMPATIBILITY) ============
@@ -425,81 +466,108 @@ export async function deleteConversationReply(
 /**
  * Legacy: Get all messages for a tenant
  */
-export async function getMessagesByTenant(tenantId: string, token?: string | null) {
-  const res = await apiRequest('GET', `/messages/tenant/${tenantId}/all`, undefined, token)
-  const json = await res.json()
+export async function getMessagesByTenant(
+  tenantId: string,
+  token?: string | null,
+) {
+  const res = await apiRequest(
+    "GET",
+    `/messages/tenant/${tenantId}/all`,
+    undefined,
+    token ?? undefined,
+  );
+  const json = await res.json();
   return (json || []).map((m: any) => ({
     ...m,
     id: m.id || m._id,
     fromUserId: getUserRefId(m.fromUserId),
     toUserId: Array.isArray(m.toUserId)
-      ? m.toUserId.map(getUserRefId).filter(Boolean)
-      : m.toUserId
-        ? [getUserRefId(m.toUserId)]
-        : [],
+      ? getSingleMessageRecipientId(m)
+      : getUserRefId(m.toUserId),
     seenBy: Array.isArray(m.seenBy)
       ? m.seenBy.map(getUserRefId).filter(Boolean)
       : [],
-  })) as ConversationMessage[]
+  })) as ConversationMessage[];
 }
 
 /**
  * Legacy: Create message (deprecated; use createConversationMessage)
  */
-export async function createMessageApi(payload: Partial<MessageRecord>, token?: string | null) {
+export async function createMessageApi(
+  payload: Partial<MessageRecord>,
+  token?: string | null,
+) {
   // Map legacy payload to new structure if needed
   const newPayload = {
-    category: 'message' as const,
-    fromUserId: payload.fromUserId || '',
-    toUserId: payload.toUserId ? [payload.toUserId as string].flat() : [],
-    message: payload.message || '',
-  }
+    category: "message" as const,
+    fromUserId: payload.fromUserId || "",
+    toUserId: payload.toUserId || "",
+    message: payload.message || "",
+  };
   // This will fail without ownerId and propertyId; recommend using createConversationMessage instead
-  console.warn('createMessageApi is deprecated; use createConversationMessage instead')
-  return newPayload
+  console.warn(
+    "createMessageApi is deprecated; use createConversationMessage instead",
+  );
+  return newPayload;
 }
 
 /**
  * Legacy: Get single message by ID
  */
 export async function getMessageById(id: string, token?: string | null) {
-  console.warn('getMessageById is deprecated; use getConversationByProperty instead')
-  return null as any
+  console.warn(
+    "getMessageById is deprecated; use getConversationByProperty instead",
+  );
+  return null as any;
 }
 
 /**
  * Legacy: Update message
  */
-export async function updateMessageApi(id: string, patch: Partial<MessageRecord>, token?: string | null) {
-  console.warn('updateMessageApi is deprecated; use markConversationMessageSeen instead')
-  return null as any
+export async function updateMessageApi(
+  id: string,
+  patch: Partial<MessageRecord>,
+  token?: string | null,
+) {
+  console.warn(
+    "updateMessageApi is deprecated; use markConversationMessageSeen instead",
+  );
+  return null as any;
 }
 
 /**
  * Legacy: Delete message
  */
 export async function deleteMessageApi(id: string, token?: string | null) {
-  console.warn('deleteMessageApi is deprecated; use deleteConversationMessage instead')
-  return null as any
+  console.warn(
+    "deleteMessageApi is deprecated; use deleteConversationMessage instead",
+  );
+  return null as any;
 }
 
 /**
  * Legacy: Create reply
  */
-export async function createReplyApi(messageId: string, payload: { reply: string; createdBy?: string }, token?: string | null) {
-  console.warn('createReplyApi is deprecated; use createConversationReply instead')
-  return null as any
+export async function createReplyApi(
+  messageId: string,
+  payload: { reply: string; createdBy?: string },
+  token?: string | null,
+) {
+  console.warn(
+    "createReplyApi is deprecated; use createConversationReply instead",
+  );
+  return null as any;
 }
 
 /**
  * Legacy: Get replies for message
  */
-export async function getRepliesForMessage(messageId: string, token?: string | null) {
-  console.warn('getRepliesForMessage is deprecated; replies are embedded in messages')
-  return [] as ConversationReply[]
+export async function getRepliesForMessage(
+  messageId: string,
+  token?: string | null,
+) {
+  console.warn(
+    "getRepliesForMessage is deprecated; replies are embedded in messages",
+  );
+  return [] as ConversationReply[];
 }
-
-
-
-
-

@@ -71,6 +71,19 @@ export default function RentCollectionProgress({
     return null;
   };
 
+  const renderPieLabel = ({ name, percent, x, y }: any) => (
+    <text
+      x={x}
+      y={y}
+      fill="var(--foreground)"
+      fontSize={10}
+      textAnchor="middle"
+      dominantBaseline="central"
+    >
+      {`${name}: ${Math.round((percent || 0) * 100)}%`}
+    </text>
+  );
+
   return (
     <div className="space-y-4">
       {/* Progress Summary */}
@@ -141,10 +154,8 @@ export default function RentCollectionProgress({
               outerRadius={110}
               paddingAngle={3}
               cornerRadius={20}
-              labelLine={false}
-              label={({ name, percent }) =>
-                `${name}: ${Math.round((percent || 0) * 100)}%`
-              }
+              labelLine={{ stroke: "var(--border)" }}
+              label={renderPieLabel}
             >
               {data.map((entry) => (
                 <Cell key={entry.name} fill={entry.color} />

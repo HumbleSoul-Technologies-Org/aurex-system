@@ -13,6 +13,7 @@ import {
   RentPayment,
 } from "@/lib/services/payments";
 import { useAppData } from "@/lib/data-context";
+import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 
@@ -68,9 +69,8 @@ export default function MakePaymentPage() {
   const [outstandingBalance, setOutstandingBalance] = useState<number | null>(
     null,
   );
-  const [method, setMethod] = useState<
-    "bank_transfer" | "credit_card" | "debit_card"
-  >("bank_transfer");
+  const [method, setMethod] = useState<string>("bank_transfer");
+  const { settings: apiSettings } = useSettings();
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
   const tenantPayments = tenant
@@ -408,51 +408,64 @@ export default function MakePaymentPage() {
             </h2>
 
             <div className="space-y-3">
-              {[
-                {
-                  id: "bank_transfer",
-                  name: "Bank Transfer",
-                  description: "Direct transfer from your bank account",
-                },
-                {
-                  id: "credit_card",
-                  name: "Credit Card",
-                  description: "Visa, Mastercard, American Express",
-                },
-                {
-                  id: "debit_card",
-                  name: "Debit Card",
-                  description: "Direct debit card payment",
-                },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() =>
-                    setMethod(
-                      m.id as "bank_transfer" | "credit_card" | "debit_card",
-                    )
-                  }
-                  className={`w-full p-4 border-2 rounded-lg transition-all text-left ${method === m.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${method === m.id ? "border-primary bg-primary" : "border-border"}`}
-                    >
-                      {method === m.id && (
-                        <div className="w-2 h-2 bg-white rounded-full" />
-                      )}
+              {(apiSettings?.finance?.paymentMethods || [])
+                .filter((pm) => pm.enabled)
+                .map((pm) => ({
+                  id: pm.type,
+                  name:
+                    pm.type === "Visa_Mastercard"
+                      ? "Credit / Debit Card"
+                      : pm.type === "Bank_Transfer"
+                        ? "Bank Transfer"
+                        : pm.type.replace(/_/g, " "),
+                  description: pm.transactionNumber
+                    ? `Use ${pm.transactionNumber}`
+                    : pm.bankDetails
+                      ? `Account ${pm.bankDetails.bankName}`
+                      : "",
+                }))
+                .concat(
+                  // Fallback default methods if none configured
+                  (apiSettings?.finance?.paymentMethods || []).length === 0
+                    ? [
+                        {
+                          id: "bank_transfer",
+                          name: "Bank Transfer",
+                          description: "Direct transfer from your bank account",
+                        },
+                        {
+                          id: "credit_card",
+                          name: "Credit Card",
+                          description: "Visa, Mastercard, American Express",
+                        },
+                      ]
+                    : [],
+                )
+                .map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setMethod(String(m.id))}
+                    className={`w-full p-4 border-2 rounded-lg transition-all text-left ${method === m.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${method === m.id ? "border-primary bg-primary" : "border-border"}`}
+                      >
+                        {method === m.id && (
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm md:text-base">
+                          {m.name}
+                        </p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          {m.description}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-foreground text-sm md:text-base">
-                        {m.name}
-                      </p>
-                      <p className="text-xs md:text-sm text-muted-foreground">
-                        {m.description}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
             </div>
           </div>
         </Card>

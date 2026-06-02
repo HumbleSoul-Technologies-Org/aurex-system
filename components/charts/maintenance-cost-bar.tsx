@@ -3,11 +3,8 @@
 import React, { useMemo } from "react";
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  CartesianGrid,
-  XAxis,
-  YAxis,
+  PieChart,
+  Pie,
   Tooltip,
   Legend,
   Cell,
@@ -112,6 +109,19 @@ export default function MaintenanceCostBar({
     return null;
   };
 
+  const renderPieLabel = ({ name, percent, x, y }: any) => (
+    <text
+      x={x}
+      y={y}
+      fill="var(--foreground)"
+      fontSize={10}
+      textAnchor="middle"
+      dominantBaseline="central"
+    >
+      {`${name}: ${Math.round((percent || 0) * 100)}%`}
+    </text>
+  );
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[320px] text-muted-foreground">
@@ -153,51 +163,33 @@ export default function MaintenanceCostBar({
         </div>
       </div>
 
-      {/* Bar Chart */}
+      {/* Doughnut Chart */}
       <div className="w-full h-[320px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 10, right: 30, left: 10, bottom: 80 }}
-          >
-            <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" />
-            <XAxis
-              dataKey="property"
-              stroke="var(--border)"
-              tickLine={{ stroke: "var(--border)" }}
-              axisLine={{ stroke: "var(--border)" }}
-              tick={{
-                fill: "var(--muted-foreground)",
-                fontSize: 11,
-              }}
-              angle={-45}
-              textAnchor="end"
-              height={80}
-            />
-            <YAxis
-              stroke="var(--border)"
-              tickLine={{ stroke: "var(--border)" }}
-              axisLine={{ stroke: "var(--border)" }}
-              tick={{
-                fill: "var(--muted-foreground)",
-                fontSize: 11,
-              }}
-              tickFormatter={(value) =>
-                `${formatCurrency(value, activeCurrency)}`
-              }
-            />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend
-              verticalAlign="top"
-              height={36}
-              wrapperStyle={{ color: "var(--muted-foreground)" }}
-            />
-            <Bar dataKey="cost" name="Total Cost" radius={[8, 8, 0, 0]}>
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="cost"
+              nameKey="property"
+              cx="50%"
+              cy="50%"
+              innerRadius={70}
+              outerRadius={110}
+              paddingAngle={4}
+              label={renderPieLabel}
+              labelLine={{ stroke: "var(--border)" }}
+            >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}
-            </Bar>
-          </BarChart>
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              verticalAlign="bottom"
+              height={46}
+              wrapperStyle={{ color: "var(--muted-foreground)" }}
+            />
+          </PieChart>
         </ResponsiveContainer>
       </div>
     </div>

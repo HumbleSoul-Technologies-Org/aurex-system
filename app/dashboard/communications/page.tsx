@@ -251,19 +251,26 @@ export default function CommunicationsPage() {
 
     setIsSendingMessage(true);
     try {
-      await createConversationMessage(
-        user.id,
-        propertyId,
-        {
-          category: "message",
-          fromUserId: user.id,
-          toUserId: currentConversation.participants.filter(
-            (p) => p !== user.id,
-          ),
-          message: messageText,
-        },
-        token,
+      const recipientIds = currentConversation.participants.filter(
+        (p) => p !== user.id,
       );
+
+      await Promise.all(
+        recipientIds.map((recipientId) =>
+          createConversationMessage(
+            user.id,
+            propertyId,
+            {
+              category: "message",
+              fromUserId: user.id,
+              toUserId: recipientId,
+              message: messageText,
+            },
+            token ?? undefined,
+          ),
+        ),
+      );
+
       setMessageText("");
       // Reload conversation
       const updated = await getConversationByProperty(
@@ -474,16 +481,20 @@ export default function CommunicationsPage() {
     }
     setIsSendingNew(true);
     try {
-      await createConversationMessage(
-        user.id,
-        sendPropertyId,
-        {
-          category: "message",
-          fromUserId: user.id,
-          toUserId: sendTenantIds,
-          message: sendMessageText,
-        },
-        token,
+      await Promise.all(
+        sendTenantIds.map((recipientId) =>
+          createConversationMessage(
+            user.id,
+            sendPropertyId,
+            {
+              category: "message",
+              fromUserId: user.id,
+              toUserId: recipientId,
+              message: sendMessageText,
+            },
+            token ?? undefined,
+          ),
+        ),
       );
       // Reload conversations
       const convs = await getConversationsByOwner(user.id, token);
@@ -791,13 +802,8 @@ export default function CommunicationsPage() {
                       ) : (
                         allMessages?.map((msg, idx) => {
                           const fromUserId = getUserRefId(msg.fromUserId);
-                          const toUserids = Array.isArray(msg.toUserId)
-                            ? msg.toUserId.map((u) => getUserRefId(u))
-                            : [getUserRefId(msg.toUserId)];
+                          const recipientId = getUserRefId(msg.toUserId);
                           const isFromCurrentUser = fromUserId === user?.id;
-                          const firstToUser = Array.isArray(msg.toUserId)
-                            ? msg.toUserId[0]
-                            : msg.toUserId;
 
                           return (
                             <div
@@ -820,9 +826,9 @@ export default function CommunicationsPage() {
                                 </b>{" "}
                                 to:
                                 <b>
-                                  {toUserids.includes(user?.id || "")
+                                  {recipientId === user?.id
                                     ? "You"
-                                    : getToUserName(firstToUser)}{" "}
+                                    : getToUserName(msg.toUserId)}{" "}
                                 </b>
                               </p>
 
@@ -873,15 +879,12 @@ export default function CommunicationsPage() {
                           Recipients
                         </p>
                         <p className="text-sm">
-                          {selectedMessage.toUserId.length > 0
-                            ? selectedMessage.toUserId
-                                .map((toRef) =>
-                                  getUserRefId(toRef) === user?.id
-                                    ? "You"
-                                    : getToUserName(toRef),
-                                )
-                                .join(", ")
-                            : "No recipients"}
+                          {selectedMessage.toUserId
+                            ? getUserRefId(selectedMessage.toUserId) ===
+                              user?.id
+                              ? "You"
+                              : getToUserName(selectedMessage.toUserId)
+                            : "No recipient"}
                         </p>
                       </div>
                       <div className="rounded-xl border border-border p-4">

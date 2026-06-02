@@ -72,9 +72,15 @@ import RecordPaymentModal from "@/components/modals/record-payment-modal";
 export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState("rent-collection");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "paid" | "pending">(
-    "all",
-  );
+  const [filterStatus, setFilterStatus] = useState<
+    | "complete"
+    | "balance"
+    | "pending"
+    | "failed"
+    | "refunded"
+    | "recorded"
+    | "confirmed"
+  >("complete");
   const {
     tenants: allTenants,
     properties: allProperties,
@@ -319,11 +325,16 @@ export default function FinancesPage() {
   const filteredPayments = rentPayments.filter((payment) => {
     const normalizedStatus = String(payment.status || "").toLowerCase();
     const matchesStatus =
-      filterStatus === "all" ||
-      (filterStatus === "pending" &&
-        ["pending", "balance", ""].includes(normalizedStatus)) ||
-      (filterStatus === "completed" &&
-        ["complete", "completed", "paid"].includes(normalizedStatus));
+      filterStatus === "complete" &&
+      [
+        "complete",
+        "balance",
+        "pending",
+        "failed",
+        "refunded",
+        "recorded",
+        "confirmed",
+      ].includes(normalizedStatus);
     const matchesSearch =
       !searchQuery ||
       (payment.tenantName || "")

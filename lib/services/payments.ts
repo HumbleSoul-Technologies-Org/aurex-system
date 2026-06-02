@@ -262,9 +262,35 @@ export async function getPaymentsForTenant(
 }
 
 export async function getPaymentsForProperty(
-  propertyId: string,
+  propertyIdOrIds: string | string[],
   token?: string,
 ): Promise<RentPayment[]> {
+  const propertyIds = Array.isArray(propertyIdOrIds)
+    ? propertyIdOrIds.filter(Boolean)
+    : [propertyIdOrIds];
+
+  if (propertyIds.length === 0) {
+    return [];
+  }
+
+  if (propertyIds.length > 1) {
+    const allPayments = await Promise.all(
+      propertyIds.map(async (propertyId) => {
+        try {
+          return await getPaymentsForProperty(propertyId, token);
+        } catch (error) {
+          console.warn(
+            `Failed to fetch payments for property ${propertyId}:`,
+            error,
+          );
+          return [] as RentPayment[];
+        }
+      }),
+    );
+    return allPayments.flat();
+  }
+
+  const propertyId = propertyIds[0];
   if (!propertyId) {
     return [];
   }
@@ -277,8 +303,6 @@ export async function getPaymentsForProperty(
       token,
     );
     const data = await res.json();
-
-    console.log("Raw payments response for property:", data);
 
     const rawList: any[] = Array.isArray(data?.data)
       ? data.data
@@ -312,68 +336,6 @@ export async function getPaymentsForProperty(
       return [];
     }
   }
-}
-
-export async function getPaymentsForPropertyIds(
-  propertyIds: string[],
-  token?: string,
-): Promise<RentPayment[]> {
-  if (!Array.isArray(propertyIds) || propertyIds.length === 0) {
-    return [];
-  }
-
-  const normalizedPropertyIds = propertyIds.filter(Boolean);
-  if (normalizedPropertyIds.length === 0) {
-    return [];
-  }
-
-  try {
-    const res = await apiRequest(
-      "GET",
-      "/payments/property/all",
-      { propertyIds: normalizedPropertyIds },
-      token,
-    );
-    const data = await res.json();
-    const rawList: any[] = Array.isArray(data?.data)
-      ? data.data
-      : Array.isArray(data?.payments)
-        ? data.payments
-        : Array.isArray(data)
-          ? data
-          : [];
-
-    const payments = rawList
-      .map((raw: any) => mapServerPaymentToClient(raw))
-      .filter((payment): payment is RentPayment => payment !== null);
-
-    if (payments.length > 0) {
-      return payments;
-    }
-  } catch (err) {
-    console.warn(
-      "Batch payments request failed, falling back to per-property fetch:",
-      err,
-    );
-  }
-
-  const paymentsByProperty = await Promise.all(
-    normalizedPropertyIds.map((propertyId) =>
-      getPaymentsForProperty(propertyId, token),
-    ),
-  );
-  const allPayments = paymentsByProperty.flat();
-  const seen = new Set<string>();
-
-  return allPayments.filter((payment) => {
-    if (!payment) return false;
-    const paymentKey = payment.id || payment.txdId || JSON.stringify(payment);
-    if (!paymentKey || seen.has(paymentKey)) {
-      return false;
-    }
-    seen.add(paymentKey);
-    return true;
-  });
 }
 
 function mapServerPaymentToClient(p: any): any {

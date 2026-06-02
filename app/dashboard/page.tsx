@@ -409,23 +409,17 @@ export default function DashboardPage() {
     });
   }, [properties, tenants, payments]);
 
-  // Calculate tenant distribution by property category
-  const tenantDistributionByCategory = useMemo(() => {
+  // Calculate property category distribution by counting properties in each category
+  const propertyCategoryDistribution = useMemo(() => {
     const distribution: Record<string, number> = {};
 
     properties.forEach((property) => {
       const category = property.category || "other";
-      const propertyTenants = tenants.filter(
-        (t) => t.propertyId === property.id,
-      );
-      if (!distribution[category]) {
-        distribution[category] = 0;
-      }
-      distribution[category] += propertyTenants.length;
+      distribution[category] = (distribution[category] || 0) + 1;
     });
 
     return distribution;
-  }, [properties, tenants]);
+  }, [properties]);
 
   // Calculate maintenance requests by status
   const maintenanceByStatus = useMemo(() => {
@@ -1024,7 +1018,19 @@ export default function DashboardPage() {
                       innerRadius={60}
                       outerRadius={90}
                       paddingAngle={2}
-                      label={({ name, value }) => `${name}: ${value}%`}
+                      label={({ name, percent, x, y }) => (
+                        <text
+                          x={x}
+                          y={y}
+                          fill="var(--foreground)"
+                          fontSize={10}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                        >
+                          {`${name}: ${Math.round((percent || 0) * 100)}%`}
+                        </text>
+                      )}
+                      labelLine={{ stroke: "var(--border)" }}
                     >
                       {expenseBreakdown.map((entry) => (
                         <Cell key={entry.name} fill={entry.fill} />
@@ -1055,10 +1061,10 @@ export default function DashboardPage() {
       {/* Tenant Distribution by Category */}
       <Card className="border border-border p-4 md:p-6">
         <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
-          Tenant Distribution by Property Type
+          Property Category Distribution
         </h2>
         <TenantDistributionRing
-          tenantsByCategory={tenantDistributionByCategory}
+          tenantsByCategory={propertyCategoryDistribution}
         />
       </Card>
 
