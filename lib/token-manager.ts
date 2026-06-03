@@ -3,27 +3,37 @@
  * Handles JWT token storage, retrieval, and refresh
  */
 
-const TOKEN_KEY = 'propman:auth_token';
-const USER_KEY = 'propman:user';
-const REFRESH_TOKEN_KEY = 'propman:refresh_token';
+const TOKEN_KEY = "propman:auth_token";
+const USER_KEY = "propman:user";
+const REFRESH_TOKEN_KEY = "propman:refresh_token";
 
-const COOKIE_AUTH_TOKEN = 'auth-token';
-const COOKIE_SETTINGS_ID = 'settings-id';
+const COOKIE_AUTH_TOKEN = "auth-token";
+const COOKIE_SETTINGS_ID = "settings-id";
 
-function setCookie(name: string, value: string, options: { path?: string; expires?: Date; maxAge?: number; sameSite?: 'Lax' | 'Strict' | 'None'; secure?: boolean } = {}) {
-  if (typeof document === 'undefined') return;
+function setCookie(
+  name: string,
+  value: string,
+  options: {
+    path?: string;
+    expires?: Date;
+    maxAge?: number;
+    sameSite?: "Lax" | "Strict" | "None";
+    secure?: boolean;
+  } = {},
+) {
+  if (typeof document === "undefined") return;
 
   const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
   if (options.path) parts.push(`path=${options.path}`);
   if (options.expires) parts.push(`expires=${options.expires.toUTCString()}`);
   if (options.maxAge !== undefined) parts.push(`max-age=${options.maxAge}`);
   if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
-  if (options.secure) parts.push('Secure');
-  document.cookie = parts.join('; ');
+  if (options.secure) parts.push("Secure");
+  document.cookie = parts.join("; ");
 }
 
 function deleteCookie(name: string) {
-  if (typeof document === 'undefined') return;
+  if (typeof document === "undefined") return;
   document.cookie = `${encodeURIComponent(name)}=; path=/; max-age=0; SameSite=Lax;`;
 }
 
@@ -37,16 +47,16 @@ function getTokenExpiry(token: string) {
  * Store authentication token and user data
  */
 export function setAuthToken(token: string, user: any) {
-  if (typeof window === 'undefined') return; // SSR check
+  if (typeof window === "undefined") return; // SSR check
 
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 
   const expiry = getTokenExpiry(token);
   const cookieOptions = {
-    path: '/',
-    sameSite: 'Lax' as const,
-    secure: window.location.protocol === 'https:',
+    path: "/",
+    sameSite: "Lax" as const,
+    secure: window.location.protocol === "https:",
     expires: expiry,
   };
 
@@ -63,7 +73,7 @@ export function setAuthToken(token: string, user: any) {
  * Get authentication token
  */
 export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null; // SSR check
+  if (typeof window === "undefined") return null; // SSR check
 
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -72,7 +82,7 @@ export function getAuthToken(): string | null {
  * Get stored user data
  */
 export function getStoredUser(): any | null {
-  if (typeof window === 'undefined') return null; // SSR check
+  if (typeof window === "undefined") return null; // SSR check
 
   const user = localStorage.getItem(USER_KEY);
   return user ? JSON.parse(user) : null;
@@ -82,11 +92,14 @@ export function getStoredUser(): any | null {
  * Clear all auth data
  */
 export function clearAuthData() {
-  if (typeof window === 'undefined') return; // SSR check
+  if (typeof window === "undefined") return; // SSR check
 
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  const theme = localStorage.getItem("theme");
+  localStorage.clear();
+  if (theme !== null) {
+    localStorage.setItem("theme", theme);
+  }
+
   deleteCookie(COOKIE_AUTH_TOKEN);
   deleteCookie(COOKIE_SETTINGS_ID);
 }
@@ -103,7 +116,7 @@ export function isAuthenticated(): boolean {
  */
 export function isTokenExpired(token: string): boolean {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     const expiryTime = payload.exp * 1000; // exp is in seconds, convert to ms
     return Date.now() >= expiryTime;
   } catch (error) {
@@ -116,7 +129,7 @@ export function isTokenExpired(token: string): boolean {
  */
 export function getTokenExpiryTime(token: string): Date | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     return new Date(payload.exp * 1000);
   } catch (error) {
     return null;
@@ -128,7 +141,7 @@ export function getTokenExpiryTime(token: string): Date | null {
  */
 export function getUserRoleFromToken(token: string): string | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.role || null;
   } catch (error) {
     return null;
@@ -140,7 +153,7 @@ export function getUserRoleFromToken(token: string): string | null {
  */
 export function getUserIdFromToken(token: string): string | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(atob(token.split(".")[1]));
     return payload.userId || null;
   } catch (error) {
     return null;
@@ -151,7 +164,10 @@ export function getUserIdFromToken(token: string): string | null {
  * Setup automatic token refresh before expiry
  * Returns cleanup function
  */
-export function setupTokenRefreshTimer(expiryTime: Date, onRefresh: () => void): () => void {
+export function setupTokenRefreshTimer(
+  expiryTime: Date,
+  onRefresh: () => void,
+): () => void {
   // Refresh 5 minutes before actual expiry
   const refreshTime = expiryTime.getTime() - 5 * 60 * 1000;
   const now = Date.now();
@@ -169,16 +185,16 @@ export function setupTokenRefreshTimer(expiryTime: Date, onRefresh: () => void):
  * Update user data
  */
 export function updateStoredUser(user: any) {
-  if (typeof window === 'undefined') return; // SSR check
+  if (typeof window === "undefined") return; // SSR check
 
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 
   if (user?.settingsId) {
     setCookie(COOKIE_SETTINGS_ID, user.settingsId, {
-      path: '/',
-      sameSite: 'Lax',
-      secure: window.location.protocol === 'https:',
-      expires: getTokenExpiry(getAuthToken() ?? '') || undefined,
+      path: "/",
+      sameSite: "Lax",
+      secure: window.location.protocol === "https:",
+      expires: getTokenExpiry(getAuthToken() ?? "") || undefined,
     });
   } else {
     deleteCookie(COOKIE_SETTINGS_ID);
@@ -191,7 +207,7 @@ export function updateStoredUser(user: any) {
 export function isValidToken(token: string): boolean {
   try {
     // JWT format: header.payload.signature
-    const parts = token.split('.');
+    const parts = token.split(".");
     if (parts.length !== 3) return false;
 
     // Check if payload can be parsed
@@ -206,7 +222,7 @@ export function isValidToken(token: string): boolean {
  * Get token from Authorization header value
  */
 export function extractTokenFromHeader(headerValue: string): string | null {
-  if (!headerValue || !headerValue.startsWith('Bearer ')) {
+  if (!headerValue || !headerValue.startsWith("Bearer ")) {
     return null;
   }
   return headerValue.substring(7);
