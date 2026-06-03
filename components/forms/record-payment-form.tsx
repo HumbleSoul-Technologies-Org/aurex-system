@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAppData } from "@/lib/data-context";
 import {
   createManualPayment,
@@ -59,35 +60,77 @@ export default function RecordPaymentForm({
         (t as any)?.rentAmount || (t as any)?.monthlyRent || 0,
       );
       if (rent > 0) setMonthlyRent(rent);
+
+      // Auto-fill property if tenant has a propertyId
+      if ((t as any)?.propertyId && !propertyId) {
+        setPropertyId((t as any).propertyId);
+      }
     }
     if (!tenantId && initialTenantId) setTenantId(initialTenantId as string);
     if (!propertyId && initialPropertyId)
       setPropertyId(initialPropertyId as string);
   }, [tenantId, initialTenantId, initialPropertyId, tenants, propertyId]);
 
+  // Fetch tenant's outstanding balance on tenant selection and store it
   useEffect(() => {
     let cancelled = false;
-    if (tenantId && reasonForPayment === "balancePayment") {
+    if (tenantId) {
       getTenantOutstandingBalance(tenantId).then((data) => {
         if (cancelled) return;
-        if (data) {
+        if (data && data.outstandingBalance > 0) {
           setOutstandingBalance(data.outstandingBalance);
-          setAmount(String(data.outstandingBalance));
+          // If the current reason is balancePayment, show outstanding balance
+          if (reasonForPayment === "balancePayment") {
+            setBalance(data.outstandingBalance.toFixed(2));
+          }
         } else {
           setOutstandingBalance(null);
+          // no outstanding balance -> reset displayed balance to 0 or monthlyRent
+          if (reasonForPayment === "balancePayment") setBalance("0");
         }
       });
     } else {
       setOutstandingBalance(null);
+      setBalance("0");
     }
     return () => {
       cancelled = true;
     };
   }, [tenantId, reasonForPayment]);
 
+  // Auto-calculate displayed balance as: outstandingBalance - amount (if present)
+  // otherwise monthlyRent - amount. Update live as `amount` changes.
+  useEffect(() => {
+    const amountNum = Number(amount) || 0;
+
+    if (outstandingBalance !== null) {
+      const newBal = Math.max(0, outstandingBalance - amountNum);
+      setBalance(newBal.toFixed(2));
+      return;
+    }
+
+    if (monthlyRent !== null) {
+      const newBal = Math.max(0, monthlyRent - amountNum);
+      setBalance(newBal.toFixed(2));
+      return;
+    }
+
+    // fallback
+    setBalance("0");
+  }, [amount, outstandingBalance, monthlyRent]);
+
   useEffect(() => {
     setCurrency(activeCurrency);
   }, [activeCurrency]);
+
+  // Create tenant options for searchable select
+  const tenantOptions = useMemo(() => {
+    return tenants.map((t: any) => ({
+      value: t.id,
+      label: t.name || "Unknown Tenant",
+      description: `${t.unit || t.propertyName || "N/A"} — ${t.email || "No email"}`,
+    }));
+  }, [tenants]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,18 +180,13 @@ export default function RecordPaymentForm({
           <label className="text-xs text-muted-foreground block mb-1">
             Tenant
           </label>
-          <select
-            value={tenantId || ""}
-            onChange={(e) => setTenantId(e.target.value || null)}
-            className="w-full border border-border rounded px-3 py-2 bg-transparent"
-          >
-            <option value="">Select tenant</option>
-            {tenants.map((t: any) => (
-              <option key={t.id} value={t.id}>
-                {t.name} — {t.unit || t.propertyName || t.email}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={tenantOptions}
+            value={tenantId}
+            onValueChange={setTenantId}
+            placeholder="Search tenant..."
+            emptyMessage="No tenant found."
+          />
         </div>
 
         <div>
@@ -285,29 +323,24 @@ export default function RecordPaymentForm({
             placeholder="Name of payer"
           />
         </div>
-        {reasonForPayment !== "balancePayment" ? (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">
-              Balance
-            </label>
-            <Input
-              value={balance}
-              onChange={(e) => setBalance(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
-        ) : (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">
-              Outstanding Balance
-            </label>
-            <div className="w-full rounded border border-border px-3 py-2 bg-slate-50 text-sm">
-              {outstandingBalance !== null
-                ? `$${outstandingBalance.toFixed(2)}`
-                : "Loading outstanding balance..."}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            {outstandingBalance !== null
+              ? "Remaining Balance"
+              : "Balance (Auto-calculated)"}
+          </label>
+          <Input
+            value={balance}
+            readOnly
+            placeholder="0.00"
+            className="bg-slate-50"
+          />
+          {outstandingBalance !== null && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Outstanding: ${outstandingBalance.toFixed(2)}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* reference and receipt fields removed — handled by backend */}

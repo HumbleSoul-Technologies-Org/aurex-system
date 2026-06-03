@@ -143,44 +143,48 @@ export default function FinancesPage() {
   });
 
   const rentPayments = enrichedPayments;
+  const tenantOutstandingBalances = useMemo(
+    () =>
+      allTenants
+        .map((tenant) => Number(tenant.currentBalance ?? 0))
+        .filter((balance) => balance > 0),
+    [allTenants],
+  );
+  const expectedOutstanding = tenantOutstandingBalances.reduce(
+    (sum, balance) => sum + balance,
+    0,
+  );
   const completedPayments = rentPayments.filter(
     (t) =>
       t.status === "complete" ||
       t.status === "completed" ||
       t.status === "paid",
   );
-  // only count pending payments for tenants whose status is 'due'
-  const dueTenantIds = allTenants
-    .filter((t) => t.status === "due")
-    .map((t) => t.id);
   const pendingPayments = rentPayments.filter((t) => {
     const status = String(t.status || "").toLowerCase();
-    return (
-      (status === "pending" || status === "balance" || status === "") &&
-      t.tenantId &&
-      dueTenantIds.includes(t.tenantId)
-    );
+    if (!["pending", "balance", ""].includes(status)) return false;
+    if (!t.tenantId) return false;
+    const tenant = allTenants.find((tenant) => tenant.id === t.tenantId);
+    return Number(tenant?.currentBalance ?? 0) > 0;
   });
 
-  const partialPayments = rentPayments.filter(
-    (t) => String(t.status || "").toLowerCase() === "balance",
-  );
+  const partialPayments = rentPayments.filter((t) => {
+    const status = String(t.status || "").toLowerCase();
+    if (status !== "balance") return false;
+    const tenant = allTenants.find((tenant) => tenant.id === t.tenantId);
+    return Number(tenant?.currentBalance ?? 0) > 0;
+  });
+
   const totalRevenue = rentPayments
     .filter((t) => {
       const status = String(t.status || "").toLowerCase();
       return ["complete", "completed", "paid", "balance"].includes(status);
     })
     .reduce((sum, t) => sum + (t.amount || 0), 0);
-  const expectedOutstanding = partialPayments.reduce(
-    (sum, t) => sum + (t.balance || 0),
+  const totalPending = tenantOutstandingBalances.reduce(
+    (sum, balance) => sum + balance,
     0,
   );
-  const totalPending = pendingPayments.reduce((sum, t) => {
-    if (String(t.status || "").toLowerCase() === "balance") {
-      return sum + Number(t.balance || 0);
-    }
-    return sum + Number(t.amount || 0);
-  }, 0);
   const totalExpenses = enrichedTransactions
     .filter((t) => t.type === "expense")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -454,20 +458,10 @@ export default function FinancesPage() {
             Pending Payments
           </p>
           <p className="text-2xl sm:text-lg font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
-            {formatCurrency(
-              payments
-                .filter((t) => t.status === "pending" || t.status === "balance")
-                .reduce((sum, t) => sum + (t.balance || 0), 0),
-              activeCurrency,
-            )}
+            {formatCurrency(totalPending, activeCurrency)}
           </p>
           <p className="text-xs text-muted-foreground">
-            {
-              payments.filter(
-                (t) => t.status === "pending" || t.status === "balance",
-              ).length
-            }{" "}
-            pending/partial payments
+            {pendingPayments.length} pending/partial payments
           </p>
         </Card>
 

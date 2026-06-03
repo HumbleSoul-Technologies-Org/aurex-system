@@ -301,6 +301,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     enabled: paymentPropertyIds.length > 0,
     initialData: () => [] as PaymentRecord[],
     staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: true,
   });
 
   const tenantPayments = React.useMemo(() => {

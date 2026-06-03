@@ -201,13 +201,12 @@ export default function DashboardPage() {
     );
     const ytdProfit = totalYtdRevenue - totalExpenses;
 
-    const pendingPaymentsList = payments.filter((payment) => {
-      const status = String(payment.status || "").toLowerCase();
-      return status === "pending" || status === "balance";
-    });
-    const pendingPayments = pendingPaymentsList.length;
-    const pendingBalanceTotal = pendingPaymentsList.reduce(
-      (sum, payment) => sum + Number(payment.balance || 0),
+    const outstandingTenants = tenants.filter(
+      (tenant) => Number(tenant.currentBalance ?? 0) > 0,
+    );
+    const pendingPayments = outstandingTenants.length;
+    const pendingBalanceTotal = outstandingTenants.reduce(
+      (sum, tenant) => sum + Number(tenant.currentBalance ?? 0),
       0,
     );
 
