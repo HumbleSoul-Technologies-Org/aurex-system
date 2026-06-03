@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 type Props = {
-  tenantsByCategory: Record<string, number>;
+  categories: Record<string, number>;
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -34,25 +34,27 @@ const CATEGORY_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-export default function TenantDistributionRing({ tenantsByCategory }: Props) {
+export default function PropertyCategoryDistributionRing({
+  categories,
+}: Props) {
   const data = useMemo(() => {
-    return Object.entries(tenantsByCategory)
+    return Object.entries(categories)
       .filter(([, count]) => count > 0)
       .map(([category, count]) => ({
         name: CATEGORY_LABELS[category] || category,
         value: count,
         fill: CATEGORY_COLORS[category] || "#9ca3af",
       }));
-  }, [tenantsByCategory]);
+  }, [categories]);
 
-  const totalTenants = useMemo(() => {
+  const totalItems = useMemo(() => {
     return data.reduce((sum, item) => sum + item.value, 0);
   }, [data]);
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const { name, value } = payload[0];
-      const percentage = ((value / totalTenants) * 100).toFixed(1);
+      const percentage = ((value / totalItems) * 100).toFixed(1);
       return (
         <div
           style={{
@@ -65,7 +67,7 @@ export default function TenantDistributionRing({ tenantsByCategory }: Props) {
         >
           <p className="font-semibold">{name}</p>
           <p className="text-sm text-muted-foreground">
-            {value} tenant{value !== 1 ? "s" : ""} ({percentage}%)
+            {value} {value !== 1 ? "properties" : "property"} ({percentage}%)
           </p>
         </div>
       );
@@ -90,8 +92,8 @@ export default function TenantDistributionRing({ tenantsByCategory }: Props) {
     return (
       <div className="flex items-center justify-center h-[300px] text-muted-foreground">
         <div className="text-center">
-          <p>No tenant data available</p>
-          <p className="text-sm">Add tenants to see distribution</p>
+          <p>No property data available</p>
+          <p className="text-sm">Add properties to see distribution</p>
         </div>
       </div>
     );
@@ -99,13 +101,13 @@ export default function TenantDistributionRing({ tenantsByCategory }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Total Tenants Summary */}
+      {/* Total Properties Summary */}
       <div className="bg-card border border-border rounded-lg p-4">
         <p className="text-xs md:text-sm text-muted-foreground mb-1">
-          Total Tenants
+          Total Properties
         </p>
         <p className="text-2xl md:text-3xl font-bold text-foreground">
-          {totalTenants}
+          {totalItems}
         </p>
       </div>
 
@@ -156,7 +158,7 @@ export default function TenantDistributionRing({ tenantsByCategory }: Props) {
             </div>
             <p className="text-lg font-bold text-foreground">{item.value}</p>
             <p className="text-xs text-muted-foreground">
-              {((item.value / totalTenants) * 100).toFixed(1)}%
+              {((item.value / totalItems) * 100).toFixed(1)}%
             </p>
           </div>
         ))}

@@ -31,7 +31,10 @@ import { PaymentRecord, getPaymentsForTenant } from "./services/payments";
 import { Notification, getNotifications } from "./services/notifications";
 import { fetchNotifications } from "@/app/lib/notifications-client";
 import { DocumentRecord, listDocuments } from "./services/documents";
-import { getTenantPropertyMessagesForUI } from "./services/messages";
+import {
+  getConversationsByTenant,
+  getTenantPropertyMessagesForUI,
+} from "./services/messages";
 import TenantContext from "./tenant-context";
 
 interface TenantContextProviderProps {
@@ -82,16 +85,18 @@ function getPropertyOwnerId(property: any): string | null {
 }
 
 async function fetchTenantProfile(userId: string, token: string) {
-  const paths = [`/tenant/${userId}/self`, `/tenants/${userId}/self`];
   let lastError: unknown;
 
-  for (const path of paths) {
-    try {
-      const res = await apiRequest("GET", path, undefined, token);
-      return res;
-    } catch (error) {
-      lastError = error;
-    }
+  try {
+    const res = await apiRequest(
+      "GET",
+      `/tenants/${userId}/self`,
+      undefined,
+      token,
+    );
+    return res;
+  } catch (error) {
+    lastError = error;
   }
 
   throw lastError;
@@ -195,11 +200,13 @@ export function TenantContextProvider({
           token,
         );
         const data = await res.json();
+
         const property = {
           ...data,
           id: data.id || data._id || propertyId,
         } as PropertyRecord;
         setCurrentProperty(property);
+
         writeCache(CACHE_KEYS.tenantProperty, property);
         setErrorState("tenantProperty", null);
       } catch (error: any) {
@@ -227,13 +234,11 @@ export function TenantContextProvider({
       if (!ownerId) {
         throw new Error("Property owner information is missing");
       }
-      const tenantMessages = await getTenantPropertyMessagesForUI(
+
+      const tenantMessages: any = await getConversationsByTenant(
         currentTenant.id,
-        ownerId,
-        currentProperty.id,
         token,
       );
-
       setMessages(tenantMessages);
       writeCache(CACHE_KEYS.messages, tenantMessages);
       setErrorState("messages", null);
@@ -285,7 +290,7 @@ export function TenantContextProvider({
     try {
       const announcements = await getAnnouncementsByProperty(
         currentProperty.id,
-        token,
+        token ? token : undefined,
       );
       setAnnouncements(announcements);
       writeCache(CACHE_KEYS.announcements, announcements);
@@ -330,7 +335,7 @@ export function TenantContextProvider({
           const resp = await fetchNotifications(
             currentTenant?.id,
             undefined,
-            token,
+            token ? token : undefined,
           );
           // server returns { success: true, data: [...] } or array
           if (!resp) return getNotifications();

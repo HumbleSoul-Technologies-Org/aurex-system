@@ -93,19 +93,6 @@ function getPropertyRefId(propertyId: PropertyReference | undefined): string {
     : propertyId.id || propertyId._id || "";
 }
 
-function getMessagePropertyId(message: any): string {
-  if (!message) return "";
-  return (
-    message.propertyId ||
-    message.property_id ||
-    message.property?.id ||
-    message.property?._id ||
-    message.property?.propertyId ||
-    message.property?.property_id ||
-    ""
-  );
-}
-
 function getMessageRecipientName(userRef: any): string {
   if (!userRef) return "";
   if (typeof userRef === "string") return "";
@@ -127,6 +114,28 @@ export async function getTenantPropertyMessages(
   propertyId: string,
   token?: string | null,
 ): Promise<ConversationMessage[]> {
+  try {
+    const tenantConversations = await getConversationsByTenant(tenantId, token);
+    const filteredTenantConversations = tenantConversations.filter(
+      (conv) => getPropertyRefId(conv.propertyId) === propertyId,
+    );
+
+    if (filteredTenantConversations.length > 0) {
+      return (
+        filteredTenantConversations.flatMap((conv) =>
+          conv.conversations.flatMap(
+            (propertyConv) => propertyConv?.messages || [],
+          ),
+        ) || []
+      );
+    }
+  } catch (err) {
+    console.debug(
+      "getTenantPropertyMessages: tenant-level fetch failed, falling back",
+      err,
+    );
+  }
+
   try {
     const conversation = await getConversationByProperty(
       ownerId,
@@ -309,6 +318,20 @@ export async function getConversationsByOwner(
   const res = await apiRequest(
     "GET",
     `/messages/owner/${ownerId}/all`,
+    undefined,
+    token ?? undefined,
+  );
+  const json = await res.json();
+  return normalizeConversationResponse(json);
+}
+
+export async function getConversationsByTenant(
+  tenantId: string,
+  token?: string | null,
+) {
+  const res = await apiRequest(
+    "GET",
+    `/messages/tenant/${tenantId}/conversations`,
     undefined,
     token ?? undefined,
   );

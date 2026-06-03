@@ -26,7 +26,7 @@ export default function RentCollectionProgress({
 
   const pendingRent = Math.max(0, expectedRent - collectedRent);
 
-  const data = useMemo(
+  const chartData = useMemo(
     () => [
       {
         name: "Collected Rent",
@@ -34,12 +34,12 @@ export default function RentCollectionProgress({
         color: "#16a34a",
       },
       {
-        name: "Pending Rent",
-        value: pendingRent,
+        name: "Remaining Rent",
+        value: Math.max(0, expectedRent - collectedRent),
         color: "#94a3b8",
       },
     ],
-    [expectedRent, collectedRent, pendingRent],
+    [collectedRent, expectedRent],
   );
 
   const collectionRate = useMemo(() => {
@@ -145,19 +145,18 @@ export default function RentCollectionProgress({
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={chartData}
               dataKey="value"
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={70}
               outerRadius={110}
               paddingAngle={3}
               cornerRadius={20}
               labelLine={{ stroke: "var(--border)" }}
               label={renderPieLabel}
             >
-              {data.map((entry) => (
+              {chartData.map((entry) => (
                 <Cell key={entry.name} fill={entry.color} />
               ))}
             </Pie>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,14 +91,8 @@ export default function TenantPortalPage() {
     },
   ]);
 
-  const {
-    tenants,
-    properties,
-    payments,
-    isLoading,
-    isFetching,
-    refetchAll,
-  } = useAppData();
+  const { tenants, properties, payments, isLoading, isFetching, refetchAll } =
+    useAppData();
   const [showInitialSkeleton, setShowInitialSkeleton] = useState(true);
 
   useEffect(() => {
@@ -106,7 +100,8 @@ export default function TenantPortalPage() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const showTenantPortalSkeleton = (isLoading || isFetching) && showInitialSkeleton;
+  const showTenantPortalSkeleton =
+    (isLoading || isFetching) && showInitialSkeleton;
   const {
     settings: apiSettings,
     settingsId,
@@ -117,6 +112,9 @@ export default function TenantPortalPage() {
   const [tenantDialogOpen, setTenantDialogOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveTimer, setSaveTimer] = useState<number | null>(null);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const syncingPortalFeaturesRef = useRef(false);
 
   useEffect(() => {
     const refreshHandler = () => refetchAll();
@@ -253,6 +251,7 @@ export default function TenantPortalPage() {
 
   const updatePortalFeaturesFromSettings = () => {
     const tenantSettings = getTenantSettingsForPortal();
+    syncingPortalFeaturesRef.current = true;
 
     if (tenantSettings?.featureToggles) {
       setPortalFeatures((prev) =>
@@ -265,6 +264,11 @@ export default function TenantPortalPage() {
         })),
       );
     }
+
+    setSettingsLoaded(true);
+    window.setTimeout(() => {
+      syncingPortalFeaturesRef.current = false;
+    }, 0);
   };
 
   useEffect(() => {
@@ -304,17 +308,9 @@ export default function TenantPortalPage() {
     );
   };
 
-  const handleFeatureToggle = (featureId: string) => {
-    setPortalFeatures((prev) =>
-      prev.map((feature) =>
-        feature.id === featureId
-          ? { ...feature, enabled: !feature.enabled }
-          : feature,
-      ),
-    );
-  };
+  const savePortalFeatureSettings = async () => {
+    if (isSaving) return;
 
-  const handleSaveSettings = async () => {
     const settingsUpdates = portalFeatures.reduce(
       (acc, feature) => {
         const settingKey = featureToggleMap[feature.id];
@@ -350,7 +346,6 @@ export default function TenantPortalPage() {
       await refreshSettings();
       dispatchSystemSettingsChange();
       updatePortalFeaturesFromSettings();
-      alert("Settings saved successfully!");
     } catch (error) {
       console.error("Failed to save tenant portal settings:", error);
       alert(
@@ -361,6 +356,52 @@ export default function TenantPortalPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleFeatureToggle = (featureId: string) => {
+    if (isSaving) return;
+
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+      setSaveTimer(null);
+    }
+
+    setPortalFeatures((prev) =>
+      prev.map((feature) =>
+        feature.id === featureId
+          ? { ...feature, enabled: !feature.enabled }
+          : feature,
+      ),
+    );
+  };
+
+  useEffect(() => {
+    if (!settingsLoaded || syncingPortalFeaturesRef.current) return;
+    if (isSaving) return;
+
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setSaveTimer(null);
+      savePortalFeatureSettings();
+    }, 400);
+
+    setSaveTimer(timer);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [portalFeatures, settingsLoaded]);
+
+  const handleSaveSettings = async () => {
+    if (saveTimer) {
+      window.clearTimeout(saveTimer);
+      setSaveTimer(null);
+    }
+
+    await savePortalFeatureSettings();
   };
 
   return (
@@ -437,6 +478,7 @@ export default function TenantPortalPage() {
                       </span>
                       <Switch
                         checked={feature.enabled}
+                        disabled={isSaving}
                         onCheckedChange={() => handleFeatureToggle(feature.id)}
                       />
                     </div>

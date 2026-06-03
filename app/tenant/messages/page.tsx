@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Send,
   X,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -65,15 +66,7 @@ interface AnnouncementUI {
 export default function TenantMessagesPage() {
   const { user, token } = useAuth();
   const router = useRouter();
-  const {
-    currentTenant,
-    currentProperty,
-    messages: tenantMessages,
-    announcements,
-    loading,
-    loadMessages,
-    loadAnnouncements,
-  } = useTenantContext();
+
   const { enabled: messagesEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("messages");
   const { toast } = useToast();
@@ -100,6 +93,16 @@ export default function TenantMessagesPage() {
   const isDragging = useRef(false);
   const startX = useRef(0);
   const scrollLeft = useRef(0);
+
+  const {
+    currentTenant,
+    currentProperty,
+    messages,
+    announcements,
+    loading,
+    loadMessages,
+    loadAnnouncements,
+  } = useTenantContext();
 
   useEffect(() => {
     const el = chipsRef.current;
@@ -172,26 +175,81 @@ export default function TenantMessagesPage() {
     return getUserReferenceId(value);
   };
 
-  const flattenConversationMessages = (items: any[]): any[] => {
-    if (!Array.isArray(items)) return [];
-    return items.flatMap((item) => {
-      if (item?.conversations && Array.isArray(item.conversations)) {
-        return item.conversations.flatMap((conversation: any) =>
-          Array.isArray(conversation.messages)
-            ? conversation.messages.map((msg: any) => ({
-                ...msg,
-                _propertyId: conversation.propertyId,
-              }))
-            : [],
-        );
-      }
-      if (Array.isArray(item?.messages)) {
-        return item.messages;
-      }
-      return [item];
-    });
+  const normalizeTimestamp = (message: any): string => {
+    return (
+      message.sentAt ||
+      message.sent_at ||
+      message.createdAt ||
+      message.created_at ||
+      message.timestamp ||
+      message.date ||
+      ""
+    );
   };
 
+  const normalizeContent = (message: any): string => {
+    return message.message || message.content || message.body || "";
+  };
+
+  const normalizeReadState = (message: any): boolean => {
+    return !!(
+      message.isRead ||
+      (Array.isArray(message.seenBy) &&
+        currentTenant?.id &&
+        message.seenBy.includes(currentTenant.id)) ||
+      (Array.isArray(message.readBy) &&
+        currentTenant?.id &&
+        message.readBy.includes(currentTenant.id))
+    );
+  };
+
+  const getPropertyId = (property: any): string => {
+    if (!property) return "";
+    if (typeof property === "string") return property;
+    return property.id || property._id || property.propertyId || "";
+  };
+
+  const flattenConversationMessages = (items: any[]): any[] => {
+    const output: any[] = [];
+    const visit = (item: any) => {
+      if (!item) return;
+      if (Array.isArray(item)) {
+        item.forEach(visit);
+        return;
+      }
+
+      if (item.conversations && Array.isArray(item.conversations)) {
+        item.conversations.forEach((conversation: any) => {
+          const propId = getPropertyId(conversation.propertyId);
+          if (Array.isArray(conversation.messages)) {
+            conversation.messages.forEach((message: any) => {
+              output.push({ ...message, _propertyId: propId });
+            });
+          } else {
+            visit(conversation);
+          }
+        });
+        return;
+      }
+
+      if (Array.isArray(item.messages)) {
+        const propId = getPropertyId(item.propertyId);
+        item.messages.forEach((message: any) => {
+          output.push({ ...message, _propertyId: propId });
+        });
+        return;
+      }
+
+      if (item.message || item.content || item.category || item.type) {
+        output.push(item);
+      }
+    };
+
+    visit(items);
+    return output;
+  };
+
+  // Call all hooks BEFORE any conditional early returns
   useEffect(() => {
     if (!currentTenant?.id || !currentProperty?.id) return;
     loadMessages();
@@ -204,18 +262,6 @@ export default function TenantMessagesPage() {
     }
   }, [featuresLoaded, messagesEnabled, router]);
 
-  if (!featuresLoaded) {
-    return (
-      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
-        Loading portal settings...
-      </div>
-    );
-  }
-
-  if (!messagesEnabled) {
-    return null;
-  }
-
   useEffect(() => {
     const t = window.setTimeout(() => setShowInitialSkeleton(false), 700);
     return () => window.clearTimeout(t);
@@ -226,111 +272,39 @@ export default function TenantMessagesPage() {
     setSelectedId(null);
   }, [filter]);
 
-  // Send message
-  const send = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!messageText.trim()) return;
-
-    setIsSending(true);
-    try {
-      const tenant = currentTenant;
-      const prop = currentProperty;
-      const ownerId = getPropertyOwnerId(prop);
-
-      if (!tenant?.id || !prop?.id || !ownerId) {
-        toast({
-          title: "Error",
-          description: "Unable to determine property or owner",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Send message to property owner as admin
-      await createConversationMessage(
-        ownerId,
-        prop.id,
-        {
-          category: "message",
-          fromUserId: tenant.id,
-          toUserId: ownerId,
-          message: messageText.trim(),
-        },
-        token,
-      );
-
-      setMessageText("");
-      toast({
-        title: "Success",
-        description: "Message sent to management",
-      });
-
-      await loadMessages();
-    } catch (err) {
-      console.error("Failed to send message:", err);
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  // Mark message as read
-  const markMessageRead = async (messageId: string) => {
-    try {
-      const ownerId = getPropertyOwnerId(currentProperty);
-
-      if (!currentTenant?.id || !currentProperty?.id || !ownerId) return;
-
-      await markConversationMessageSeen(
-        ownerId,
-        currentProperty.id,
-        messageId,
-        currentTenant.id,
-        token,
-      );
-
-      await loadMessages();
-    } catch (e) {
-      console.error("Failed to mark message as read:", e);
-    }
-  };
-
-  // Filter messages
+  // Filter messages - MUST be called before early returns
   const mergedMessages = useMemo(() => {
-    const rawMessages = flattenConversationMessages(tenantMessages || []);
+    const rawMessages = flattenConversationMessages(messages || []);
 
     const normalizeIncoming = (m: any): Message => {
       const id = m._id || m.id || m.originalId || "";
-      const fromUserId = m.fromUserId || "";
+      const rawFromUserId = getUserReferenceId(m.fromUserId || m.from || "");
       const toUserId = normalizeRecipientId(m.toUserId || m.to);
       const toUserName = getUserReferenceName(m.toUserId || m.to);
-      const timestamp =
-        m.sentAt ||
-        m.sent_at ||
-        m.createdAt ||
-        m.created_at ||
-        m.timestamp ||
-        m.date ||
-        "";
-      const content = m.message || m.content || m.body || "";
+      const timestamp = normalizeTimestamp(m);
+      const content = normalizeContent(m);
       const category = m.category || m.type || "message";
-      const isRead = !!(
-        m.isRead ||
-        (Array.isArray(m.seenBy) &&
-          currentTenant &&
-          m.seenBy.includes(currentTenant.id)) ||
-        (Array.isArray(m.readBy) &&
-          currentTenant &&
-          m.readBy.includes(currentTenant.id))
-      );
+      const isRead = normalizeReadState(m);
+      const ownerId = getPropertyOwnerId(currentProperty);
+
+      const inferredFromTenant =
+        !rawFromUserId && ownerId && toUserId === ownerId && currentTenant?.id;
+      const inferredFromManager =
+        !rawFromUserId && ownerId && toUserId === currentTenant?.id;
+      const fromUserId = rawFromUserId
+        ? rawFromUserId
+        : inferredFromTenant
+          ? currentTenant?.id || ""
+          : inferredFromManager
+            ? ownerId
+            : "";
 
       const isTenantSender = currentTenant
         ? fromUserId === currentTenant.id
         : !!m.sent;
+      const senderType: "tenant" | "manager" = isTenantSender
+        ? "tenant"
+        : "manager";
 
       return {
         id,
@@ -340,6 +314,7 @@ export default function TenantMessagesPage() {
         timestamp,
         isRead,
         sent: isTenantSender,
+        senderType,
         replied: Array.isArray(m.replies) && m.replies.length > 0,
         subject:
           m.subject ||
@@ -348,7 +323,8 @@ export default function TenantMessagesPage() {
         isArchived: !!m.isArchived,
         type: category === "announcement" ? "announcement" : "message",
         originalId: id,
-        message: m.message,
+        content,
+        message: content,
         sentAt: m.sentAt,
         seenBy: Array.isArray(m.seenBy) ? m.seenBy : [],
         replies: Array.isArray(m.replies) ? m.replies : [],
@@ -368,11 +344,11 @@ export default function TenantMessagesPage() {
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-  }, [currentTenant?.id, messageFlags, tenantMessages]);
+  }, [currentTenant?.id, messageFlags, messages]);
 
   // Derive announcements and conversation messages separately (do not merge shapes)
   const { announcementItems, conversationItems } = useMemo(() => {
-    const rawMessages = flattenConversationMessages(tenantMessages || []);
+    const rawMessages = flattenConversationMessages(messages || []);
 
     const annMap = new Map<string, AnnouncementUI>();
     const conv: Message[] = [];
@@ -434,7 +410,7 @@ export default function TenantMessagesPage() {
       announcementItems: Array.from(annMap.values()),
       conversationItems: conv,
     };
-  }, [tenantMessages, mergedMessages, announcements, currentTenant?.id]);
+  }, [messages, mergedMessages, announcements, currentTenant?.id]);
 
   // Filtered view: apply filters separately then combine for rendering
   const combinedForRender = useMemo(() => {
@@ -448,18 +424,15 @@ export default function TenantMessagesPage() {
       return a.propertyId === currentPropId;
     });
 
+    console.log("Filtered announcements", conversationItems);
+
     // filter conversations using existing rules
     const filteredConversations = conversationItems.filter((m) => {
-      const fromIdRaw = (m as any).fromUserId || m.sender || "";
-      const fromId =
-        typeof fromIdRaw === "string"
-          ? fromIdRaw
-          : fromIdRaw.id || fromIdRaw._id || "";
+      const fromId = m.fromUserId || "";
       const toId = normalizeRecipientId(
         (m as any).toUserId || (m as any).to || "",
       );
-      const isManagerMessage = m.senderType === "manager";
-      const isBroadcastMessage = isManagerMessage && !toId;
+      const isBroadcastMessage = !toId && m.senderType === "manager";
 
       if (!currentId) return true;
 
@@ -468,12 +441,10 @@ export default function TenantMessagesPage() {
         return false;
 
       if (filter === "inbox") {
-        if (isBroadcastMessage) return true;
-        return toId === currentId && fromId !== currentId;
+        return isBroadcastMessage || toId === currentId;
       }
-      if (filter === "sent") return fromId === currentId;
-      if (filter === "starred") return !!m.isStarred;
-      if (filter === "archived") return !!m.isArchived;
+      if (filter === "sent") return m.sent === true;
+
       return true;
     });
 
@@ -509,6 +480,114 @@ export default function TenantMessagesPage() {
     currentProperty?.id,
   ]);
 
+  useEffect(() => {
+    if (filter !== "inbox") return;
+
+    const hasInboxMessage = combinedForRender.some((entry) =>
+      entry.kind === "announcement" ? true : !(entry.data as Message).sent,
+    );
+
+    if (!hasInboxMessage && conversationItems.some((m) => m.sent)) {
+      setFilter("sent");
+    }
+  }, [filter, combinedForRender, conversationItems]);
+
+  // Send message
+  const send = async (e?: any) => {
+    try {
+      if (e?.preventDefault) {
+        e.preventDefault();
+      }
+
+      if (!messageText.trim()) return;
+
+      setIsSending(true);
+
+      const tenant = currentTenant;
+      const prop = currentProperty;
+      const ownerId = getPropertyOwnerId(prop);
+
+      if (!tenant?.id || !prop?.id || !ownerId) {
+        console.warn("Missing tenant, property, or owner data", {
+          tenantId: tenant?.id,
+          propertyId: prop,
+          ownerId,
+        });
+        toast({
+          title: "Error",
+          description: "Unable to determine property or owner",
+          variant: "destructive",
+        });
+        setIsSending(false);
+        return;
+      }
+
+      // Send message to property owner as admin
+      await createConversationMessage(
+        ownerId,
+        prop.id,
+        {
+          category: "message",
+          fromUserId: tenant.id,
+          toUserId: ownerId,
+          message: messageText.trim(),
+        },
+        token,
+      );
+
+      setMessageText("");
+      toast({
+        title: "Success",
+        description: "Message sent to management",
+      });
+
+      await loadMessages();
+      setIsSending(false);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+      setIsSending(false);
+    }
+  };
+
+  // Mark message as read
+  const markMessageRead = async (messageId: string) => {
+    try {
+      const ownerId = getPropertyOwnerId(currentProperty);
+
+      if (!currentTenant?.id || !currentProperty?.id || !ownerId) return;
+
+      await markConversationMessageSeen(
+        ownerId,
+        currentProperty.id,
+        messageId,
+        currentTenant.id,
+        token,
+      );
+
+      await loadMessages();
+    } catch (e) {
+      console.error("Failed to mark message as read:", e);
+    }
+  };
+
+  // Early returns - after all hooks have been called
+  if (!featuresLoaded) {
+    return (
+      <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
+        Loading portal settings...
+      </div>
+    );
+  }
+
+  if (!messagesEnabled) {
+    return null;
+  }
+
   const selectedMessageItem =
     mergedMessages.find((m) => m.id === selectedId) ?? null;
   const selectedAnnouncementItem =
@@ -523,68 +602,6 @@ export default function TenantMessagesPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
-      {/* {typeof window !== "undefined" &&
-        window.location.hostname === "localhost" && (
-          <div className="mb-3 p-2 bg-gray-50 border rounded text-xs">
-            <div className="font-medium">DEBUG: mergedMessages</div>
-            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
-              {JSON.stringify(
-                {
-                  length: mergedMessages.length,
-                  preview: mergedMessages.slice(0, 3),
-                },
-                null,
-                2,
-              )}
-            </pre>
-            <div className="font-medium">DEBUG: filtered</div>
-            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
-              {JSON.stringify(
-                {
-                  filter,
-                  currentTenantId: currentTenant?.id || currentTenant?._id,
-                  userId: user?.id,
-                  length: combinedForRender.length,
-                  preview: combinedForRender.slice(0, 3),
-                },
-                null,
-                2,
-              )}
-            </pre>
-            <div className="font-medium">DEBUG: per-message</div>
-            <pre className="whitespace-pre-wrap max-h-40 overflow-auto text-xs">
-              {JSON.stringify(
-                mergedMessages.map((m) => {
-                  const fromIdRaw = (m as any).fromUserId || m.sender || "";
-                  const fromId =
-                    typeof fromIdRaw === "string"
-                      ? fromIdRaw
-                      : fromIdRaw.id || fromIdRaw._id || "";
-                  const toRaw = (m as any).toUserId || [];
-                  const toIds: string[] = Array.isArray(toRaw)
-                    ? toRaw
-                        .map((t) =>
-                          typeof t === "string" ? t : t.id || t._id || "",
-                        )
-                        .filter(Boolean)
-                    : [];
-                  const currentId =
-                    currentTenant?.id || currentTenant?._id || user?.id;
-                  return {
-                    id: m.id,
-                    fromId,
-                    toIds,
-                    includesCurrent: currentId
-                      ? toIds.includes(currentId)
-                      : null,
-                  };
-                }),
-                null,
-                2,
-              )}
-            </pre>
-          </div>
-        )} */}
       <header className="sticky top-4 z-20 bg-background/60 backdrop-blur-sm rounded-md p-3 sm:p-4 mb-4 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg sm:text-2xl font-semibold">Messages</h1>
@@ -597,28 +614,36 @@ export default function TenantMessagesPage() {
       <div className="grid grid-cols-1 md:grid-cols-[340px_1fr] gap-4">
         {/* Left: message list + send form */}
         <div
-          className={`flex flex-col ${isMobile ? "min-h-[60vh]" : "h-[70vh]"} border rounded-md overflow-hidden bg-white`}
+          className={`flex flex-col ${isMobile ? "min-h-[60vh]" : "h-[70vh]"} border border-border rounded-xl overflow-hidden bg-card shadow-sm`}
         >
           {/* Send message form */}
           <div className="p-3 border-b flex items-center gap-2">
             <input
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
-              onKeyPress={(e) => {
+              onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  send();
+                  void send();
                 }
               }}
               placeholder="Write a quick message..."
-              className="flex-1 border rounded-md px-3 py-2 text-sm"
+              className="flex-1 border border-border rounded-md bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/10 focus:outline-none"
             />
             <button
-              onClick={send}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                send();
+              }}
               disabled={isSending || !messageText.trim()}
-              className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-white disabled:opacity-50 hover:bg-primary/90"
+              className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-white disabled:opacity-50 hover:bg-primary/90 transition-all"
             >
-              <Send className="w-4 h-4" />
+              {isSending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </button>
           </div>
 
@@ -643,7 +668,7 @@ export default function TenantMessagesPage() {
                   className={`flex-shrink-0 cursor-pointer px-3 py-1.5 rounded-full text-sm ${
                     filter === key
                       ? "bg-primary text-white"
-                      : "bg-gray-100 text-gray-700"
+                      : "bg-secondary text-muted-foreground"
                   }`}
                 >
                   {label}
@@ -657,10 +682,12 @@ export default function TenantMessagesPage() {
             {loading.messages && showInitialSkeleton ? (
               <MessagesSkeleton />
             ) : loading.messages && !showInitialSkeleton ? (
-              <div className="text-gray-500 text-center py-8">Loading...</div>
+              <div className="text-muted-foreground text-center py-8">
+                Loading...
+              </div>
             ) : null}
             {!loading.messages && combinedForRender.length === 0 && (
-              <div className="text-gray-500 flex flex-col items-center justify-center pt-16 text-center">
+              <div className="text-muted-foreground flex flex-col items-center justify-center pt-16 text-center">
                 <span>No messages.</span>
                 <img
                   src="/no-message2.avif"
@@ -703,7 +730,7 @@ export default function TenantMessagesPage() {
               const m = entry.data as Message;
               return (
                 <div
-                  key={m.id || idx}
+                  key={idx}
                   onClick={() => {
                     if (!m.isRead && m.senderType === "manager") {
                       markMessageRead(m.originalId || m.id);
@@ -711,12 +738,12 @@ export default function TenantMessagesPage() {
                     setSelectedId(m.id);
                     if (isMobile) setShowDetailsOnMobile(true);
                   }}
-                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                  className={`p-3 border rounded-xl cursor-pointer transition-all ${
                     selectedId === m.id
-                      ? "bg-blue-50 border-blue-300"
+                      ? "bg-primary/10 border-primary shadow-sm"
                       : !m.isRead
-                        ? "bg-yellow-50 border-yellow-200"
-                        : "hover:bg-gray-50"
+                        ? "bg-secondary/50 border-border shadow-sm"
+                        : "border-border bg-card hover:bg-secondary"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -724,14 +751,14 @@ export default function TenantMessagesPage() {
                       <div className="font-medium text-sm truncate">
                         {m.senderType === "manager" ? "Management" : "You"}
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
+                      <div className="text-xs text-muted-foreground truncate">
                         To:{" "}
                         {m.toUserName ||
                           (m.toUserId === currentTenant?.id
                             ? "You"
                             : "Management")}
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
+                      <div className="text-xs text-muted-foreground truncate">
                         {m.subject || m.content.substring(0, 50)}
                       </div>
                     </div>
@@ -746,7 +773,7 @@ export default function TenantMessagesPage() {
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">
+                  <div className="text-xs text-muted-foreground mt-1">
                     {new Date(m.timestamp).toLocaleDateString()}
                   </div>
                 </div>
@@ -763,12 +790,12 @@ export default function TenantMessagesPage() {
                 ? `fixed inset-0 z-50 bg-black/50 flex items-end transition-opacity duration-300 ${
                     modalAnimateIn ? "opacity-100" : "opacity-0"
                   }`
-                : "flex flex-col border rounded-md overflow-hidden bg-white"
+                : "flex flex-col border border-border rounded-xl overflow-hidden bg-card shadow-sm"
             }`}
             onClick={() => isMobile && setShowDetailsOnMobile(false)}
           >
             <div
-              className={`${isMobile ? "bg-white rounded-t-lg max-h-[90vh]" : ""} flex flex-col h-full`}
+              className={`${isMobile ? "bg-card rounded-t-lg max-h-[90vh]" : ""} flex flex-col h-full`}
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -781,7 +808,7 @@ export default function TenantMessagesPage() {
                         ? "Management"
                         : "Your Message"}
                   </h2>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {isSelectedAnnouncement
                       ? new Date(
                           (selected as any).sentAt || "",
@@ -792,7 +819,7 @@ export default function TenantMessagesPage() {
                 {isMobile && (
                   <button
                     onClick={() => setShowDetailsOnMobile(false)}
-                    className="p-1 hover:bg-gray-100 rounded"
+                    className="p-1 hover:bg-secondary rounded"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -802,7 +829,7 @@ export default function TenantMessagesPage() {
               {/* Content */}
               <div className="flex-1 overflow-auto p-4">
                 {!isSelectedAnnouncement && (
-                  <div className="space-y-1 text-xs text-gray-500 mb-4">
+                  <div className="space-y-1 text-xs text-muted-foreground mb-4">
                     <div>
                       From:{" "}
                       {(selected as any).senderType === "manager"
@@ -819,13 +846,13 @@ export default function TenantMessagesPage() {
                     </div>
                   </div>
                 )}
-                <div className="whitespace-pre-wrap text-sm">
+                <div className="whitespace-pre-wrap text-sm text-foreground">
                   {isSelectedAnnouncement
                     ? (selected as any).message
                     : (selected as any).content}
                 </div>
                 {!isSelectedAnnouncement && (selected as any).subject && (
-                  <div className="mt-4 text-xs text-gray-500">
+                  <div className="mt-4 text-xs text-muted-foreground">
                     Subject: {(selected as any).subject}
                   </div>
                 )}
@@ -845,13 +872,13 @@ export default function TenantMessagesPage() {
                         },
                       }));
                     }}
-                    className="p-2 hover:bg-gray-100 rounded"
+                    className="p-2 hover:bg-secondary rounded"
                   >
                     <Star
                       className={`w-4 h-4 ${
                         (selected as any).isStarred
                           ? "fill-yellow-500 text-yellow-500"
-                          : "text-gray-400"
+                          : "text-muted-foreground"
                       }`}
                     />
                   </button>
@@ -866,13 +893,13 @@ export default function TenantMessagesPage() {
                         },
                       }));
                     }}
-                    className="p-2 hover:bg-gray-100 rounded"
+                    className="p-2 hover:bg-secondary rounded"
                   >
                     <Archive
                       className={`w-4 h-4 ${
                         (selected as any).isArchived
-                          ? "fill-gray-500 text-gray-500"
-                          : "text-gray-400"
+                          ? "fill-muted-foreground text-muted-foreground"
+                          : "text-muted-foreground"
                       }`}
                     />
                   </button>
@@ -881,7 +908,7 @@ export default function TenantMessagesPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center border rounded-md bg-white">
+          <div className="flex-1 flex items-center justify-center border border-border rounded-xl bg-card">
             <div className="text-center">
               <MailOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-lg font-semibold text-foreground mb-2">

@@ -45,7 +45,7 @@ import {
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import PropertyPerformanceGrouped from "@/components/charts/property-performance-grouped";
 import RentCollectionProgress from "@/components/charts/rent-collection-progress";
-import TenantDistributionRing from "@/components/charts/tenant-distribution-ring";
+import PropertyCategoryDistributionRing from "@/components/charts/tenant-distribution-ring";
 import MaintenanceAnalyticsRing from "@/components/charts/maintenance-analytics-ring";
 import MaintenanceTrendsLine from "@/components/charts/maintenance-trends-line";
 import MaintenanceCostBar from "@/components/charts/maintenance-cost-bar";
@@ -140,6 +140,50 @@ export default function DashboardPage() {
       "success",
     ]);
 
+    const normalizeNumber = (value: unknown) => {
+      const num = Number(value ?? 0);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    const normalizePaymentKey = (value: unknown) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z]/g, "");
+
+    const getUnitRent = (property: any, unit: any) => {
+      if (typeof unit === "object" && unit !== null) {
+        return normalizeNumber(
+          (unit as any).rent ??
+            (unit as any).price ??
+            (unit as any).monthlyRent ??
+            property.price_per_unit ??
+            (property as any).monthlyRent ??
+            0,
+        );
+      }
+
+      return normalizeNumber(
+        property.price_per_unit ?? (property as any).monthlyRent ?? 0,
+      );
+    };
+
+    const countPropertyUnits = (property: any) => {
+      if (Array.isArray(property.units) && property.units.length > 0) {
+        return property.units.length;
+      }
+
+      if (typeof property.customUnitNumbers === "string") {
+        return property.customUnitNumbers
+          .split(/[,\n]/)
+          .map((item: string) => item.trim())
+          .filter(Boolean).length;
+      }
+
+      return (
+        Number(property.units_available ?? property.units?.length ?? 0) || 0
+      );
+    };
+
     const totalMonthlyRevenue = payments.reduce((sum, payment) => {
       const status = String(payment.status || "").toLowerCase();
       if (!revenueStatuses.has(status)) return sum;
@@ -154,31 +198,28 @@ export default function DashboardPage() {
         date.getUTCMonth() + 1,
       ).padStart(2, "0")}`;
       if (monthKey !== currentMonthKey) return sum;
-      return sum + Number(payment.amount || 0);
+      return (
+        sum + normalizeNumber(payment.amount ?? payment.total ?? payment.value)
+      );
     }, 0);
 
     const totalExpectedRent = properties.reduce((sum, property) => {
       const units = Array.isArray(property.units) ? property.units : [];
       if (units.length > 0) {
-        const unitRentSum = units.reduce((unitSum, unit) => {
-          const rentValue =
-            typeof unit === "object" && unit !== null
-              ? Number(
-                  (unit as any).rent ??
-                    (unit as any).price ??
-                    property.price_per_unit ??
-                    0,
-                )
-              : Number(property.price_per_unit ?? 0);
-          return unitSum + rentValue;
-        }, 0);
-        return sum + unitRentSum;
+        return (
+          sum +
+          units.reduce(
+            (unitSum, unit) => unitSum + getUnitRent(property, unit),
+            0,
+          )
+        );
       }
 
-      const unitCount = Number(
-        property.units_available ?? property.units?.length ?? 0,
+      const unitCount = countPropertyUnits(property);
+      const unitRent = normalizeNumber(
+        property.price_per_unit ?? (property as any).monthlyRent ?? 0,
       );
-      return sum + Number(property.price_per_unit ?? 0) * unitCount;
+      return sum + unitRent * unitCount;
     }, 0);
 
     const totalYtdRevenue = payments.reduce((sum, payment) => {
@@ -192,7 +233,25 @@ export default function DashboardPage() {
       const date = new Date(String(paymentDate || ""));
       if (Number.isNaN(date.getTime()) || date.getUTCFullYear() !== currentYear)
         return sum;
-      return sum + Number(payment.amount || 0);
+      return (
+        sum + normalizeNumber(payment.amount ?? payment.total ?? payment.value)
+      );
+    }, 0);
+
+    const totalCollectedRent = payments.reduce((sum, payment) => {
+      const status = String(payment.status || "").toLowerCase();
+      if (!revenueStatuses.has(status)) return sum;
+      const reason = normalizePaymentKey(payment.reasonForPayment);
+      const paymentType = normalizePaymentKey(payment.paymentType);
+      const isRentRelated =
+        reason.includes("rent") ||
+        reason.includes("balance") ||
+        paymentType.includes("rent") ||
+        paymentType.includes("balance");
+      if (!isRentRelated) return sum;
+      return (
+        sum + normalizeNumber(payment.amount ?? payment.total ?? payment.value)
+      );
     }, 0);
 
     const totalExpenses = expenses.reduce(
@@ -231,7 +290,7 @@ export default function DashboardPage() {
       totalExpenses,
       ytdProfit,
       expectedRent: totalExpectedRent,
-      collectedRent: totalMonthlyRevenue,
+      collectedRent: totalCollectedRent,
     };
   }, [properties, tenants, payments, maintenanceRequests, expenses]);
 
@@ -1062,8 +1121,8 @@ export default function DashboardPage() {
         <h2 className="text-base md:text-lg font-bold text-foreground mb-4 md:mb-6">
           Property Category Distribution
         </h2>
-        <TenantDistributionRing
-          tenantsByCategory={propertyCategoryDistribution}
+        <PropertyCategoryDistributionRing
+          categories={propertyCategoryDistribution}
         />
       </Card>
 

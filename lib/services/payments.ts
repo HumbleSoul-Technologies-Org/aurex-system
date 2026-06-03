@@ -15,6 +15,63 @@ function dispatchPaymentsUpdatedEvent() {
   }
 }
 
+function normalizePaymentAmount(value: unknown) {
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function isSettledPaymentStatus(status: string) {
+  return [
+    "complete",
+    "completed",
+    "paid",
+    "settled",
+    "confirmed",
+    "recorded",
+  ].includes(String(status || "").toLowerCase());
+}
+
+function isRentRelatedPayment(payment: any) {
+  const key = String(payment.reasonForPayment || payment.paymentType || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  return key.includes("rent") || key.includes("balance");
+}
+
+function applyTenantStatusFromPayment(payment: any) {
+  if (!payment?.tenantId) return;
+
+  const tenant = getTenant(payment.tenantId);
+  if (!tenant) return;
+
+  if (!isSettledPaymentStatus(payment.status)) return;
+  if (!isRentRelatedPayment(payment)) return;
+
+  const paid = normalizePaymentAmount(
+    payment.amount ??
+      payment.total ??
+      payment.value ??
+      payment.amountPaid ??
+      payment.paymentAmount,
+  );
+  const rent = normalizePaymentAmount(tenant.rentAmount ?? 0);
+  const balanceAfterPayment = normalizePaymentAmount(
+    payment.balanceAfterPayment ?? payment.balance ?? 0,
+  );
+
+  if (balanceAfterPayment === 0 && paid > 0) {
+    updateTenant(tenant.id, { status: "paid" });
+  } else if (rent > 0 && paid >= rent) {
+    updateTenant(tenant.id, { status: "paid" });
+  } else if (paid > 0) {
+    updateTenant(tenant.id, { status: "balance" });
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("tenantsUpdated"));
+  }
+}
+
 export type PaymentReasonFor =
   | "securityDeposit"
   | "rentPayment"
@@ -68,6 +125,7 @@ export async function createManualPayment(
     const raw = data?.data || data?.payment || data || null;
     if (!raw) return null;
     const record = mapServerPaymentToClient(raw);
+    applyTenantStatusFromPayment(record);
     dispatchPaymentsUpdatedEvent();
     return record;
   } catch (err) {
@@ -90,6 +148,7 @@ export async function updatePayment(
     const raw = data?.data || data?.payment || data || null;
     if (!raw) return null;
     const record = mapServerPaymentToClient(raw);
+    applyTenantStatusFromPayment(record);
     dispatchPaymentsUpdatedEvent();
     return record;
   } catch (err) {
@@ -499,10 +558,17 @@ export function updateLocalPayment(
   id: string,
   patch: Partial<PaymentRecord>,
 ): PaymentRecord | null {
-  return updateInCollection<PaymentRecord>("payments", id, {
+  const updated = updateInCollection<PaymentRecord>("payments", id, {
     ...patch,
     updatedAt: new Date().toISOString(),
   });
+
+  if (updated) {
+    applyTenantStatusFromPayment(updated);
+    dispatchPaymentsUpdatedEvent();
+  }
+
+  return updated;
 }
 
 export function deletePayment(id: string): boolean {
@@ -545,31 +611,8 @@ export function createPayment(payload: Partial<PaymentRecord>): PaymentRecord {
   };
   insertIntoCollection("payments", rec);
 
-  // Update tenant lease status based on payment amount vs tenant rent
-  try {
-    if (rec.tenantId) {
-      const tenant = getTenant(rec.tenantId);
-      if (tenant) {
-        const rent = Number(tenant.rentAmount || 0);
-        const paid = Number(rec.amount || 0);
-        if (rent > 0) {
-          if (paid >= rent) {
-            updateTenant(tenant.id, { status: "paid" });
-          } else if (paid > 0) {
-            updateTenant(tenant.id, { status: "balance" });
-          }
-          // notify UI listeners that tenants may have changed
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("tenantsUpdated"));
-          }
-        }
-      }
-    }
-  } catch (e) {
-    // ignore tenant update failures
-    // eslint-disable-next-line no-console
-    console.error("Failed to update tenant status after payment", e);
-  }
+  applyTenantStatusFromPayment(rec);
+  dispatchPaymentsUpdatedEvent();
 
   return rec;
 }
