@@ -239,7 +239,9 @@ export function TenantContextProvider({
         currentTenant.id,
         token,
       );
+
       setMessages(tenantMessages);
+      // Persist normalized API data to cache so fallback matches server state
       writeCache(CACHE_KEYS.messages, tenantMessages);
       setErrorState("messages", null);
     } catch (error: any) {
@@ -249,7 +251,9 @@ export function TenantContextProvider({
         error?.message || "Failed to load tenant messages",
       );
       const cached = readCache<TenantMessage[]>(CACHE_KEYS.messages);
-      if (cached) setMessages(cached);
+      if (cached) {
+        setMessages(cached);
+      }
     } finally {
       setLoadingState("messages", false);
     }
@@ -293,7 +297,7 @@ export function TenantContextProvider({
         token ? token : undefined,
       );
       setAnnouncements(announcements);
-      writeCache(CACHE_KEYS.announcements, announcements);
+      // Always use fresh API data; only use cache as fallback on error
       setErrorState("announcements", null);
     } catch (error: any) {
       console.error("Failed to load announcements", error);

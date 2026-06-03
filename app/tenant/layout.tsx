@@ -197,7 +197,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-4">
             <Link href="/tenant" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">PT</span>
+                <span className="text-white font-bold text-sm">TP</span>
               </div>
               <span className="hidden sm:inline font-bold text-foreground">
                 Tenant Portal
@@ -242,7 +242,11 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Profile Menu */}
             <button className="flex items-center gap-2 px-2 py-1 hover:bg-secondary rounded-lg transition-colors">
               <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-xs">SA</span>
+                <img
+                  src={`${currentTenant?.avatar?.url}`}
+                  alt="Profile"
+                  className="w-full h-full rounded-full object-cover"
+                />
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-semibold text-foreground">

@@ -192,14 +192,21 @@ export default function TenantMessagesPage() {
   };
 
   const normalizeReadState = (message: any): boolean => {
+    const seenByIds = Array.isArray(message.seenBy)
+      ? message.seenBy
+          .map((entry: any) => getUserReferenceId(entry))
+          .filter(Boolean)
+      : [];
+    const readByIds = Array.isArray(message.readBy)
+      ? message.readBy
+          .map((entry: any) => getUserReferenceId(entry))
+          .filter(Boolean)
+      : [];
+
     return !!(
       message.isRead ||
-      (Array.isArray(message.seenBy) &&
-        currentTenant?.id &&
-        message.seenBy.includes(currentTenant.id)) ||
-      (Array.isArray(message.readBy) &&
-        currentTenant?.id &&
-        message.readBy.includes(currentTenant.id))
+      (currentTenant?.id && seenByIds.includes(currentTenant.id)) ||
+      (currentTenant?.id && readByIds.includes(currentTenant.id))
     );
   };
 
@@ -246,6 +253,7 @@ export default function TenantMessagesPage() {
     };
 
     visit(items);
+
     return output;
   };
 
@@ -334,7 +342,6 @@ export default function TenantMessagesPage() {
     };
 
     const tenantMessageShapes: Message[] = rawMessages.map(normalizeIncoming);
-
     return tenantMessageShapes
       .map((message) => ({
         ...message,
@@ -349,7 +356,6 @@ export default function TenantMessagesPage() {
   // Derive announcements and conversation messages separately (do not merge shapes)
   const { announcementItems, conversationItems } = useMemo(() => {
     const rawMessages = flattenConversationMessages(messages || []);
-
     const annMap = new Map<string, AnnouncementUI>();
     const conv: Message[] = [];
 
@@ -361,15 +367,21 @@ export default function TenantMessagesPage() {
     };
 
     announcements?.forEach((m) => {
+      const readBy = Array.isArray(m.readBy)
+        ? m.readBy
+            .map((entry: any) => getUserReferenceId(entry))
+            .filter(Boolean)
+        : [];
+
       addAnnouncement({
         id: m.id,
         title: m.title || "Announcement",
         message: m.message || "",
         sentAt: m.sentAt || m.createdAt || "",
-        readBy: m.readBy || [],
+        readBy,
         isRead:
-          currentTenant?.id && Array.isArray(m.readBy)
-            ? m.readBy.includes(currentTenant.id)
+          currentTenant?.id && Array.isArray(readBy)
+            ? readBy.includes(currentTenant.id)
             : false,
         propertyId: m.propertyId || "",
         raw: m,
@@ -380,7 +392,15 @@ export default function TenantMessagesPage() {
       const category = m.category || m.type || "message";
       const propId = m._propertyId || m.propertyId || "";
       if (category === "announcement") {
-        const readBy = Array.isArray(m.seenBy) ? m.seenBy : m.readBy || [];
+        const readBy = Array.isArray(m.seenBy)
+          ? m.seenBy
+              .map((entry: any) => getUserReferenceId(entry))
+              .filter(Boolean)
+          : Array.isArray(m.readBy)
+            ? m.readBy
+                .map((entry: any) => getUserReferenceId(entry))
+                .filter(Boolean)
+            : [];
         addAnnouncement({
           id: m._id || m.id || "",
           title:
@@ -423,8 +443,6 @@ export default function TenantMessagesPage() {
       if (!a.propertyId) return true; // global announcement
       return a.propertyId === currentPropId;
     });
-
-    console.log("Filtered announcements", conversationItems);
 
     // filter conversations using existing rules
     const filteredConversations = conversationItems.filter((m) => {
@@ -479,18 +497,6 @@ export default function TenantMessagesPage() {
     currentTenant?.id,
     currentProperty?.id,
   ]);
-
-  useEffect(() => {
-    if (filter !== "inbox") return;
-
-    const hasInboxMessage = combinedForRender.some((entry) =>
-      entry.kind === "announcement" ? true : !(entry.data as Message).sent,
-    );
-
-    if (!hasInboxMessage && conversationItems.some((m) => m.sent)) {
-      setFilter("sent");
-    }
-  }, [filter, combinedForRender, conversationItems]);
 
   // Send message
   const send = async (e?: any) => {
@@ -728,11 +734,18 @@ export default function TenantMessagesPage() {
                 );
               }
               const m = entry.data as Message;
+              const isMessageRead = Array.isArray(m.seenBy)
+                ? m.seenBy
+                    .map((entry: any) => getUserReferenceId(entry))
+                    .filter(Boolean)
+                    .includes(currentTenant?.id ? currentTenant.id : "")
+                : false;
+
               return (
                 <div
                   key={idx}
                   onClick={() => {
-                    if (!m.isRead && m.senderType === "manager") {
+                    if (!isMessageRead && m.senderType === "manager") {
                       markMessageRead(m.originalId || m.id);
                     }
                     setSelectedId(m.id);
@@ -741,8 +754,8 @@ export default function TenantMessagesPage() {
                   className={`p-3 border rounded-xl cursor-pointer transition-all ${
                     selectedId === m.id
                       ? "bg-primary/10 border-primary shadow-sm"
-                      : !m.isRead
-                        ? "bg-secondary/50 border-border shadow-sm"
+                      : !isMessageRead && m.senderType === "manager"
+                        ? "bg-orange-50 border-orange-200 shadow-sm"
                         : "border-border bg-card hover:bg-secondary"
                   }`}
                 >
@@ -763,10 +776,10 @@ export default function TenantMessagesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {m.isRead ? (
+                      {isMessageRead ? (
                         <MailOpen className="w-4 h-4 text-muted-foreground" />
                       ) : (
-                        <Mail className="w-4 h-4 text-blue-600" />
+                        <Mail className="w-4 h-4 text-orange-600" />
                       )}
                       {m.isStarred && (
                         <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />

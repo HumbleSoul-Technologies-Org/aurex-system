@@ -117,14 +117,14 @@ export async function getTenantPropertyMessages(
   try {
     const tenantConversations = await getConversationsByTenant(tenantId, token);
     const filteredTenantConversations = tenantConversations.filter(
-      (conv) => getPropertyRefId(conv.propertyId) === propertyId,
+      (conv: any) => getPropertyRefId(conv.propertyId) === propertyId,
     );
 
     if (filteredTenantConversations.length > 0) {
       return (
-        filteredTenantConversations.flatMap((conv) =>
+        filteredTenantConversations.flatMap((conv: any) =>
           conv.conversations.flatMap(
-            (propertyConv) => propertyConv?.messages || [],
+            (propertyConv: any) => propertyConv?.messages || [],
           ),
         ) || []
       );
@@ -336,7 +336,8 @@ export async function getConversationsByTenant(
     token ?? undefined,
   );
   const json = await res.json();
-  return normalizeConversationResponse(json);
+
+  return json;
 }
 
 /**

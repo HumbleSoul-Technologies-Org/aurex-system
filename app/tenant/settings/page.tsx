@@ -27,6 +27,7 @@ import {
 import { changePassword } from "@/lib/services/authApi";
 import { getTenantTypeConfig } from "@/lib/services/settings";
 import { getAuthToken } from "@/lib/token-manager";
+import { useTenantContext } from "@/lib/tenant-context";
 
 const tabItems = [
   { id: "profile", label: "Profile" },
@@ -73,7 +74,7 @@ const documentDeliveryOptions = [
 ];
 
 export default function TenantSettingsPage() {
-  const { currentTenant: tenant } = useAppData();
+  const { currentTenant: tenant } = useTenantContext();
 
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({

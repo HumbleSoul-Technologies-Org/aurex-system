@@ -28,14 +28,14 @@ import { useAuth } from "@/lib/auth-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import { createManualPayment, RentPayment } from "@/lib/services/payments";
-import { useAppData } from "@/lib/data-context";
+import { useTenantContext } from "@/lib/tenant-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function PaymentsPage() {
   const router = useRouter();
   const activeCurrency = useActiveCurrency();
   const { user } = useAuth();
-  const { properties, payments, currentTenant, currentProperty } = useAppData();
+  const { payments, currentTenant, currentProperty } = useTenantContext();
   const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("paymentPortal");
 
@@ -48,32 +48,9 @@ export default function PaymentsPage() {
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
-  const tenant =
-    currentTenant ??
-    useMemo(() => {
-      if (!user) return null;
-      const email = user.email?.toLowerCase();
-      return (
-        properties
-          .flatMap((p) => p.tenants ?? [])
-          .find(
-            (t: any) =>
-              t.id === user.id ||
-              t._id === user.id ||
-              t.email?.toLowerCase() === email,
-          ) || null
-      );
-    }, [user, properties]);
-
-  const property =
-    currentProperty ??
-    useMemo(
-      () =>
-        tenant?.propertyId
-          ? properties.find((p) => p.id === tenant.propertyId)
-          : null,
-      [tenant, properties],
-    );
+  // Use tenant and property from context (already derived)
+  const tenant = currentTenant;
+  const property = currentProperty;
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
 
@@ -317,8 +294,7 @@ export default function PaymentsPage() {
                         {payment.method || "—"}
                       </td>
                       <td className="hidden md:table-cell px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
-                        {properties.find((p) => p.id === payment.propertyId)
-                          ?.name || "—"}
+                        {currentProperty?.name || "—"}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-muted-foreground">
                         {tenant?.unitNumber || "—"}

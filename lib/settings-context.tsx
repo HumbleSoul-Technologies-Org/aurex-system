@@ -108,6 +108,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [user, authLoading, hasFetched, fetchSettings]);
 
+  // Listen for settings changes from other tabs/windows or from admin panel
+  useEffect(() => {
+    const handleSettingsChanged = () => {
+      setHasFetched(false); // Force refetch
+    };
+
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === "propman:v1") {
+        setHasFetched(false); // Force refetch
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("system-settings-changed", handleSettingsChanged);
+      window.addEventListener("storage", handleStorageChange);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(
+          "system-settings-changed",
+          handleSettingsChanged,
+        );
+        window.removeEventListener("storage", handleStorageChange);
+      }
+    };
+  }, []);
+
   const isLoaded = !isLoading && hasFetched && settings !== null;
 
   // Manual refresh

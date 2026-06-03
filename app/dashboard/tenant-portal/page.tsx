@@ -58,38 +58,42 @@ const featureToggleMap: Record<string, string> = {
   documents: "documentAccess",
 };
 
+const createDefaultPortalFeatures = () => [
+  {
+    id: "rent-payment",
+    icon: DollarSign,
+    title: "Rent Payment",
+    description: "Pay rent online with multiple payment options",
+    enabled: true,
+  },
+  {
+    id: "messaging",
+    icon: MessageSquare,
+    title: "Messaging",
+    description: "Communicate directly with property managers",
+    enabled: true,
+  },
+  {
+    id: "maintenance",
+    icon: Wrench,
+    title: "Maintenance Requests",
+    description: "Submit and track maintenance issues",
+    enabled: true,
+  },
+  {
+    id: "documents",
+    icon: FileText,
+    title: "Documents",
+    description: "Access lease and important documents",
+    enabled: true,
+  },
+];
+
 export default function TenantPortalPage() {
   const activeCurrency = useActiveCurrency();
-  const [portalFeatures, setPortalFeatures] = useState([
-    {
-      id: "rent-payment",
-      icon: DollarSign,
-      title: "Rent Payment",
-      description: "Pay rent online with multiple payment options",
-      enabled: true,
-    },
-    {
-      id: "messaging",
-      icon: MessageSquare,
-      title: "Messaging",
-      description: "Communicate directly with property managers",
-      enabled: true,
-    },
-    {
-      id: "maintenance",
-      icon: Wrench,
-      title: "Maintenance Requests",
-      description: "Submit and track maintenance issues",
-      enabled: true,
-    },
-    {
-      id: "documents",
-      icon: FileText,
-      title: "Documents",
-      description: "Access lease and important documents",
-      enabled: true,
-    },
-  ]);
+  const [portalFeatures, setPortalFeatures] = useState(
+    createDefaultPortalFeatures(),
+  );
 
   const { tenants, properties, payments, isLoading, isFetching, refetchAll } =
     useAppData();
@@ -272,6 +276,12 @@ export default function TenantPortalPage() {
   };
 
   useEffect(() => {
+    if (!settingsLoaded && apiSettings) {
+      updatePortalFeaturesFromSettings();
+    }
+  }, [apiSettings, settingsLoaded]);
+
+  useEffect(() => {
     updatePortalFeaturesFromSettings();
 
     const handleStorage = (event: StorageEvent) => {
@@ -297,7 +307,7 @@ export default function TenantPortalPage() {
         handleSettingsChanged as EventListener,
       );
     };
-  }, [apiSettings]);
+  }, [apiSettings, settingsId]);
 
   const dispatchSystemSettingsChange = () => {
     if (typeof window === "undefined") return;
