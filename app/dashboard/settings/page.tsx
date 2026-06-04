@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,9 +47,12 @@ import {
   updateSettingsOnApi,
   convertPayloadToTenantPortalSettings,
   updateTenantPortalSettings,
+  updateSystemSettings,
+  NotificationTemplate,
   FieldStatus,
   debounce,
   AdminPaymentMethod,
+  SettingsPayload,
 } from "@/lib/services/settings";
 import { SystemSettings, clearDB, generateId } from "@/lib/local-store";
 import { useAuth } from "@/lib/auth-context";
@@ -282,8 +285,17 @@ export default function SettingsPage() {
   } = useSettings();
   const [activeTab, setActiveTab] = useState("profile");
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [notificationTemplates, setNotificationTemplates] = useState<
+    Record<string, NotificationTemplate>
+  >({});
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings?.notifications?.templates) {
+      setNotificationTemplates(settings.notifications.templates);
+    }
+  }, [settings?.notifications?.templates]);
 
   // Payment methods modal state
   const [isPaymentMethodsModalOpen, setIsPaymentMethodsModalOpen] =
@@ -381,7 +393,10 @@ export default function SettingsPage() {
     }
   }, [settings?.companyInfo]);
 
-  const buildPayloadForField = (flatKey: string, value: any) => {
+  const buildPayloadForField = (
+    flatKey: string,
+    value: any,
+  ): Partial<SettingsPayload> | undefined => {
     const existingSecurity = settings?.tenantPortalSettings?.securitySettings;
     const securityPayload = {
       autoLogout: {
@@ -482,6 +497,9 @@ export default function SettingsPage() {
           },
         };
       default:
+        if (flatKey.startsWith("notifications_templates_")) {
+          return { notifications: { templates: value } };
+        }
         return undefined;
     }
   };
@@ -507,6 +525,44 @@ export default function SettingsPage() {
   const [fieldStatus, setFieldStatus] = useState<Record<string, FieldStatus>>(
     {},
   );
+
+  const [notificationSavingTemplates, setNotificationSavingTemplates] =
+    useState<Record<string, number>>({});
+
+  const debouncedFieldHandlers = useRef<
+    Record<
+      string,
+      {
+        handle: (value: any) => Promise<void>;
+        latest: { setter: (value: any) => void; payload?: Record<string, any> };
+      }
+    >
+  >({});
+
+  const getNotificationTemplateKey = (flatKey: string) => {
+    if (!flatKey.startsWith("notifications_templates_")) return null;
+    return flatKey
+      .replace(/^notifications_templates_/, "")
+      .replace(/_(email|in_app)$/, "");
+  };
+
+  const setNotificationTemplateSaving = (
+    templateKey: string | null,
+    saving: boolean,
+  ) => {
+    if (!templateKey) return;
+    setNotificationSavingTemplates((prev) => {
+      const current = prev[templateKey] ?? 0;
+      const next = saving ? current + 1 : Math.max(0, current - 1);
+      return {
+        ...prev,
+        [templateKey]: next,
+      };
+    });
+  };
+
+  const isNotificationTemplateSaving = (templateKey: string) =>
+    (notificationSavingTemplates[templateKey] ?? 0) > 0;
 
   // Per-field error tracking
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -614,75 +670,107 @@ export default function SettingsPage() {
     setter: (value: any) => void,
     payload?: Record<string, any>,
   ) => {
-    const debouncedUpdate = debounce(
-      async (value: any) => {
-        clearFieldError(flatKey);
-        markFieldStatus(flatKey, "saving");
+    if (!debouncedFieldHandlers.current[flatKey]) {
+      const latest = { setter, payload };
+      const debouncedUpdate = debounce(
+        async (value: any) => {
+          const templateKey = getNotificationTemplateKey(flatKey);
+          clearFieldError(flatKey);
+          markFieldStatus(flatKey, "saving");
+          setNotificationTemplateSaving(templateKey, true);
 
-        try {
-          const payloadToSend = payload ?? buildPayloadForField(flatKey, value);
+          try {
+            const payloadToSend =
+              latest.payload ?? buildPayloadForField(flatKey, value);
 
-          // Debug logs to trace what is being sent when updating settings
-          // Helps diagnose currency save issues where USD is persisted unexpectedly
-          // eslint-disable-next-line no-console
-          console.debug(
-            "[Settings] Saving field",
-            flatKey,
-            "value:",
-            value,
-            "payload:",
-            payloadToSend,
-          );
+            // Debug logs to trace what is being sent when updating settings
+            // Helps diagnose currency save issues where USD is persisted unexpectedly
+            // eslint-disable-next-line no-console
+            console.debug(
+              "[Settings] Saving field",
+              flatKey,
+              "value:",
+              value,
+              "payload:",
+              payloadToSend,
+            );
 
-          if (payloadToSend) {
-            if (!settingsId) {
-              const created = await createSettingsOnApi(
-                payloadToSend,
-                token ?? undefined,
-              );
-              // eslint-disable-next-line no-console
-              console.debug("[Settings] createSettingsOnApi result:", created);
-              // After creating settings, refresh the context to pick up the new settingsId
-              if (created?._id) {
-                await refreshSettings();
-                dispatchSystemSettingsChange();
+            const isNotificationTemplateUpdate =
+              flatKey.startsWith("notifications_templates_");
+
+            if (payloadToSend) {
+              if (!settingsId) {
+                const created = await createSettingsOnApi(
+                  payloadToSend,
+                  token ?? undefined,
+                );
+                // eslint-disable-next-line no-console
+                console.debug("[Settings] createSettingsOnApi result:", created);
+                if (created?._id) {
+                  if (templateKey && isNotificationTemplateUpdate) {
+                    updateSystemSettings({
+                      notifications: {
+                        templates: value,
+                      },
+                    });
+                  }
+                  if (!isNotificationTemplateUpdate) {
+                    await refreshSettings();
+                    dispatchSystemSettingsChange();
+                  }
+                }
+              } else {
+                const updated = await updateSettingsOnApi(
+                  settingsId,
+                  payloadToSend,
+                  token ?? undefined,
+                );
+                // eslint-disable-next-line no-console
+                console.debug("[Settings] updateSettingsOnApi result:", updated);
+                if (!updated) {
+                  throw new Error("Failed to save to server");
+                }
+                if (templateKey && isNotificationTemplateUpdate) {
+                  updateSystemSettings({
+                    notifications: {
+                      templates: value,
+                    },
+                  });
+                }
+                if (!isNotificationTemplateUpdate) {
+                  await refreshSettings();
+                  dispatchSystemSettingsChange();
+                }
               }
-            } else {
-              const updated = await updateSettingsOnApi(
-                settingsId,
-                payloadToSend,
-                token ?? undefined,
-              );
-              // eslint-disable-next-line no-console
-              console.debug("[Settings] updateSettingsOnApi result:", updated);
-              if (!updated) {
-                throw new Error("Failed to save to server");
-              }
-              // Refresh shared settings so other pages use the updated currency value
-              await refreshSettings();
-              dispatchSystemSettingsChange();
             }
+
+            setter(value);
+            markFieldStatus(flatKey, "saved");
+            setTimeout(() => markFieldStatus(flatKey, "idle"), 2000);
+          } catch (error) {
+            console.error(`Error updating field ${flatKey}:`, error);
+            markFieldError(
+              flatKey,
+              error instanceof Error ? error.message : "Save failed",
+            );
+          } finally {
+            setNotificationTemplateSaving(templateKey, false);
           }
+        },
+        500,
+      );
 
-          // Update local state
-          setter(value);
-          markFieldStatus(flatKey, "saved");
-
-          // Clear "saved" indicator after 2 seconds
-          setTimeout(() => markFieldStatus(flatKey, "idle"), 2000);
-        } catch (error) {
-          console.error(`Error updating field ${flatKey}:`, error);
-          markFieldError(
-            flatKey,
-            error instanceof Error ? error.message : "Save failed",
-          );
-        }
-      },
-      500, // 500ms debounce
-    );
+      debouncedFieldHandlers.current[flatKey] = {
+        handle: debouncedUpdate,
+        latest,
+      };
+    } else {
+      debouncedFieldHandlers.current[flatKey]!.latest.setter = setter;
+      debouncedFieldHandlers.current[flatKey]!.latest.payload = payload;
+    }
 
     return async (value: any) => {
-      await debouncedUpdate(value);
+      await debouncedFieldHandlers.current[flatKey]!.handle(value);
     };
   };
 
@@ -2193,9 +2281,10 @@ export default function SettingsPage() {
                     description: "Expense records created or updated.",
                   },
                 ].map((n) => {
-                  const channelPref = settings.notifications?.templates?.[
-                    n.key
-                  ] ?? { channels: ["email", "in_app"] };
+                  const channelPref =
+                    notificationTemplates[n.key] ||
+                    settings.notifications?.templates?.[n.key] ||
+                    { channels: ["email", "in_app"] };
                   const emailEnabled = (channelPref.channels || []).includes(
                     "email",
                   );
@@ -2219,8 +2308,10 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-2">
                               <Switch
                                 checked={emailEnabled}
+                                disabled={isNotificationTemplateSaving(n.key)}
                                 onCheckedChange={(checked) => {
                                   const existing =
+                                    notificationTemplates ||
                                     settings.notifications?.templates || {};
                                   const tmpl = existing[n.key] || {
                                     subject: "",
@@ -2237,29 +2328,42 @@ export default function SettingsPage() {
                                       channels: Array.from(channels),
                                     },
                                   };
-                                  updateSettings({
-                                    notifications: {
-                                      ...settings.notifications,
-                                      templates: updated,
-                                    },
-                                  });
+                                  setNotificationTemplates(updated);
+                                  updateSettings(
+                                    (prev: SystemSettings | null) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            notifications: {
+                                              ...prev.notifications,
+                                              templates: updated,
+                                            },
+                                          }
+                                        : prev,
+                                  );
 
                                   createIndependentFieldHandler(
-                                    `notifications_templates_${n.key}`,
+                                    `notifications_templates_${n.key}_email`,
                                     (v) =>
-                                      updateSettings({
-                                        notifications: {
-                                          ...settings.notifications,
-                                          templates: v,
-                                        },
-                                      }),
+                                      updateSettings(
+                                        (prev: SystemSettings | null) =>
+                                          prev
+                                            ? {
+                                                ...prev,
+                                                notifications: {
+                                                  ...prev.notifications,
+                                                  templates: v,
+                                                },
+                                              }
+                                            : prev,
+                                      ),
                                   )(updated);
                                 }}
                               />
                               <FieldSaveIndicator
                                 status={
                                   fieldStatus[
-                                    `notifications_templates_${n.key}`
+                                    `notifications_templates_${n.key}_email`
                                   ] || "idle"
                                 }
                               />
@@ -2270,8 +2374,10 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-2">
                               <Switch
                                 checked={inAppEnabled}
+                                disabled={isNotificationTemplateSaving(n.key)}
                                 onCheckedChange={(checked) => {
                                   const existing =
+                                    notificationTemplates ||
                                     settings.notifications?.templates || {};
                                   const tmpl = existing[n.key] || {
                                     subject: "",
@@ -2288,29 +2394,42 @@ export default function SettingsPage() {
                                       channels: Array.from(channels),
                                     },
                                   };
-                                  updateSettings({
-                                    notifications: {
-                                      ...settings.notifications,
-                                      templates: updated,
-                                    },
-                                  });
+                                  setNotificationTemplates(updated);
+                                  updateSettings(
+                                    (prev: SystemSettings | null) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            notifications: {
+                                              ...prev.notifications,
+                                              templates: updated,
+                                            },
+                                          }
+                                        : prev,
+                                  );
 
                                   createIndependentFieldHandler(
-                                    `notifications_templates_${n.key}`,
+                                    `notifications_templates_${n.key}_in_app`,
                                     (v) =>
-                                      updateSettings({
-                                        notifications: {
-                                          ...settings.notifications,
-                                          templates: v,
-                                        },
-                                      }),
+                                      updateSettings(
+                                        (prev: SystemSettings | null) =>
+                                          prev
+                                            ? {
+                                                ...prev,
+                                                notifications: {
+                                                  ...prev.notifications,
+                                                  templates: v,
+                                                },
+                                              }
+                                            : prev,
+                                      ),
                                   )(updated);
                                 }}
                               />
                               <FieldSaveIndicator
                                 status={
                                   fieldStatus[
-                                    `notifications_templates_${n.key}`
+                                    `notifications_templates_${n.key}_in_app`
                                   ] || "idle"
                                 }
                               />

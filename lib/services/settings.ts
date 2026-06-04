@@ -578,14 +578,44 @@ export function createDefaultSystemSettings(): SystemSettings {
     },
     notifications: {
       templates: {
-        rentReminder: {
+        rentDue: {
           subject: "Rent payment reminder",
           body: "Your rent payment is due soon. Please pay on time to avoid late fees.",
           channels: ["email", "in_app"],
         },
-        maintenanceRequest: {
-          subject: "Maintenance request received",
-          body: "Your maintenance request has been received and will be reviewed shortly.",
+        messages: {
+          subject: "New message received",
+          body: "You have a new message waiting in your tenant portal.",
+          channels: ["email", "in_app"],
+        },
+        failedLogin: {
+          subject: "Failed login attempt",
+          body: "A failed login attempt was detected. Please verify your account activity.",
+          channels: ["email", "in_app"],
+        },
+        rentPayments: {
+          subject: "Rent payment status",
+          body: "A rent payment has been received or failed. Please review the details.",
+          channels: ["email", "in_app"],
+        },
+        tenantProfile: {
+          subject: "Tenant profile updated",
+          body: "A tenant profile has been created, updated, or deleted.",
+          channels: ["email", "in_app"],
+        },
+        propertyProfile: {
+          subject: "Property profile updated",
+          body: "A property profile has been created, updated, or deleted.",
+          channels: ["email", "in_app"],
+        },
+        maintenance: {
+          subject: "Maintenance update",
+          body: "A maintenance request has been created or updated.",
+          channels: ["email", "in_app"],
+        },
+        expenses: {
+          subject: "Expense record updated",
+          body: "An expense record has been created or updated.",
           channels: ["email", "in_app"],
         },
       },
@@ -916,6 +946,8 @@ export interface SettingsPayload {
       inApp?: boolean;
       sms?: boolean;
     };
+    templates?: Record<string, NotificationTemplate>;
+    schedules?: Record<string, NotificationSchedule>;
   };
   features?: {
     map?: boolean;
@@ -1463,6 +1495,15 @@ export async function updateSettingsOnApi(
           settingsData as SettingsPayload,
         );
         updateTenantPortalSettings(tenantSettings);
+        if (settingsData.notifications?.templates) {
+          updateSystemSettings({
+            notifications: {
+              ...created.notifications,
+              templates: settingsData.notifications.templates,
+              schedules: created.notifications?.schedules ?? {},
+            },
+          });
+        }
         return {
           _id: created.id,
           createdAt: created.createdAt,
@@ -1482,6 +1523,20 @@ export async function updateSettingsOnApi(
       const tenantSettings = convertPayloadToTenantPortalSettings(
         settingsData as SettingsPayload,
       );
+
+      if (settingsData.notifications?.templates) {
+        const existing = getSystemSettings();
+        if (existing) {
+          updateSystemSettings({
+            notifications: {
+              ...existing.notifications,
+              templates: settingsData.notifications.templates,
+              schedules: existing.notifications?.schedules ?? {},
+            },
+          });
+        }
+      }
+
       const updated = updateTenantPortalSettings(tenantSettings);
       if (!updated) return null;
       return {
