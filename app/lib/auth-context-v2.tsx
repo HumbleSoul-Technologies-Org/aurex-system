@@ -100,7 +100,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await authApi.login({ email, password });
 
         // Store token and user
-        await tokenManager.setAuthToken(response.data.token, response.data.user);
+        await tokenManager.setAuthToken(
+          response.data.token,
+          response.data.user,
+        );
         setUser(response.data.user);
 
         return response.data.user;
@@ -136,7 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         // Store token and user
-        await tokenManager.setAuthToken(response.data.token, response.data.user);
+        await tokenManager.setAuthToken(
+          response.data.token,
+          response.data.user,
+        );
         setUser(response.data.user);
 
         return { user: response.data.user, token: response.data.token };
@@ -222,7 +228,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await authApi.resetPassword(token, newPassword);
 
         // Store token and user
-        await tokenManager.setAuthToken(response.data.token, response.data.user);
+        await tokenManager.setAuthToken(
+          response.data.token,
+          response.data.user,
+        );
         setUser(response.data.user);
       } catch (err: any) {
         const errorMessage = err.message || "Failed to reset password";

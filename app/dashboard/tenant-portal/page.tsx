@@ -285,7 +285,7 @@ export default function TenantPortalPage() {
     updatePortalFeaturesFromSettings();
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === "propman:v1") {
+      if (event.key === "propman:system-settings-sync") {
         updatePortalFeaturesFromSettings();
       }
     };
@@ -313,7 +313,7 @@ export default function TenantPortalPage() {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new Event("system-settings-changed"));
     localStorage.setItem(
-      "propman:v1",
+      "propman:system-settings-sync",
       JSON.stringify({ updatedAt: Date.now() }),
     );
   };

@@ -529,7 +529,7 @@ export default function SettingsPage() {
     if (typeof window === "undefined") return;
     window.dispatchEvent(new Event("system-settings-changed"));
     localStorage.setItem(
-      "propman:v1",
+      "propman:system-settings-sync",
       JSON.stringify({ updatedAt: Date.now() }),
     );
   };

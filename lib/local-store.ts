@@ -258,10 +258,7 @@ async function writeEncryptedRaw(db: DBSchema) {
   if (typeof window === "undefined" || !encryptionKey) return;
 
   try {
-    const encrypted = await encryptString(
-      encryptionKey,
-      JSON.stringify(db),
-    );
+    const encrypted = await encryptString(encryptionKey, JSON.stringify(db));
     localStorage.setItem(DB_KEY, `${ENCRYPTION_PREFIX}${encrypted}`);
   } catch (error) {
     console.error("local-store encrypted write error", error);
@@ -462,5 +459,14 @@ export function getValue<T = any>(key: string): T | null {
   } catch (e) {
     console.error("local-store getValue error", e);
     return null;
+  }
+}
+
+export function removeValue(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error("local-store removeValue error", e);
   }
 }

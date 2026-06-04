@@ -3,7 +3,10 @@
  * Handles JWT token storage, retrieval, and refresh
  */
 
-import { clearStorageEncryptionKey, setStorageEncryptionKey } from "@/lib/local-store";
+import {
+  clearStorageEncryptionKey,
+  setStorageEncryptionKey,
+} from "@/lib/local-store";
 
 const TOKEN_KEY = "propman:auth_token";
 const USER_KEY = "propman:user";

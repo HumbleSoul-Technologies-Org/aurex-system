@@ -115,7 +115,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
 
     const handleStorageChange = (event: StorageEvent) => {
-      if (event.key === "propman:v1") {
+      if (event.key === "propman:system-settings-sync") {
         setHasFetched(false); // Force refetch
       }
     };

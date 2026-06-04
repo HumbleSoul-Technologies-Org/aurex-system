@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
+import { getValue, removeValue, setValue } from "@/lib/local-store";
 
 const rawMaintenancePeriod = process.env.NEXT_PUBLIC_MAINTENANCE_PERIOD;
 
@@ -86,13 +87,13 @@ export default function MaintenancePage() {
     }
 
     const storageKey = `maintenance-countdown-end-${rawMaintenancePeriod ?? "default"}`;
-    const rawStored = localStorage.getItem(storageKey);
+    const rawStored = getValue<string>(storageKey);
     const now = Date.now();
     let endTimestamp = rawStored ? Number(rawStored) : NaN;
 
     if (!rawStored || isNaN(endTimestamp) || endTimestamp <= now) {
       endTimestamp = now + maintenanceSchedule.seconds * 1000;
-      localStorage.setItem(storageKey, String(endTimestamp));
+      setValue(storageKey, String(endTimestamp));
     }
 
     const updateCountdown = () => {
@@ -103,7 +104,7 @@ export default function MaintenancePage() {
       setRemainingSeconds(deltaSeconds);
 
       if (deltaSeconds === 0) {
-        localStorage.removeItem(storageKey);
+        removeValue(storageKey);
       }
     };
 

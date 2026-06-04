@@ -28,7 +28,9 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export async function deriveAesGcmKeyFromSecret(secret: string): Promise<CryptoKey> {
+export async function deriveAesGcmKeyFromSecret(
+  secret: string,
+): Promise<CryptoKey> {
   if (!isBrowserCryptoAvailable()) {
     throw new Error("Web Crypto API is not available in this environment.");
   }
