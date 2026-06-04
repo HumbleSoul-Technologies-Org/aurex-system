@@ -127,6 +127,37 @@ export async function createManualPayment(
     const record = mapServerPaymentToClient(raw);
     applyTenantStatusFromPayment(record);
     dispatchPaymentsUpdatedEvent();
+
+    // Dispatch tenant notification for payment received
+    if (record.tenantId && isSettledPaymentStatus(record.status)) {
+      const tenant = getTenant(record.tenantId);
+      if (tenant && typeof window !== "undefined") {
+        // Dispatch async to avoid blocking the payment creation flow
+        (async () => {
+          try {
+            const { dispatchTenantNotification } =
+              await import("@/lib/services/notification-dispatcher");
+            await dispatchTenantNotification({
+              type: "paymentReceived",
+              tenant,
+              data: {
+                paymentId: record.id,
+                amount: record.amount,
+                transactionId: record.transId || record.id,
+                paymentDate: new Date().toLocaleDateString(),
+                currency: "USD",
+              },
+            });
+          } catch (error) {
+            console.error(
+              "[Payment Service] Failed to dispatch payment notification:",
+              error,
+            );
+          }
+        })();
+      }
+    }
+
     return record;
   } catch (err) {
     console.warn("Failed to create manual payment:", err);
@@ -150,6 +181,40 @@ export async function updatePayment(
     const record = mapServerPaymentToClient(raw);
     applyTenantStatusFromPayment(record);
     dispatchPaymentsUpdatedEvent();
+
+    // Dispatch tenant notification if status changed to settled
+    if (
+      record.tenantId &&
+      isSettledPaymentStatus(record.status) &&
+      isSettledPaymentStatus(updates.status || "")
+    ) {
+      const tenant = getTenant(record.tenantId);
+      if (tenant && typeof window !== "undefined") {
+        (async () => {
+          try {
+            const { dispatchTenantNotification } =
+              await import("@/lib/services/notification-dispatcher");
+            await dispatchTenantNotification({
+              type: "paymentReceived",
+              tenant,
+              data: {
+                paymentId: record.id,
+                amount: record.amount,
+                transactionId: record.transId || record.id,
+                paymentDate: new Date().toLocaleDateString(),
+                currency: "USD",
+              },
+            });
+          } catch (error) {
+            console.error(
+              "[Payment Service] Failed to dispatch payment notification:",
+              error,
+            );
+          }
+        })();
+      }
+    }
+
     return record;
   } catch (err) {
     console.warn("Failed to update payment:", err);

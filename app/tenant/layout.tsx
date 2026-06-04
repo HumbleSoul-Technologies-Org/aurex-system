@@ -9,6 +9,11 @@ import {
   CreditCard,
   Wrench,
   MessageSquare,
+  PlusCircle,
+  RefreshCcw,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
   Settings,
   LogOut,
   X,
@@ -34,8 +39,37 @@ interface NavItem {
   badge?: number;
 }
 
+const getNotificationIcon = (
+  category?: string,
+  type?: string,
+): React.ComponentType<React.SVGProps<SVGSVGElement>> => {
+  const key = (category || type || "").toLowerCase();
+
+  switch (key) {
+    case "message":
+      return MessageSquare;
+    case "payment":
+      return CreditCard;
+    case "creation":
+      return PlusCircle;
+    case "update":
+      return RefreshCcw;
+    case "delete":
+      return XCircle;
+    case "approval":
+      return CheckCircle2;
+    case "rejected":
+      return XCircle;
+    case "sys":
+      return AlertCircle;
+    default:
+      return Bell;
+  }
+};
+
 function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   const { currentTenant, notifications } = useTenantContext();
+  const tenantNotifications = notifications as any[];
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -66,7 +100,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     // compute unread notifications after mount to avoid hydration mismatch
     if (!mounted) return;
-    setUnreadCount(notifications.filter((n) => !n.read).length);
+    setUnreadCount(tenantNotifications.filter((n) => !n.read).length);
   }, [mounted]);
 
   React.useEffect(() => {
@@ -210,7 +244,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Notifications Bell */}
             <button
               onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="relative hidden p-2 hover:bg-secondary rounded-lg transition-colors"
+              className="relative p-2 border border-transparent hover:bg-secondary rounded-lg transition-colors"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5 text-foreground" />
@@ -327,9 +361,9 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
 
       {/* Notifications Sidebar - Right */}
       {notificationsOpen && (
-        <div className="fixed right-0 top-16 h-[calc(100vh-64px)] z-40 w-full sm:w-96 bg-background border-l border-border shadow-lg overflow-y-auto">
-          <div className="p-4 border-b border-border sticky top-0 bg-background">
-            <div className="flex items-center justify-between">
+        <div className="fixed right-0 top-16 h-[calc(100vh-64px)] z-40 w-full sm:w-96 bg-background border-l border-border shadow-2xl overflow-y-auto">
+          <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+            <div className="flex items-center justify-between gap-3">
               <h2 className="font-bold text-foreground">Notifications</h2>
               <button
                 onClick={() => setNotificationsOpen(false)}
@@ -342,13 +376,13 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Notifications List */}
-          <div className="space-y-2 p-4">
-            {notifications.length === 0 ? (
+          <div className="space-y-3 p-4">
+            {tenantNotifications.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-8">
                 No notifications
               </p>
             ) : (
-              [...notifications]
+              [...tenantNotifications]
                 .sort(
                   (a, b) =>
                     new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -360,35 +394,53 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
                     onClick={() => setNotificationsOpen(false)}
                   >
                     <Card
-                      className={`p-3 cursor-pointer hover:bg-secondary transition-colors border ${
+                      className={`rounded-3xl relative p-4 my-3 last:mb-0 cursor-pointer hover:bg-secondary transition-colors border ${
                         notif.read
-                          ? "border-border"
+                          ? "border-border bg-card"
                           : "border-primary bg-primary/5"
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="mt-1">
+                        {/* <div className="mt-1">
                           {!notif.read && (
                             <div className="w-2 h-2 bg-primary rounded-full" />
                           )}
-                        </div>
+                        </div> */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-sm text-foreground truncate">
-                              {notif.title}
-                            </p>
-                            <Badge className="text-xs whitespace-nowrap">
-                              {notif.type}
-                            </Badge>
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-8 w-8 absolute top-2 right-3 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                              {React.createElement(
+                                getNotificationIcon(notif.category, notif.type),
+                                {
+                                  className: "w-5 h-5",
+                                },
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="font-semibold text-sm text-foreground truncate">
+                                  {notif.title}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                                {notif.body || "No details available."}
+                              </p>
+                              <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                <span>
+                                  {new Date(
+                                    notif.createdAt,
+                                  ).toLocaleDateString()}
+                                </span>
+                                {notif.resourceType && (
+                                  <span className="rounded-full bg-secondary/10 px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-secondary">
+                                    {notif.resourceType}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                            {notif.message}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            {new Date(notif.date).toLocaleDateString()}
-                          </p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                        {/* <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" /> */}
                       </div>
                     </Card>
                   </Link>

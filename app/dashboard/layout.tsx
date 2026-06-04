@@ -19,6 +19,12 @@ import {
   DollarSign,
   Wrench,
   MessageSquare,
+  CreditCard,
+  PlusCircle,
+  RefreshCcw,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
   FileText,
   Settings,
   LogOut,
@@ -54,6 +60,34 @@ interface NavItem {
   icon: React.ReactNode;
   badge?: number;
 }
+
+const getNotificationIcon = (
+  category?: string,
+  type?: string,
+): React.ComponentType<React.SVGProps<SVGSVGElement>> => {
+  const key = (category || type || "").toLowerCase();
+
+  switch (key) {
+    case "message":
+      return MessageSquare;
+    case "payment":
+      return CreditCard;
+    case "creation":
+      return PlusCircle;
+    case "update":
+      return RefreshCcw;
+    case "delete":
+      return Trash2;
+    case "approval":
+      return CheckCircle2;
+    case "rejected":
+      return XCircle;
+    case "sys":
+      return AlertCircle;
+    default:
+      return Bell;
+  }
+};
 
 export default function DashboardLayout({
   children,
@@ -460,10 +494,10 @@ export default function DashboardLayout({
                 {/* Notifications */}
                 <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative hidden p-2 hover:bg-secondary rounded-lg transition-colors"
+                  className="relative p-2 border border-transparent hover:bg-secondary rounded-lg transition-colors"
                   aria-label="Notifications"
                 >
-                  <Bell className="w-5 h-5" />
+                  <Bell className="w-5 h-5 text-foreground" />
                   {unreadNotifications > 0 && (
                     <span className="absolute top-1 right-1 w-5 h-5 bg-destructive rounded-full flex items-center justify-center text-white text-xs font-bold">
                       {unreadNotifications}
@@ -494,21 +528,22 @@ export default function DashboardLayout({
           {notificationsOpen && (
             <>
               {/* Desktop sidebar */}
-              <div className="hidden md:fixed md:right-0 md:top-16 md:h-[calc(100vh-64px)] md:w-80 md:border-l md:border-border md:bg-background md:flex md:flex-col md:z-40 md:shadow-lg">
-                <div className="p-4 border-b border-border sticky top-0 bg-background">
-                  <div className="flex items-center justify-between">
+              <div className="hidden md:fixed md:right-0 md:top-16 md:h-[calc(100vh-64px)] md:w-[28rem] md:border-l md:border-border md:bg-background md:flex md:flex-col md:z-40 md:shadow-2xl">
+                <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+                  <div className="flex items-center justify-between gap-3">
                     <h2 className="font-bold flex-1 text-foreground">
                       Notifications
                     </h2>
                     {notifications.length > 0 && (
-                      <span className="flex mr-5 hover:border-0 gap-2 items-center border rounded-md p-2 cursor-pointer hover:bg-red-600 hover:text-white justify-center">
-                        <Trash2
-                          className="w-4   h-4     cursor-pointer"
-                          onClick={clearAllNotifications}
-                          aria-label="Clear all notifications"
-                        />{" "}
-                        <p className="text-xs">Clear All</p>
-                      </span>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+                        onClick={clearAllNotifications}
+                        aria-label="Clear all notifications"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Clear All
+                      </button>
                     )}
                     <button
                       onClick={() => setNotificationsOpen(false)}
@@ -521,7 +556,7 @@ export default function DashboardLayout({
                 </div>
 
                 {/* Notifications List */}
-                <div className="flex-1 overflow-y-auto space-y-2 p-4">
+                <div className="flex-1 overflow-y-auto space-y-3 p-4">
                   {notifications.length === 0 ? (
                     <p className="text-center text-muted-foreground text-sm py-8">
                       No notifications
@@ -557,9 +592,9 @@ export default function DashboardLayout({
                           }}
                         >
                           <Card
-                            className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
+                            className={`rounded-3xl p-4 cursor-pointer hover:bg-secondary transition-colors border ${
                               notif.read
-                                ? "border-border"
+                                ? "border-border bg-card"
                                 : "border-primary bg-primary/5"
                             }`}
                           >
@@ -570,22 +605,46 @@ export default function DashboardLayout({
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-sm text-foreground truncate">
-                                    {notif.title}
-                                  </p>
-                                  <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
-                                    {notif.category || notif.type}
-                                  </span>
+                                <div className="flex items-start gap-3">
+                                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                    {React.createElement(
+                                      getNotificationIcon(
+                                        notif.category,
+                                        notif.type,
+                                      ),
+                                      {
+                                        className: "w-5 h-5",
+                                      },
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="font-semibold text-sm text-foreground truncate">
+                                        {notif.title}
+                                      </p>
+                                      <Badge className="text-xs whitespace-nowrap">
+                                        {notif.category || notif.type}
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                                      {notif.body ||
+                                        notif.message ||
+                                        "No details available."}
+                                    </p>
+                                    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                      <span>
+                                        {new Date(
+                                          notif.createdAt || notif.date,
+                                        ).toLocaleDateString()}
+                                      </span>
+                                      {notif.resourceType && (
+                                        <span className="rounded-full bg-secondary/10 px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-secondary">
+                                          {notif.resourceType}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                  {notif.body || notif.message}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                  {new Date(
-                                    notif.createdAt || notif.date,
-                                  ).toLocaleDateString()}
-                                </p>
                               </div>
                               <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
                             </div>
@@ -642,9 +701,9 @@ export default function DashboardLayout({
                         }}
                       >
                         <Card
-                          className={`p-3 cursor-pointer mt-1 mb-1 hover:bg-secondary transition-colors border ${
+                          className={`rounded-3xl p-4 cursor-pointer hover:bg-secondary transition-colors border ${
                             notif.read
-                              ? "border-border"
+                              ? "border-border bg-card"
                               : "border-primary bg-primary/5"
                           }`}
                         >
@@ -655,20 +714,46 @@ export default function DashboardLayout({
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="font-semibold text-sm text-foreground truncate">
-                                  {notif.title}
-                                </p>
-                                <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
-                                  {notif.category || notif.type}
-                                </span>
+                              <div className="flex items-start gap-3">
+                                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                                  {React.createElement(
+                                    getNotificationIcon(
+                                      notif.category,
+                                      notif.type,
+                                    ),
+                                    {
+                                      className: "w-5 h-5",
+                                    },
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-semibold text-sm text-foreground truncate">
+                                      {notif.title}
+                                    </p>
+                                    <Badge className="text-xs whitespace-nowrap">
+                                      {notif.category || notif.type}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                                    {notif.body ||
+                                      notif.message ||
+                                      "No details available."}
+                                  </p>
+                                  <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                    <span>
+                                      {new Date(
+                                        notif.date,
+                                      ).toLocaleDateString()}
+                                    </span>
+                                    {notif.resourceType && (
+                                      <span className="rounded-full bg-secondary/10 px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-secondary">
+                                        {notif.resourceType}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {notif.body || notif.message}
-                              </p>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {new Date(notif.date).toLocaleDateString()}
-                              </p>
                             </div>
                             <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
                           </div>

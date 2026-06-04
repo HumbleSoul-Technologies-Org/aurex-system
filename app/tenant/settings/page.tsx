@@ -34,7 +34,7 @@ import { useSettings } from "@/lib/settings-context";
 const tabItems = [
   { id: "profile", label: "Profile" },
   { id: "finances", label: "Finances" },
-  // { id: "notifications", label: "Notifications" },
+  { id: "notifications", label: "Notifications" },
   // { id: "emergency", label: "Emergency Contact" },
   // { id: "moveout", label: "Move-Out Notice" },
   { id: "security", label: "Security" },
@@ -44,11 +44,16 @@ const tabItems = [
 type TabId = (typeof tabItems)[number]["id"];
 
 type NotificationType =
-  | "overdue"
-  | "leaseEnd"
-  | "maintenance"
+  | "paymentReminder"
+  | "paymentReceived"
+  | "maintenanceScheduled"
+  | "maintenanceCompleted"
+  | "messages"
+  | "leaseExpiryAlert"
+  | "financeReports"
   | "profileChanges"
-  | "messages";
+  | "announcements"
+  | "propertyUpdates";
 
 type NotificationPreferences = Record<
   NotificationType,
@@ -56,11 +61,16 @@ type NotificationPreferences = Record<
 >;
 
 const defaultNotificationPreferences: NotificationPreferences = {
-  overdue: { email: true, sms: false },
-  leaseEnd: { email: true, sms: false },
-  maintenance: { email: true, sms: false },
-  profileChanges: { email: true, sms: false },
+  paymentReminder: { email: true, sms: false },
+  paymentReceived: { email: true, sms: false },
+  maintenanceScheduled: { email: true, sms: false },
+  maintenanceCompleted: { email: true, sms: false },
   messages: { email: true, sms: false },
+  leaseExpiryAlert: { email: true, sms: false },
+  financeReports: { email: true, sms: false },
+  profileChanges: { email: true, sms: false },
+  announcements: { email: false, sms: false },
+  propertyUpdates: { email: false, sms: false },
 };
 
 const moveOutReasons = [
@@ -118,7 +128,7 @@ export default function TenantSettingsPage() {
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
     profile: false,
     finances: false,
-    // notifications: false,
+    notifications: false,
     // emergency: false,
     // moveout: false,
     security: false,
@@ -127,7 +137,7 @@ export default function TenantSettingsPage() {
   const [saveError, setSaveError] = useState<Record<TabId, string | null>>({
     profile: null,
     finances: null,
-    // notifications: null,
+    notifications: null,
     // emergency: null,
     // moveout: null,
     security: null,

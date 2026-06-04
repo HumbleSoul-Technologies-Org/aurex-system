@@ -166,6 +166,7 @@ export function notifyNewProperty(
   propertyId: string,
 ): void {
   createNotification({
+    type: "property.created",
     title: "New Property Added",
     body: `Property "${propertyName}" was added to your portfolio.`,
     category: "creation",
@@ -183,6 +184,7 @@ export function notifyNewMaintenanceRequest(
   tenantId?: string,
 ): void {
   createNotification({
+    type: "maintenance.requested",
     title: "New Maintenance Request",
     body: `${description} - ${propertyName}`,
     category: "creation",
@@ -201,6 +203,7 @@ export function notifyNewMessage(
   tenantId?: string,
 ): void {
   createNotification({
+    type: "message.new",
     title: "New Message Received",
     body: `${senderName}: ${preview}`,
     category: "message",
@@ -218,6 +221,7 @@ export function notifyNewTenant(
   tenantId: string,
 ): void {
   createNotification({
+    type: "tenant.created",
     title: "New Tenant Added",
     body: `Tenant "${tenantName}" was added to ${propertyName}.`,
     category: "creation",
@@ -233,6 +237,7 @@ export function notifyTenantProfileUpdated(
   changedFields: string[],
 ): void {
   createNotification({
+    type: "tenant.profile.updated",
     title: "Tenant Profile Updated",
     body: `Profile update fields: ${changedFields.join(", ")}`,
     category: "update",
@@ -248,6 +253,7 @@ export function notifyTenantProfileUpdateToAdmin(
   changedFields: string[],
 ): void {
   createNotification({
+    type: "tenant.profile.updated",
     title: "Tenant Updated Their Profile",
     body: `Tenant ${tenantName} updated: ${changedFields.join(", ")}`,
     category: "update",
@@ -264,6 +270,7 @@ export function notifyPropertyUpdated(
   targetTenantIds?: string[],
 ): void {
   createNotification({
+    type: "property.updated",
     title: "Property Updated",
     body: `Changes: ${changedFields.join(", ")}`,
     category: "update",
@@ -282,6 +289,7 @@ export function notifyPaymentMade(
   paymentId?: string,
 ): void {
   createNotification({
+    type: "payment.received",
     title: "Payment Received",
     body: `A payment of ${amount} was processed.${
       balance !== undefined ? ` Balance: ${balance}.` : ""
@@ -302,6 +310,7 @@ export function notifySystemChange(
   actionUrl?: string,
 ): void {
   createNotification({
+    type: "system.change",
     title,
     body,
     category: "sys",

@@ -22,11 +22,17 @@ export interface NotificationChannelSettings {
 }
 
 export interface NotificationPreferences {
-  overdue: NotificationChannelSettings;
-  leaseEnd: NotificationChannelSettings;
-  maintenance: NotificationChannelSettings;
-  profileChanges: NotificationChannelSettings;
+  [key: string]: NotificationChannelSettings | undefined;
+  paymentReminder: NotificationChannelSettings;
+  paymentReceived: NotificationChannelSettings;
+  maintenanceScheduled: NotificationChannelSettings;
+  maintenanceCompleted: NotificationChannelSettings;
   messages: NotificationChannelSettings;
+  leaseExpiryAlert: NotificationChannelSettings;
+  financeReports: NotificationChannelSettings;
+  profileChanges: NotificationChannelSettings;
+  announcements: NotificationChannelSettings;
+  propertyUpdates: NotificationChannelSettings;
 }
 
 export interface MoveOutNotice {

@@ -110,12 +110,103 @@ export default function PaymentsPage() {
     setMethod("bank_transfer");
   };
 
+  const getPaymentGroup = (payment: RentPayment) => {
+    const groupKey =
+      payment.transId || payment.reference || payment.receiptUrl || payment.id;
+    return tenantPayments.filter((p) => {
+      const compareKey = p.transId || p.reference || p.receiptUrl || p.id;
+      return compareKey === groupKey;
+    });
+  };
+
+  const handlePrintPayment = (payment: RentPayment) => {
+    if (typeof window === "undefined") return;
+
+    const relatedPayments = getPaymentGroup(payment);
+    const paymentTitle = `Payment Receipt - ${payment.transId || payment.id}`;
+    const totalGroupAmount = relatedPayments.reduce(
+      (sum, item) => sum + (item.amount || 0),
+      0,
+    );
+    const paymentDate =
+      payment.paidOn || payment.paymentDate || payment.date || "";
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${paymentTitle}</title>
+          <style>
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: #111; }
+            h1 { margin-bottom: 4px; font-size: 24px; }
+            p { margin: 4px 0; color: #555; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th, td { border: 1px solid #d1d5db; padding: 10px 12px; text-align: left; }
+            th { background: #f8fafc; }
+            tbody tr:nth-child(even) { background: #f9fafb; }
+            .summary { margin-top: 20px; }
+            .summary p { margin: 2px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>${paymentTitle}</h1>
+          <p><strong>Tenant:</strong> ${tenant?.name || "Tenant"}</p>
+          <p><strong>Property:</strong> ${currentProperty?.name || "Property"}</p>
+          <p><strong>Date:</strong> ${paymentDate}</p>
+          <div class="summary">
+            <p><strong>Payment Method:</strong> ${payment.method || payment.paymentMethod || "—"}</p>
+            <p><strong>Status:</strong> ${payment.status || "—"}</p>
+            <p><strong>Total Paid:</strong> ${formatCurrency(totalGroupAmount, activeCurrency)}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Payment Part</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${relatedPayments
+                .map(
+                  (item, index) => `
+                    <tr>
+                      <td>${index + 1}</td>
+                      <td>${formatCurrency(item.amount || 0, activeCurrency)}</td>
+                      <td>${item.status || "—"}</td>
+                      <td>${item.paidOn || item.paymentDate || item.date || "—"}</td>
+                    </tr>
+                  `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   const handleDownloadPaymentHistory = async () => {
     if (typeof window === "undefined") return;
 
     const tenantName = tenant?.name || "Tenant";
     const propertyName = currentProperty?.name || "Property";
     const title = `Payment History - ${tenantName}`;
+
+    const pdfTotalPaid = tenantPayments.reduce(
+      (sum, payment) => sum + (payment.amount || 0),
+      0,
+    );
 
     const module = await import("jspdf/dist/jspdf.umd.min.js");
     const { jsPDF } = module;
@@ -137,7 +228,7 @@ export default function PaymentsPage() {
 
     cursorY += 18;
     doc.text(
-      `Total Paid: ${formatCurrency(totalPaid, activeCurrency)}`,
+      `Total Paid: ${formatCurrency(pdfTotalPaid, activeCurrency)}`,
       margin,
       cursorY,
     );
@@ -422,16 +513,7 @@ export default function PaymentsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => {
-                                if (typeof window === "undefined") return;
-                                const w = window.open("", "_blank");
-                                if (!w) return;
-                                w.document.write(
-                                  `<html><head><title>Payment ${payment.transId || payment.id}</title></head><body><pre>${JSON.stringify(payment, null, 2)}</pre></body></html>`,
-                                );
-                                w.document.close();
-                                w.print();
-                              }}
+                              onClick={() => handlePrintPayment(payment)}
                             >
                               <Printer className="mr-2 h-4 w-4" />
                               Print

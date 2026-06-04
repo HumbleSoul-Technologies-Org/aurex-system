@@ -68,8 +68,9 @@ export default function NotificationBell({ tenantId }: { tenantId?: string }) {
           setOpen(!open);
           if (!open) refresh();
         }}
+        aria-label="Notifications"
       >
-        <Bell />
+        <Bell className="w-5 h-5 text-foreground" />
         {unreadCount > 0 && (
           <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full bg-red-600 text-white">
             {unreadCount}
@@ -95,10 +96,17 @@ export default function NotificationBell({ tenantId }: { tenantId?: string }) {
                   role="button"
                   tabIndex={0}
                   onClick={() => handleNavigate(n)}
-                  className="flex justify-between items-start p-2 border-b border-border last:border-b-0 cursor-pointer hover:bg-secondary transition-colors"
+                  className={`flex justify-between items-start p-2 border-b last:border-b-0 cursor-pointer transition-colors ${
+                    n.read
+                      ? "border-border bg-card"
+                      : "border-primary bg-primary/5"
+                  } hover:bg-secondary`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
+                      {!n.read && (
+                        <span className="w-2 h-2 bg-primary rounded-full shrink-0" />
+                      )}
                       <p className="font-medium text-foreground">{n.title}</p>
                       <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
                         {n.category || n.type || "general"}

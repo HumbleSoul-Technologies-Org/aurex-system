@@ -2,6 +2,8 @@ export type NotificationCategory =
   | "sys"
   | "message"
   | "payment"
+  | "maintenance"
+  | "general"
   | "creation"
   | "update"
   | "delete"
@@ -21,6 +23,7 @@ export type NotificationResourceType =
 
 export interface NotificationPayload {
   title: string;
+  type: string;
   body?: string;
   category: NotificationCategory;
   resourceType: NotificationResourceType;
