@@ -22,11 +22,13 @@ import {
   Users,
   DollarSign,
   User,
+  Download,
 } from "lucide-react";
 import { AdminSkeletonHeader, Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import { CsvColumn, downloadCsvFile } from "@/lib/csv";
 
 export default function PropertiesPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -37,8 +39,8 @@ export default function PropertiesPage() {
   useEffect(() => setMounted(true), []);
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
-  const { properties, isLoading, isFetching } = useAppData();
-  const isPageLoading = isLoading || (isFetching && properties.length === 0);
+  const { properties, isInitialDataLoading } = useAppData();
+  const isPageLoading = isInitialDataLoading;
 
   if (!mounted || isPageLoading) {
     return (
@@ -76,6 +78,54 @@ export default function PropertiesPage() {
       prop.city.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+
+  const propertyCsvColumns: CsvColumn<PropertyRecord>[] = [
+    { label: "ID", value: (item) => item.id },
+    { label: "_id", value: (item) => item._id },
+    { label: "Name", value: (item) => item.name },
+    { label: "Address", value: (item) => item.address },
+    { label: "City", value: (item) => item.city },
+    { label: "Country", value: (item) => item.country },
+    { label: "Category", value: (item) => item.category },
+    { label: "Units Available", value: (item) => item.units_available },
+    { label: "Units", value: (item) => item.units },
+    { label: "Price Per Unit", value: (item) => item.price_per_unit },
+    { label: "Customize Units", value: (item) => item.customizeUnits },
+    { label: "Custom Unit Numbers", value: (item) => item.customUnitNumbers },
+    { label: "Detailed Units", value: (item) => item.detailedUnits },
+    { label: "Type", value: (item) => item.type },
+    { label: "Property Type", value: (item) => item.propertyType },
+    {
+      label: "Auto Generate Unit Numbers",
+      value: (item) => item.autoGenerateUnitNumbers,
+    },
+    { label: "Geography", value: (item) => item.geography },
+    { label: "Images", value: (item) => item.images },
+    { label: "Features", value: (item) => item.features },
+    { label: "Specifications", value: (item) => item.specifications },
+    { label: "Description", value: (item) => item.description },
+    { label: "Zoning", value: (item) => item.zoning },
+    { label: "Permitted Uses", value: (item) => item.permittedUses },
+    {
+      label: "Annual Property Taxes",
+      value: (item) => item.annualPropertyTaxes,
+    },
+    { label: "Annual Insurance", value: (item) => item.annualInsurance },
+    { label: "Appraised Value", value: (item) => item.appraisedValue },
+    { label: "Last Appraisal Date", value: (item) => item.lastAppraisalDate },
+    { label: "NOI", value: (item) => item.noi },
+    { label: "Cap Rate", value: (item) => item.capRate },
+    { label: "Estate", value: (item) => item.estate },
+    { label: "Occupancy", value: (item) => item.occupancy },
+    { label: "Monthly Revenue", value: (item) => item.monthlyRevenue },
+    { label: "Location Latitude", value: (item) => item.location?.lat },
+    { label: "Location Longitude", value: (item) => item.location?.lng },
+    { label: "Tenant IDs / Objects", value: (item) => item.tenants },
+  ];
+
+  const handleExportPropertiesCsv = () => {
+    downloadCsvFile("properties.csv", propertyCsvColumns, filteredProperties);
+  };
 
   const handleAddProperty = async (data: any, file?: File | null) => {
     setIsCreatingProperty(true);
@@ -222,19 +272,29 @@ export default function PropertiesPage() {
           </div>
 
           {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-secondary p-1 rounded-lg">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2 rounded ${viewMode === "grid" ? "bg-background text-foreground" : "text-muted-foreground"}`}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleExportPropertiesCsv()}
             >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`p-2 rounded ${viewMode === "list" ? "bg-background text-foreground" : "text-muted-foreground"}`}
-            >
-              <List className="w-4 h-4" />
-            </button>
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <div className="flex items-center gap-1 bg-secondary p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded ${viewMode === "grid" ? "bg-background text-foreground" : "text-muted-foreground"}`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded ${viewMode === "list" ? "bg-background text-foreground" : "text-muted-foreground"}`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </Card>

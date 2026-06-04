@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Eye,
   DollarSign,
+  Download,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
+import { CsvColumn, downloadCsvFile } from "@/lib/csv";
 import RecordPaymentModal from "@/components/modals/record-payment-modal";
 
 import { useAuth } from "@/lib/auth-context";
@@ -102,6 +104,72 @@ export default function TenantsPage() {
 
     return matchesSearch && matchesStatus;
   });
+
+  const tenantCsvColumns: CsvColumn<(typeof enrichedTenants)[number]>[] = [
+    { label: "ID", value: (item) => item.id },
+    { label: "_id", value: (item) => item._id },
+    { label: "Name", value: (item) => item.name },
+    { label: "Email", value: (item) => item.email },
+    { label: "Phone", value: (item) => item.phone },
+    { label: "Tenant Type", value: (item) => item.tenantType },
+    { label: "Unit Number", value: (item) => item.unitNumber },
+    { label: "Property ID", value: (item) => item.propertyId },
+    {
+      label: "Property Name",
+      value: (item) => item.property?.name || item.propertyName || "",
+    },
+    { label: "Rent Amount", value: (item) => item.rentAmount },
+    { label: "Lease Type", value: (item) => item.leaseType },
+    { label: "Lease Start Date", value: (item) => item.leaseStartDate },
+    { label: "Lease Renew Date", value: (item) => item.leaseRenewDate },
+    { label: "Lease End Date", value: (item) => item.leaseEndDate },
+    { label: "Lease Terms", value: (item) => item.leaseTerms },
+    {
+      label: "Preferred Contact Method",
+      value: (item) => item.preferredContactMethod,
+    },
+    { label: "Application Date", value: (item) => item.applicationDate },
+    { label: "Move In Date", value: (item) => item.moveInDate },
+    { label: "Date Of Birth", value: (item) => item.dateOfBirth },
+    { label: "Employment Info", value: (item) => item.employmentInfo },
+    { label: "Previous Addresses", value: (item) => item.previousAddresses },
+    { label: "Co-signer", value: (item) => item.coSigner },
+    { label: "Pets", value: (item) => item.pets },
+    { label: "Vehicles", value: (item) => item.vehicles },
+    { label: "Business Info", value: (item) => item.businessInfo },
+    { label: "Business Contacts", value: (item) => item.businessContacts },
+    { label: "Financial Info", value: (item) => item.financialInfo },
+    { label: "Security Deposit", value: (item) => item.securityDeposit },
+    { label: "Emergency Contact", value: (item) => item.emergencyContact },
+    {
+      label: "Emergency Contact Name",
+      value: (item) => item.emergencyContactName,
+    },
+    {
+      label: "Emergency Contact Phone",
+      value: (item) => item.emergencyContactPhone,
+    },
+    {
+      label: "Emergency Contact Email",
+      value: (item) => item.emergencyContactEmail,
+    },
+    { label: "Notes", value: (item) => item.notes },
+    { label: "Document Delivery", value: (item) => item.documentDelivery },
+    { label: "Move Out Notice", value: (item) => item.moveOutNotice },
+    { label: "Avatar", value: (item) => item.avatar },
+    { label: "Current Balance", value: (item) => item.currentBalance },
+    { label: "Is Blocked", value: (item) => item.isBlocked },
+    { label: "Address", value: (item) => item.address },
+    { label: "City", value: (item) => item.city },
+    { label: "Postal Code", value: (item) => item.postalCode },
+    { label: "Country", value: (item) => item.country },
+    { label: "Status", value: (item) => item.status },
+    { label: "Tenant Notes", value: (item) => item.notes },
+  ];
+
+  const handleExportTenantsCsv = () => {
+    downloadCsvFile("tenants.csv", tenantCsvColumns, filteredTenants);
+  };
 
   const getStatusColor = (tenant: (typeof enrichedTenants)[number]) => {
     if (tenant.status === "moving out")
@@ -226,6 +294,14 @@ export default function TenantsPage() {
 
           {/* Filter */}
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleExportTenantsCsv()}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
             <Filter className="w-4 h-4 text-muted-foreground" />
             <select
               value={filterStatus}

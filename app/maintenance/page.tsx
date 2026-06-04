@@ -23,14 +23,14 @@ function parseMaintenanceSchedule(value?: string) {
     unit === "mo"
       ? amount * 2592000
       : unit === "w"
-      ? amount * 604800
-      : unit === "d"
-      ? amount * 86400
-      : unit === "h"
-      ? amount * 3600
-      : unit === "m"
-      ? amount * 60
-      : amount;
+        ? amount * 604800
+        : unit === "d"
+          ? amount * 86400
+          : unit === "h"
+            ? amount * 3600
+            : unit === "m"
+              ? amount * 60
+              : amount;
   const labels: Record<string, string> = {
     mo: amount === 1 ? "month" : "months",
     w: amount === 1 ? "week" : "weeks",

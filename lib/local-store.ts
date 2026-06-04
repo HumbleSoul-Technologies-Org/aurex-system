@@ -1,4 +1,9 @@
 import { migrateDatabase } from "@/lib/migrations";
+import {
+  deriveAesGcmKeyFromSecret,
+  decryptString,
+  encryptString,
+} from "@/lib/crypto";
 
 const DB_KEY = "propman:v1";
 
@@ -244,13 +249,90 @@ function getServerDatabase(): DBSchema {
   return globalAny.__PROP_MAN_DB__ as DBSchema;
 }
 
+const ENCRYPTION_PREFIX = "enc:";
+let encryptionKey: CryptoKey | null = null;
+let cachedDb: DBSchema | null = null;
+let encryptionInitialized = false;
+
+async function writeEncryptedRaw(db: DBSchema) {
+  if (typeof window === "undefined" || !encryptionKey) return;
+
+  try {
+    const encrypted = await encryptString(
+      encryptionKey,
+      JSON.stringify(db),
+    );
+    localStorage.setItem(DB_KEY, `${ENCRYPTION_PREFIX}${encrypted}`);
+  } catch (error) {
+    console.error("local-store encrypted write error", error);
+  }
+}
+
+async function loadCachedDatabase() {
+  if (typeof window === "undefined" || !encryptionKey) return;
+
+  const txt = localStorage.getItem(DB_KEY);
+  if (!txt) {
+    cachedDb = defaultDB;
+    return;
+  }
+
+  try {
+    if (txt.startsWith(ENCRYPTION_PREFIX)) {
+      const decrypted = await decryptString(
+        encryptionKey,
+        txt.slice(ENCRYPTION_PREFIX.length),
+      );
+      cachedDb = { ...defaultDB, ...JSON.parse(decrypted) };
+      return;
+    }
+
+    cachedDb = { ...defaultDB, ...JSON.parse(txt) };
+    await writeEncryptedRaw(cachedDb);
+  } catch (error) {
+    console.error("local-store encrypted cache load error", error);
+    cachedDb = defaultDB;
+  }
+}
+
+export async function setStorageEncryptionKey(secret: string) {
+  if (typeof window === "undefined") return;
+
+  try {
+    encryptionKey = await deriveAesGcmKeyFromSecret(secret);
+    encryptionInitialized = true;
+    await loadCachedDatabase();
+  } catch (error) {
+    console.error("Failed to initialize local storage encryption", error);
+  }
+}
+
+export function clearStorageEncryptionKey() {
+  encryptionKey = null;
+  cachedDb = null;
+  encryptionInitialized = false;
+}
+
+export function isStorageEncryptionEnabled() {
+  return encryptionInitialized;
+}
+
 function readRaw(): DBSchema {
   if (typeof window === "undefined") {
     return getServerDatabase();
   }
+
+  if (cachedDb) {
+    return cachedDb;
+  }
+
   try {
     const txt = localStorage.getItem(DB_KEY);
     if (!txt) return defaultDB;
+    if (txt.startsWith(ENCRYPTION_PREFIX)) {
+      return cachedDb ?? defaultDB;
+    }
+
     const parsed = JSON.parse(txt);
     const dbWithDefaults = { ...defaultDB, ...parsed };
 
@@ -277,6 +359,13 @@ function writeRaw(db: DBSchema) {
     globalAny.__PROP_MAN_DB__ = db;
     return;
   }
+
+  if (encryptionKey) {
+    cachedDb = db;
+    void writeEncryptedRaw(db);
+    return;
+  }
+
   try {
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   } catch (e) {

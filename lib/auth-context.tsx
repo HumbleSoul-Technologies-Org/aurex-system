@@ -86,6 +86,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        await tokenManager.initializeStorageEncryption(token);
+
         // Try to fetch current user
         try {
           const response = await authApi.getCurrentUser(token);
@@ -114,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const normalizedUser = normalizeUser(response.data.user);
 
         // Store token and user
-        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        await tokenManager.setAuthToken(response.data.token, normalizedUser);
         setUser(normalizedUser);
 
         return normalizedUser;
@@ -151,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const normalizedUser = normalizeUser(response.data.user);
 
         // Store token and user
-        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        await tokenManager.setAuthToken(response.data.token, normalizedUser);
         setUser(normalizedUser);
 
         return { user: normalizedUser, password: undefined };
@@ -239,7 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Store token and user
         const normalizedUser = normalizeUser(response.data.user);
-        tokenManager.setAuthToken(response.data.token, normalizedUser);
+        await tokenManager.setAuthToken(response.data.token, normalizedUser);
         setUser(normalizedUser);
       } catch (err: any) {
         const errorMessage = err.message || "Failed to reset password";

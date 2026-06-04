@@ -60,6 +60,7 @@ import {
   AdminTableSkeleton,
   Skeleton,
 } from "@/components/ui/skeleton";
+import { CsvColumn, downloadCsvFile } from "@/lib/csv";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -88,6 +89,11 @@ export default function FinancesPage() {
     expenses,
     isLoading,
     isFetching,
+    isInitialDataLoading,
+    isPaymentsLoading,
+    isExpensesLoading,
+    isPaymentsInitialLoading,
+    isExpensesInitialLoading,
     refetchAll,
     paymentsError,
     expensesError,
@@ -376,10 +382,77 @@ export default function FinancesPage() {
     refetchAll();
   };
 
-  const isPageLoading = isLoading;
+  const isPageLoading = isInitialDataLoading;
+  const showPaymentsCardSkeleton = isPaymentsInitialLoading && !isPageLoading;
+  const showExpensesCardSkeleton = isExpensesInitialLoading && !isPageLoading;
+  const showFinancialCardSkeleton =
+    (isPaymentsInitialLoading || isExpensesInitialLoading) && !isPageLoading;
 
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+
+  const paymentCsvColumns: CsvColumn<any>[] = [
+    { label: "Payment ID", value: (item) => item.id },
+    {
+      label: "Transaction ID",
+      value: (item) => item.transId || item.transactionId || "",
+    },
+    { label: "Tenant", value: (item) => item.tenantName },
+    { label: "Property", value: (item) => item.propertyName },
+    { label: "Amount", value: (item) => item.amount },
+    { label: "Currency", value: (item) => item.currency || activeCurrency },
+    { label: "Status", value: (item) => item.status },
+    {
+      label: "Payment Method",
+      value: (item) => item.paymentMethod || item.method,
+    },
+    {
+      label: "Reference",
+      value: (item) => item.reference || item.paymentReference || "",
+    },
+    {
+      label: "Date",
+      value: (item) =>
+        item.date || item.paymentDate || item.paidOn || item.createdAt,
+    },
+    { label: "Notes", value: (item) => item.notes || item.description || "" },
+  ];
+
+  const expenseCsvColumns: CsvColumn<any>[] = [
+    { label: "Expense ID", value: (item) => item.id },
+    {
+      label: "Transaction ID",
+      value: (item) => item.transId || item.transactionId || "",
+    },
+    { label: "Property", value: (item) => item.propertyName },
+    { label: "Unit", value: (item) => item.unit || "" },
+    { label: "Category", value: (item) => item.category },
+    { label: "Amount", value: (item) => item.amount },
+    { label: "Currency", value: (item) => item.currency || activeCurrency },
+    { label: "Status", value: (item) => item.status },
+    {
+      label: "Payment Method",
+      value: (item) => item.paymentMethod || item.method || "",
+    },
+    { label: "Description", value: (item) => item.description || "" },
+    {
+      label: "Date",
+      value: (item) =>
+        item.date ||
+        item.createdAt ||
+        item.transactionDate ||
+        item.postedAt ||
+        item.entryDate,
+    },
+  ];
+
+  const handleExportPaymentsCsv = () => {
+    downloadCsvFile("payments.csv", paymentCsvColumns, enrichedPayments);
+  };
+
+  const handleExportExpensesCsv = () => {
+    downloadCsvFile("expenses.csv", expenseCsvColumns, expenseTransactions);
+  };
 
   // dialog for viewing/editing a transaction
   const [selectedTx, setSelectedTx] = useState<any | null>(null);
@@ -434,7 +507,13 @@ export default function FinancesPage() {
             Total Revenue
           </p>
           <p className="text-2xl sm:text-lg font-bold text-green-600 dark:text-green-400 mb-1 whitespace-nowrap truncate">
-            {formatCurrency(totalRevenue, activeCurrency)}
+            {showPaymentsCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-10 w-32 rounded-xl" />
+              </span>
+            ) : (
+              formatCurrency(totalRevenue, activeCurrency)
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
             Includes partial and completed rent payments
@@ -446,7 +525,13 @@ export default function FinancesPage() {
             Outstanding Balances
           </p>
           <p className="text-2xl sm:text-lg font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
-            {formatCurrency(expectedOutstanding, activeCurrency)}
+            {showPaymentsCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-10 w-32 rounded-xl" />
+              </span>
+            ) : (
+              formatCurrency(expectedOutstanding, activeCurrency)
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
             Expected from partial payments and overdue rent
@@ -458,10 +543,22 @@ export default function FinancesPage() {
             Pending Payments
           </p>
           <p className="text-2xl sm:text-lg font-bold text-orange-600 dark:text-orange-400 mb-1 whitespace-nowrap truncate">
-            {formatCurrency(totalPending, activeCurrency)}
+            {showPaymentsCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-10 w-24 rounded-xl" />
+              </span>
+            ) : (
+              formatCurrency(totalPending, activeCurrency)
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {pendingPayments.length} pending/partial payments
+            {showPaymentsCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-4 w-24 rounded-xl" />
+              </span>
+            ) : (
+              `${pendingPayments.length} pending/partial payments`
+            )}
           </p>
         </Card>
 
@@ -470,7 +567,13 @@ export default function FinancesPage() {
             Total Expenses
           </p>
           <p className="text-2xl sm:text-lg font-bold text-foreground mb-1 whitespace-nowrap truncate">
-            {formatCurrency(totalExpenses, activeCurrency)}
+            {showExpensesCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-10 w-32 rounded-xl" />
+              </span>
+            ) : (
+              formatCurrency(totalExpenses, activeCurrency)
+            )}
           </p>
           <p className="text-xs text-muted-foreground">Maintenance & other</p>
         </Card>
@@ -482,7 +585,13 @@ export default function FinancesPage() {
           <p
             className={`text-2xl sm:text-lg font-bold mb-1 ${netColorClass} whitespace-nowrap truncate`}
           >
-            {formatCurrency(netProfit, activeCurrency)}
+            {showFinancialCardSkeleton ? (
+              <span className="inline-block">
+                <Skeleton className="h-10 w-32 rounded-xl" />
+              </span>
+            ) : (
+              formatCurrency(netProfit, activeCurrency)
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
             Revenue minus expenses
@@ -813,6 +922,14 @@ export default function FinancesPage() {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
+                variant="outline"
+                onClick={() => handleExportPaymentsCsv()}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Payments
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => setShowRecordPayment(true)}
                 className="bg-primary hover:bg-primary/90 text-white"
               >
@@ -995,6 +1112,14 @@ export default function FinancesPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleExportExpensesCsv()}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Expenses
+            </Button>
             <Button size="sm" onClick={() => setShowAddExpense(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Add Expense

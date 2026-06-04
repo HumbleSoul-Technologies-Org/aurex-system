@@ -6,7 +6,11 @@ import { apiRequest } from "./query-client";
 import { useAuth } from "./auth-context";
 import { listProperties, PropertyRecord } from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
-import { getPaymentsForProperty, PaymentRecord } from "./services/payments";
+import {
+  getPaymentsForProperty,
+  listPayments,
+  PaymentRecord,
+} from "./services/payments";
 import { getExpensesForProperties, ExpenseRecord } from "./services/expenses";
 import {
   getMaintenanceRequests,
@@ -27,6 +31,11 @@ interface DataContextValue {
   maintenanceRequests: MaintenanceRequest[];
   isLoading: boolean;
   isFetching: boolean;
+  isInitialDataLoading: boolean;
+  isPaymentsLoading: boolean;
+  isExpensesLoading: boolean;
+  isPaymentsInitialLoading: boolean;
+  isExpensesInitialLoading: boolean;
   isError: boolean;
   paymentsError: string | null;
   expensesError: string | null;
@@ -215,6 +224,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryFn: () => fetchProperties(adminId, user?.role ?? null),
     initialData: () => listProperties(),
     staleTime: 1000 * 60 * 2,
+    refetchOnMount: true,
   });
 
   const maintenanceRequestsQuery = useQuery({
@@ -222,6 +232,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryFn: fetchMaintenanceRequests,
     initialData: () => [] as MaintenanceRequest[],
     staleTime: 1000 * 60 * 2,
+    refetchOnMount: true,
   });
 
   // derive tenants from properties (API now returns populated tenant subdocuments)
@@ -240,6 +251,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     enabled: expensePropertyIds.length > 0,
     initialData: () => [] as ExpenseRecord[],
     staleTime: 1000 * 60 * 2,
+    refetchOnMount: true,
   });
 
   const tenantsDerived: TenantRecord[] = (propertiesData as any[])
@@ -299,8 +311,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryFn: () =>
       fetchPaymentsWithErrorHandling(paymentPropertyIds, token ?? null),
     enabled: paymentPropertyIds.length > 0,
-    initialData: () => [] as PaymentRecord[],
+    initialData: () =>
+      listPayments().filter((payment) =>
+        paymentPropertyIds.includes(payment.propertyId || ""),
+      ),
     staleTime: 1000 * 60 * 2,
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
@@ -319,6 +335,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
       (expense) => expense.tenantId === currentTenant.id,
     );
   }, [currentTenant, expensesQuery.data]);
+
+  const isPaymentsLoading = paymentsQuery.isLoading || paymentsQuery.isFetching;
+  const isExpensesLoading = expensesQuery.isLoading || expensesQuery.isFetching;
+  const isPaymentsInitialLoading =
+    paymentsQuery.isLoading ||
+    (paymentsQuery.isFetching && !paymentsQuery.isFetchedAfterMount);
+  const isExpensesInitialLoading =
+    expensesQuery.isLoading ||
+    (expensesQuery.isFetching && !expensesQuery.isFetchedAfterMount);
+
+  const isInitialDataLoading =
+    propertiesQuery.isLoading ||
+    paymentsQuery.isLoading ||
+    expensesQuery.isLoading ||
+    maintenanceRequestsQuery.isLoading ||
+    (propertiesQuery.isFetching && !propertiesQuery.isFetchedAfterMount) ||
+    (paymentsQuery.isFetching && !paymentsQuery.isFetchedAfterMount) ||
+    (expensesQuery.isFetching && !expensesQuery.isFetchedAfterMount) ||
+    (maintenanceRequestsQuery.isFetching &&
+      !maintenanceRequestsQuery.isFetchedAfterMount);
 
   const value: DataContextValue = {
     properties: propertiesQuery.data ?? listProperties(),
@@ -340,6 +376,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       paymentsQuery.isFetching ||
       expensesQuery.isFetching ||
       maintenanceRequestsQuery.isFetching,
+    isInitialDataLoading,
+    isPaymentsLoading,
+    isExpensesLoading,
+    isPaymentsInitialLoading,
+    isExpensesInitialLoading,
     paymentsError,
     expensesError,
     isError:

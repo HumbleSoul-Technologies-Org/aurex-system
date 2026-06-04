@@ -3,6 +3,8 @@
  * Handles JWT token storage, retrieval, and refresh
  */
 
+import { clearStorageEncryptionKey, setStorageEncryptionKey } from "@/lib/local-store";
+
 const TOKEN_KEY = "propman:auth_token";
 const USER_KEY = "propman:user";
 const REFRESH_TOKEN_KEY = "propman:refresh_token";
@@ -46,8 +48,10 @@ function getTokenExpiry(token: string) {
 /**
  * Store authentication token and user data
  */
-export function setAuthToken(token: string, user: any) {
+export async function setAuthToken(token: string, user: any) {
   if (typeof window === "undefined") return; // SSR check
+
+  await setStorageEncryptionKey(token);
 
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -100,8 +104,13 @@ export function clearAuthData() {
     localStorage.setItem("theme", theme);
   }
 
+  clearStorageEncryptionKey();
   deleteCookie(COOKIE_AUTH_TOKEN);
   deleteCookie(COOKIE_SETTINGS_ID);
+}
+
+export async function initializeStorageEncryption(token: string) {
+  await setStorageEncryptionKey(token);
 }
 
 /**

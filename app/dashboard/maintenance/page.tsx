@@ -22,6 +22,7 @@ import {
   Calendar,
   ChevronRight,
   Trash2,
+  Download,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
@@ -33,6 +34,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { CsvColumn, downloadCsvFile } from "@/lib/csv";
 
 interface MaintenanceRequestDisplay {
   id: string;
@@ -65,7 +67,9 @@ export default function MaintenancePage() {
     isFetching,
     refetchAll,
   } = useAppData();
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(
+    null,
+  );
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
@@ -116,6 +120,34 @@ export default function MaintenancePage() {
       }),
     [maintenanceRequests, allTenants, allProperties],
   );
+
+  const maintenanceCsvColumns: CsvColumn<MaintenanceRequestDisplay>[] = [
+    { label: "ID", value: (item) => item.id },
+    { label: "Property ID", value: (item) => item.propertyId },
+    { label: "Property Name", value: (item) => item.propertyName },
+    { label: "Unit", value: (item) => item.unit },
+    { label: "Tenant ID", value: (item) => item.tenantId },
+    { label: "Tenant Name", value: (item) => item.tenantName },
+    { label: "Description", value: (item) => item.description },
+    { label: "Category", value: (item) => item.category },
+    { label: "Location", value: (item) => item.location },
+    { label: "Contact Method", value: (item) => item.contactMethod },
+    { label: "Priority", value: (item) => item.priority },
+    { label: "Status", value: (item) => item.status },
+    { label: "Assigned To", value: (item) => item.assignedTo },
+    { label: "Cost", value: (item) => item.cost },
+    { label: "Transaction ID", value: (item) => item.transactionId },
+    { label: "Created Date", value: (item) => item.createdDate },
+    { label: "Completed Date", value: (item) => item.completedDate },
+  ];
+
+  const handleExportMaintenanceCsv = () => {
+    downloadCsvFile(
+      "maintenance-requests.csv",
+      maintenanceCsvColumns,
+      enrichedRequests,
+    );
+  };
 
   const openExpenseDialog = (requestId: string) => {
     setSelectedRequestId(requestId);
@@ -387,6 +419,14 @@ export default function MaintenancePage() {
 
       {/* View Toggle */}
       <div className="flex gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleExportMaintenanceCsv()}
+        >
+          <Download className="w-4 h-4 mr-2" />
+          Export CSV
+        </Button>
         <Button
           variant={viewMode === "kanban" ? "default" : "outline"}
           onClick={() => setViewMode("kanban")}

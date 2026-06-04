@@ -1,5 +1,6 @@
 import { apiRequest } from '@/lib/query-client'
 import * as tokenManager from '@/lib/token-manager'
+import { getValue, setValue } from '@/lib/local-store'
 
 export interface TenantInviteRecord {
   id: string
@@ -18,13 +19,12 @@ export interface TenantInviteRecord {
 const INVITE_STORAGE_KEY = 'tenant-invites'
 
 function listTenantInvitesLocal(): TenantInviteRecord[] {
-  const stored = typeof window !== 'undefined' ? localStorage.getItem(INVITE_STORAGE_KEY) : null
-  return stored ? JSON.parse(stored) : []
+  const stored = getValue<TenantInviteRecord[]>(INVITE_STORAGE_KEY);
+  return stored ?? [];
 }
 
 function saveTenantInvitesLocal(invites: TenantInviteRecord[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(INVITE_STORAGE_KEY, JSON.stringify(invites))
+  setValue(INVITE_STORAGE_KEY, invites);
 }
 
 export async function createTenantInvite(

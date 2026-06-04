@@ -63,6 +63,11 @@ export default function DashboardPage() {
     maintenanceRequests,
     isLoading,
     isFetching,
+    isInitialDataLoading,
+    isPaymentsLoading,
+    isExpensesLoading,
+    isPaymentsInitialLoading,
+    isExpensesInitialLoading,
     refetchAll,
     paymentsError,
     expensesError,
@@ -89,8 +94,10 @@ export default function DashboardPage() {
     "monthly",
   );
   const [showMovingAverage, setShowMovingAverage] = useState<boolean>(true);
-  const isPageLoading =
-    !isHydrated || isLoading || (isFetching && properties.length === 0);
+  const isPageLoading = !isHydrated || isInitialDataLoading;
+  const showPaymentCardSkeleton = isPaymentsInitialLoading && !isPageLoading;
+  const showFinancialCardSkeleton =
+    (isPaymentsInitialLoading || isExpensesInitialLoading) && !isPageLoading;
 
   // Load real data on mount
   useEffect(() => {
@@ -654,9 +661,13 @@ export default function DashboardPage() {
                 Monthly Revenue
               </p>
               <p className="text-lg md:text-sm font-bold text-foreground">
-                {isHydrated
-                  ? formatCurrency(metrics.totalMonthlyRevenue, activeCurrency)
-                  : "—"}
+                {showPaymentCardSkeleton ? (
+                  <span className="inline-block">
+                    <Skeleton className="h-7 w-32 rounded-xl" />
+                  </span>
+                ) : (
+                  formatCurrency(metrics.totalMonthlyRevenue, activeCurrency)
+                )}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
                 Includes completed and partial rent payments this month
@@ -676,13 +687,23 @@ export default function DashboardPage() {
                 Pending Payments
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {isHydrated ? metrics.pendingPayments : "—"}
+                {showPaymentCardSkeleton ? (
+                  <span className="inline-block">
+                    <Skeleton className="h-10 w-16 rounded-xl" />
+                  </span>
+                ) : (
+                  metrics.pendingPayments
+                )}
               </p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-2">
                 Balance due:{" "}
-                {isHydrated
-                  ? formatCurrency(metrics.pendingBalanceTotal, activeCurrency)
-                  : "—"}
+                {showPaymentCardSkeleton ? (
+                  <span className="inline-block align-text-bottom">
+                    <Skeleton className="h-5 w-24 rounded-xl" />
+                  </span>
+                ) : (
+                  formatCurrency(metrics.pendingBalanceTotal, activeCurrency)
+                )}
               </p>
             </div>
             <div className="w-10 h-10 md:w-12 md:h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -719,9 +740,11 @@ export default function DashboardPage() {
                 YTD Profit
               </p>
               <p className="text-lg md:text-sm font-bold text-foreground">
-                {isHydrated
-                  ? formatCurrency(metrics.ytdProfit, activeCurrency)
-                  : "—"}
+                {showFinancialCardSkeleton ? (
+                  <Skeleton className="h-7 w-32 rounded-xl" />
+                ) : (
+                  formatCurrency(metrics.ytdProfit, activeCurrency)
+                )}
               </p>
               <p className="text-xs text-green-600 dark:text-green-400 mt-2">
                 After estimated expenses
@@ -791,8 +814,44 @@ export default function DashboardPage() {
         </div>
       </Card>
 
+      {/* Recent Activity */}
+      <Card className="border border-border p-6 lg:max-h-[500px] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-foreground">Recent Activity</h2>
+        </div>
+        <div className="space-y-3">
+          {recentActivity.map((activity) => (
+            <div
+              key={activity.id}
+              className="flex items-center justify-between py-3 border-b border-border last:border-0"
+            >
+              <div className="flex-1">
+                <p className="font-medium text-foreground">
+                  {activity.type === "payment"
+                    ? `Payment from ${activity.tenant}`
+                    : `Expense: ${activity.description}`}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {activity.property}
+                </p>
+              </div>
+              <div className="text-right">
+                <p
+                  className={`font-bold ${activity.type === "payment" ? "text-green-600" : "text-red-600"}`}
+                >
+                  {activity.type === "payment" ? "+" : "-"}
+                  {getCurrencySymbol(activeCurrency)}{" "}
+                  {activity.amount.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">{activity.date}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* Occupancy & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 ">
         {/* Occupancy by Property */}
         <div className="lg:col-span-2">
           <Card className="border border-border p-6">
@@ -1260,48 +1319,6 @@ export default function DashboardPage() {
           Lease Expiry Timeline
         </h2>
         <LeaseExpiryTimeline tenants={tenants} properties={properties} />
-      </Card>
-
-      {/* Recent Activity */}
-      <Card className="border border-border p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-foreground">Recent Activity</h2>
-          <Button
-            variant="outline"
-            className="border-border text-primary bg-transparent"
-          >
-            View all <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-        </div>
-        <div className="space-y-3">
-          {recentActivity.map((activity) => (
-            <div
-              key={activity.id}
-              className="flex items-center justify-between py-3 border-b border-border last:border-0"
-            >
-              <div className="flex-1">
-                <p className="font-medium text-foreground">
-                  {activity.type === "payment"
-                    ? `Payment from ${activity.tenant}`
-                    : `Expense: ${activity.description}`}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {activity.property}
-                </p>
-              </div>
-              <div className="text-right">
-                <p
-                  className={`font-bold ${activity.type === "payment" ? "text-green-600" : "text-red-600"}`}
-                >
-                  {activity.type === "payment" ? "+" : "-"}
-                  {getCurrencySymbol(activeCurrency)}{" "}
-                  {activity.amount.toLocaleString()}
-                </p>
-                <p className="text-xs text-muted-foreground">{activity.date}</p>
-              </div>
-            </div>
-          ))}
-        </div>
       </Card>
     </div>
   );
