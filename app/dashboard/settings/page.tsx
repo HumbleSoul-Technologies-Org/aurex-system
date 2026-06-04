@@ -672,64 +672,41 @@ export default function SettingsPage() {
   ) => {
     if (!debouncedFieldHandlers.current[flatKey]) {
       const latest = { setter, payload };
-      const debouncedUpdate = debounce(
-        async (value: any) => {
-          const templateKey = getNotificationTemplateKey(flatKey);
-          clearFieldError(flatKey);
-          markFieldStatus(flatKey, "saving");
-          setNotificationTemplateSaving(templateKey, true);
+      const debouncedUpdate = debounce(async (value: any) => {
+        const templateKey = getNotificationTemplateKey(flatKey);
+        clearFieldError(flatKey);
+        markFieldStatus(flatKey, "saving");
+        setNotificationTemplateSaving(templateKey, true);
 
-          try {
-            const payloadToSend =
-              latest.payload ?? buildPayloadForField(flatKey, value);
+        try {
+          const payloadToSend =
+            latest.payload ?? buildPayloadForField(flatKey, value);
 
-            // Debug logs to trace what is being sent when updating settings
-            // Helps diagnose currency save issues where USD is persisted unexpectedly
-            // eslint-disable-next-line no-console
-            console.debug(
-              "[Settings] Saving field",
-              flatKey,
-              "value:",
-              value,
-              "payload:",
-              payloadToSend,
-            );
+          // Debug logs to trace what is being sent when updating settings
+          // Helps diagnose currency save issues where USD is persisted unexpectedly
+          // eslint-disable-next-line no-console
+          console.debug(
+            "[Settings] Saving field",
+            flatKey,
+            "value:",
+            value,
+            "payload:",
+            payloadToSend,
+          );
 
-            const isNotificationTemplateUpdate =
-              flatKey.startsWith("notifications_templates_");
+          const isNotificationTemplateUpdate = flatKey.startsWith(
+            "notifications_templates_",
+          );
 
-            if (payloadToSend) {
-              if (!settingsId) {
-                const created = await createSettingsOnApi(
-                  payloadToSend,
-                  token ?? undefined,
-                );
-                // eslint-disable-next-line no-console
-                console.debug("[Settings] createSettingsOnApi result:", created);
-                if (created?._id) {
-                  if (templateKey && isNotificationTemplateUpdate) {
-                    updateSystemSettings({
-                      notifications: {
-                        templates: value,
-                      },
-                    });
-                  }
-                  if (!isNotificationTemplateUpdate) {
-                    await refreshSettings();
-                    dispatchSystemSettingsChange();
-                  }
-                }
-              } else {
-                const updated = await updateSettingsOnApi(
-                  settingsId,
-                  payloadToSend,
-                  token ?? undefined,
-                );
-                // eslint-disable-next-line no-console
-                console.debug("[Settings] updateSettingsOnApi result:", updated);
-                if (!updated) {
-                  throw new Error("Failed to save to server");
-                }
+          if (payloadToSend) {
+            if (!settingsId) {
+              const created = await createSettingsOnApi(
+                payloadToSend,
+                token ?? undefined,
+              );
+              // eslint-disable-next-line no-console
+              console.debug("[Settings] createSettingsOnApi result:", created);
+              if (created?._id) {
                 if (templateKey && isNotificationTemplateUpdate) {
                   updateSystemSettings({
                     notifications: {
@@ -742,23 +719,44 @@ export default function SettingsPage() {
                   dispatchSystemSettingsChange();
                 }
               }
+            } else {
+              const updated = await updateSettingsOnApi(
+                settingsId,
+                payloadToSend,
+                token ?? undefined,
+              );
+              // eslint-disable-next-line no-console
+              console.debug("[Settings] updateSettingsOnApi result:", updated);
+              if (!updated) {
+                throw new Error("Failed to save to server");
+              }
+              if (templateKey && isNotificationTemplateUpdate) {
+                updateSystemSettings({
+                  notifications: {
+                    templates: value,
+                  },
+                });
+              }
+              if (!isNotificationTemplateUpdate) {
+                await refreshSettings();
+                dispatchSystemSettingsChange();
+              }
             }
-
-            setter(value);
-            markFieldStatus(flatKey, "saved");
-            setTimeout(() => markFieldStatus(flatKey, "idle"), 2000);
-          } catch (error) {
-            console.error(`Error updating field ${flatKey}:`, error);
-            markFieldError(
-              flatKey,
-              error instanceof Error ? error.message : "Save failed",
-            );
-          } finally {
-            setNotificationTemplateSaving(templateKey, false);
           }
-        },
-        500,
-      );
+
+          setter(value);
+          markFieldStatus(flatKey, "saved");
+          setTimeout(() => markFieldStatus(flatKey, "idle"), 2000);
+        } catch (error) {
+          console.error(`Error updating field ${flatKey}:`, error);
+          markFieldError(
+            flatKey,
+            error instanceof Error ? error.message : "Save failed",
+          );
+        } finally {
+          setNotificationTemplateSaving(templateKey, false);
+        }
+      }, 500);
 
       debouncedFieldHandlers.current[flatKey] = {
         handle: debouncedUpdate,
@@ -2281,10 +2279,10 @@ export default function SettingsPage() {
                     description: "Expense records created or updated.",
                   },
                 ].map((n) => {
-                  const channelPref =
-                    notificationTemplates[n.key] ||
-                    settings.notifications?.templates?.[n.key] ||
-                    { channels: ["email", "in_app"] };
+                  const channelPref = notificationTemplates[n.key] ||
+                    settings.notifications?.templates?.[n.key] || {
+                      channels: ["email", "in_app"],
+                    };
                   const emailEnabled = (channelPref.channels || []).includes(
                     "email",
                   );
@@ -2312,7 +2310,8 @@ export default function SettingsPage() {
                                 onCheckedChange={(checked) => {
                                   const existing =
                                     notificationTemplates ||
-                                    settings.notifications?.templates || {};
+                                    settings.notifications?.templates ||
+                                    {};
                                   const tmpl = existing[n.key] || {
                                     subject: "",
                                     body: "",
@@ -2378,7 +2377,8 @@ export default function SettingsPage() {
                                 onCheckedChange={(checked) => {
                                   const existing =
                                     notificationTemplates ||
-                                    settings.notifications?.templates || {};
+                                    settings.notifications?.templates ||
+                                    {};
                                   const tmpl = existing[n.key] || {
                                     subject: "",
                                     body: "",
