@@ -45,7 +45,7 @@ export function initializeEmailService(): nodemailer.Transporter {
     .then(() => {
       console.log("[Email Service] SMTP connection verified");
     })
-    .catch((err) => {
+    .catch((err: Error) => {
       console.error("[Email Service] SMTP connection failed:", err);
     });
 

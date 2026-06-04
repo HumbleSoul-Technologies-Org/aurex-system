@@ -129,8 +129,8 @@ export default function TenantSettingsPage() {
     profile: false,
     finances: false,
     notifications: false,
-    // emergency: false,
-    // moveout: false,
+    emergency: false,
+    moveout: false,
     security: false,
     // documents: false,
   });
@@ -138,8 +138,8 @@ export default function TenantSettingsPage() {
     profile: null,
     finances: null,
     notifications: null,
-    // emergency: null,
-    // moveout: null,
+    emergency: null,
+    moveout: null,
     security: null,
     // documents: null,
   });
@@ -757,7 +757,7 @@ export default function TenantSettingsPage() {
             </Card>
           )}
 
-          {/* {activeTab === "notifications" && (
+          {activeTab === "notifications" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
                 <div className="rounded-lg bg-primary/10 p-3 text-primary">
@@ -777,17 +777,17 @@ export default function TenantSettingsPage() {
               <div className="space-y-4">
                 {[
                   {
-                    key: "overdue" as NotificationType,
+                    key: "paymentReminder" as NotificationType,
                     label: "Rent Overdue Alerts",
                     description: "Notify me when rent payment is overdue",
                   },
                   {
-                    key: "leaseEnd" as NotificationType,
+                    key: "leaseExpiryAlert" as NotificationType,
                     label: "Lease End Reminders",
                     description: "Notify me before your lease expires",
                   },
                   {
-                    key: "maintenance" as NotificationType,
+                    key: "maintenanceScheduled" as NotificationType,
                     label: "Maintenance Scheduled",
                     description:
                       "Notify me when a maintenance visit is scheduled",
@@ -837,6 +837,7 @@ export default function TenantSettingsPage() {
                         </label>
                         <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2">
                           <input
+                            disabled={true} // Example: disable SMS for lease expiry alerts
                             type="checkbox"
                             checked={notificationPreferences[item.key].sms}
                             onChange={(e) =>
@@ -1154,7 +1155,7 @@ export default function TenantSettingsPage() {
                 </div>
               )}
             </Card>
-          )} */}
+          )}
 
           {activeTab === "security" && (
             <Card className="border border-border p-4 md:p-6">
