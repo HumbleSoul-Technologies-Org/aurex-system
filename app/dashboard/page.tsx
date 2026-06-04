@@ -791,16 +791,107 @@ export default function DashboardPage() {
         </div>
       </Card>
 
-      {/* Rent Collection Progress */}
-      <Card className="border border-border p-6">
-        <h2 className="text-lg font-bold text-foreground mb-6">
-          Rent Collection Status
-        </h2>
-        <RentCollectionProgress
-          expectedRent={metrics.expectedRent}
-          collectedRent={metrics.collectedRent}
-        />
-      </Card>
+      {/* Occupancy & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+        {/* Occupancy by Property */}
+        <div className="lg:col-span-2">
+          <Card className="border border-border p-6">
+            <h2 className="text-lg font-bold text-foreground mb-6">
+              Occupancy by Property
+            </h2>
+            <div className="flex items-center gap-2 mb-4">
+              <Button
+                variant={viewMode === "occupancy" ? undefined : "outline"}
+                onClick={() => setViewMode("occupancy")}
+              >
+                Occupancy
+              </Button>
+              <Button
+                variant={viewMode === "performance" ? undefined : "outline"}
+                onClick={() => setViewMode("performance")}
+              >
+                Occupancy + Performance
+              </Button>
+            </div>
+
+            {occupancyData.length === 0 ? (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                <div className="text-center">
+                  <Home className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>No property data available</p>
+                  <p className="text-sm">
+                    Add properties and tenants to see occupancy rates
+                  </p>
+                </div>
+              </div>
+            ) : viewMode === "occupancy" ? (
+              <div className="w-full h-[350px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={occupancyData}
+                    margin={{ top: 10, right: 30, left: 10, bottom: 80 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="4 4"
+                      stroke="var(--border)"
+                    />
+                    <XAxis
+                      dataKey="property"
+                      stroke="var(--border)"
+                      tickLine={{ stroke: "var(--border)" }}
+                      axisLine={{ stroke: "var(--border)" }}
+                      tick={{
+                        fill: "var(--muted-foreground)",
+                        fontSize: 11,
+                      }}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                      height={80}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickFormatter={(tick) => `${tick}%`}
+                      stroke="var(--border)"
+                      tickLine={{ stroke: "var(--border)" }}
+                      axisLine={{ stroke: "var(--border)" }}
+                      tick={{
+                        fill: "var(--muted-foreground)",
+                        fontSize: 11,
+                      }}
+                      width={50}
+                    />
+                    <Tooltip
+                      formatter={(value: any) => [`${value}%`, "Occupancy"]}
+                      contentStyle={{
+                        background: "var(--card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 8,
+                        color: "var(--foreground)",
+                      }}
+                      cursor={{ fill: "rgba(37, 99, 235, 0.1)" }}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      height={36}
+                      wrapperStyle={{ color: "var(--muted-foreground)" }}
+                    />
+                    <Bar
+                      dataKey="occupancy"
+                      name="Occupancy %"
+                      fill="#2563eb"
+                      radius={[8, 8, 0, 0]}
+                      barSize={40}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <PropertyPerformanceGrouped data={combinedData} />
+            )}
+          </Card>
+        </div>
+      </div>
 
       {/* Cash Flow Trend */}
       <Card className="border border-border p-4 md:p-6">
@@ -1170,108 +1261,6 @@ export default function DashboardPage() {
         </h2>
         <LeaseExpiryTimeline tenants={tenants} properties={properties} />
       </Card>
-
-      {/* Occupancy & Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Occupancy by Property */}
-        <div className="lg:col-span-2">
-          <Card className="border border-border p-6">
-            <h2 className="text-lg font-bold text-foreground mb-6">
-              Occupancy by Property
-            </h2>
-            <div className="flex items-center gap-2 mb-4">
-              <Button
-                variant={viewMode === "occupancy" ? undefined : "outline"}
-                onClick={() => setViewMode("occupancy")}
-              >
-                Occupancy
-              </Button>
-              <Button
-                variant={viewMode === "performance" ? undefined : "outline"}
-                onClick={() => setViewMode("performance")}
-              >
-                Occupancy + Performance
-              </Button>
-            </div>
-
-            {occupancyData.length === 0 ? (
-              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                <div className="text-center">
-                  <Home className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No property data available</p>
-                  <p className="text-sm">
-                    Add properties and tenants to see occupancy rates
-                  </p>
-                </div>
-              </div>
-            ) : viewMode === "occupancy" ? (
-              <div className="w-full h-[350px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={occupancyData}
-                    margin={{ top: 10, right: 30, left: 10, bottom: 80 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="4 4"
-                      stroke="var(--border)"
-                    />
-                    <XAxis
-                      dataKey="property"
-                      stroke="var(--border)"
-                      tickLine={{ stroke: "var(--border)" }}
-                      axisLine={{ stroke: "var(--border)" }}
-                      tick={{
-                        fill: "var(--muted-foreground)",
-                        fontSize: 11,
-                      }}
-                      angle={-45}
-                      textAnchor="end"
-                      interval={0}
-                      height={80}
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      tickFormatter={(tick) => `${tick}%`}
-                      stroke="var(--border)"
-                      tickLine={{ stroke: "var(--border)" }}
-                      axisLine={{ stroke: "var(--border)" }}
-                      tick={{
-                        fill: "var(--muted-foreground)",
-                        fontSize: 11,
-                      }}
-                      width={50}
-                    />
-                    <Tooltip
-                      formatter={(value: any) => [`${value}%`, "Occupancy"]}
-                      contentStyle={{
-                        background: "var(--card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                        color: "var(--foreground)",
-                      }}
-                      cursor={{ fill: "rgba(37, 99, 235, 0.1)" }}
-                    />
-                    <Legend
-                      verticalAlign="top"
-                      height={36}
-                      wrapperStyle={{ color: "var(--muted-foreground)" }}
-                    />
-                    <Bar
-                      dataKey="occupancy"
-                      name="Occupancy %"
-                      fill="#2563eb"
-                      radius={[8, 8, 0, 0]}
-                      barSize={40}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <PropertyPerformanceGrouped data={combinedData} />
-            )}
-          </Card>
-        </div>
-      </div>
 
       {/* Recent Activity */}
       <Card className="border border-border p-6">

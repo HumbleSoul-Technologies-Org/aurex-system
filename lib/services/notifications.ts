@@ -1,144 +1,312 @@
-import { getCollection } from '@/lib/local-store'
-import { fetchNotifications, createNotification, markNotificationRead } from '@/app/lib/notifications-client'
+﻿import { getCollection, writeCollection } from "@/lib/local-store";
+import {
+  createNotification as createNotificationOnServer,
+  deleteNotification as deleteNotificationOnServer,
+  fetchNotifications as fetchNotificationsFromServer,
+  hideNotification as hideNotificationOnServer,
+  markNotificationRead as markNotificationReadOnServer,
+} from "@/app/lib/notifications-client";
+import {
+  NotificationCategory,
+  NotificationPayload,
+  NotificationRecord,
+} from "@/lib/types/notifications";
 
-export interface Notification {
-  id: string
-  title: string
-  message: string
-  type: 'property' | 'maintenance' | 'message' | 'payment' | 'general'
-  read: boolean
-  date: Date
-  actionUrl?: string
-  relatedId?: string // ID of related entity (property, maintenance request, etc.)
+const NOTIFICATIONS_KEY = "notifications";
+
+export interface Notification extends NotificationRecord {}
+
+function getStorageNotifications(): NotificationRecord[] {
+  return getCollection<NotificationRecord>(NOTIFICATIONS_KEY) || [];
 }
 
-const NOTIFICATIONS_KEY = 'notifications'
-
-// Initialize with empty array if not exists
-if (!getCollection<Notification>(NOTIFICATIONS_KEY)) {
-  // Initialize empty collection
+export function getNotifications(tenantId?: string): NotificationRecord[] {
+  const notifications = getStorageNotifications();
+  if (!tenantId) return notifications;
+  return notifications.filter(
+    (notification) => !notification.hiddenFor?.includes(tenantId),
+  );
 }
 
-export function getNotifications(): Notification[] {
-  // Try server first; fall back to local-store synchronous collection
-  // Note: fetchNotifications is async; for legacy synchronous callers we return local-store immediately and
-  // consumers should call `loadNotifications` from context to refresh from server.
-  return getCollection<Notification>(NOTIFICATIONS_KEY) || []
+function writeNotifications(notifications: NotificationRecord[]) {
+  writeCollection(NOTIFICATIONS_KEY, notifications);
 }
 
-export function addNotification(notification: Omit<Notification, 'id' | 'date' | 'read'>): Notification {
-  const newNotification: Notification = {
-    ...notification,
+export function addLocalNotification(
+  payload: NotificationPayload,
+): NotificationRecord {
+  const newNotification: NotificationRecord = {
     id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    date: new Date(),
+    createdAt: new Date().toISOString(),
     read: false,
-  }
+    hiddenFor: [],
+    ...payload,
+  };
 
-  // persist locally for immediate UI responsiveness
   try {
-    const existing = getCollection<Notification>(NOTIFICATIONS_KEY) || []
-    existing.unshift(newNotification)
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(existing))
-  } catch (e) {
-    console.error('Failed to persist local notification', e)
+    const existing = getStorageNotifications();
+    writeNotifications([newNotification, ...existing]);
+  } catch (error) {
+    console.error("Failed to persist local notification", error);
   }
 
-  // async send to server (best-effort)
-  createNotification({
-    type: notification.type,
-    tenantId: undefined,
-    title: notification.title,
-    body: notification.message,
-    metadata: { relatedId: notification.relatedId, actionUrl: notification.actionUrl },
-  }).catch((e) => console.error('Failed to create server notification', e))
-
-  return newNotification
+  return newNotification;
 }
 
-export function markAsRead(notificationId: string): void {
-  try {
-    const notifications = getCollection<Notification>(NOTIFICATIONS_KEY) || []
-    const updated = notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated))
-  } catch (e) {
-    console.error('Failed to mark local notification read', e)
+export async function createNotification(
+  payload: NotificationPayload,
+): Promise<NotificationRecord> {
+  const localNotification = addLocalNotification(payload);
+
+  createNotificationOnServer(payload).catch((error) => {
+    console.error("Failed to create server notification", error);
+  });
+
+  if (typeof window !== "undefined" && (window as any).refreshNotifications) {
+    (window as any).refreshNotifications();
   }
 
-  markNotificationRead(notificationId).catch((e) => console.error('Failed to mark server notification read', e))
+  return localNotification;
 }
 
-export function markAllAsRead(): void {
-  const notifications = getNotifications()
-  notifications.forEach(notification => {
-    if (!notification.read) {
-      markAsRead(notification.id)
+export async function loadNotifications(
+  tenantId?: string,
+  unreadOnly?: boolean,
+): Promise<NotificationRecord[]> {
+  try {
+    const serverNotifications = await fetchNotificationsFromServer(
+      tenantId,
+      unreadOnly,
+    );
+    if (serverNotifications.length > 0) {
+      writeNotifications(serverNotifications);
+      return tenantId
+        ? serverNotifications.filter(
+            (notification) => !notification.hiddenFor?.includes(tenantId),
+          )
+        : serverNotifications;
     }
-  })
+    return getNotifications(tenantId);
+  } catch (error) {
+    console.error("Failed to load notifications from server", error);
+    return getNotifications(tenantId);
+  }
 }
 
-export function deleteNotification(notificationId: string): void {
-  // For local storage, we'll need to filter and re-save
-  const notifications = getNotifications().filter(n => n.id !== notificationId)
-  localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(notifications))
+export async function markAsRead(notificationId: string): Promise<void> {
+  try {
+    const notifications = getStorageNotifications();
+    const updated = notifications.map((notification) =>
+      notification.id === notificationId
+        ? { ...notification, read: true }
+        : notification,
+    );
+    writeNotifications(updated);
+  } catch (error) {
+    console.error("Failed to mark local notification read", error);
+  }
+
+  markNotificationReadOnServer(notificationId).catch((error) => {
+    console.error("Failed to mark notification read on server", error);
+  });
 }
 
-export function getUnreadCount(): number {
-  return getNotifications().filter(n => !n.read).length
+export async function hideNotification(
+  notificationId: string,
+  tenantId: string,
+): Promise<void> {
+  try {
+    const notifications = getStorageNotifications();
+    const updated = notifications.map((notification) => {
+      if (notification.id !== notificationId) return notification;
+      const hiddenFor = Array.isArray(notification.hiddenFor)
+        ? notification.hiddenFor
+        : [];
+      return {
+        ...notification,
+        hiddenFor: hiddenFor.includes(tenantId)
+          ? hiddenFor
+          : [...hiddenFor, tenantId],
+      };
+    });
+    writeNotifications(updated);
+  } catch (error) {
+    console.error("Failed to hide local notification", error);
+  }
+
+  hideNotificationOnServer(notificationId, tenantId).catch((error) => {
+    console.error("Failed to hide notification on server", error);
+  });
 }
 
-// Specific notification creators
-export function notifyNewProperty(propertyName: string, propertyId: string): void {
-  addNotification({
-    title: 'New Property Added',
-    message: `Property "${propertyName}" has been successfully added to your portfolio.`,
-    type: 'property',
+export async function deleteNotification(
+  notificationId: string,
+): Promise<void> {
+  try {
+    const notifications = getNotifications().filter(
+      (notification) => notification.id !== notificationId,
+    );
+    writeNotifications(notifications);
+  } catch (error) {
+    console.error("Failed to delete local notification", error);
+  }
+
+  deleteNotificationOnServer(notificationId).catch((error) => {
+    console.error("Failed to delete notification on server", error);
+  });
+}
+
+export function getUnreadCount(tenantId?: string): number {
+  return getNotifications(tenantId).filter((notification) => !notification.read)
+    .length;
+}
+
+export function notifyNewProperty(
+  propertyName: string,
+  propertyId: string,
+): void {
+  createNotification({
+    title: "New Property Added",
+    body: `Property "${propertyName}" was added to your portfolio.`,
+    category: "creation",
+    resourceType: "property",
+    resourceId: propertyId,
     actionUrl: `/dashboard/properties/${propertyId}`,
-    relatedId: propertyId,
-  })
-  // Refresh notifications in UI
-  if (typeof window !== 'undefined' && (window as any).refreshNotifications) {
-    (window as any).refreshNotifications();
-  }
+    metadata: { propertyName },
+  });
 }
 
-export function notifyNewMaintenanceRequest(description: string, propertyName: string, requestId: string): void {
-  addNotification({
-    title: 'New Maintenance Request',
-    message: `${description} - ${propertyName}`,
-    type: 'maintenance',
-    actionUrl: '/dashboard/maintenance',
-    relatedId: requestId,
-  })
-  // Refresh notifications in UI
-  if (typeof window !== 'undefined' && (window as any).refreshNotifications) {
-    (window as any).refreshNotifications();
-  }
+export function notifyNewMaintenanceRequest(
+  description: string,
+  propertyName: string,
+  requestId: string,
+  tenantId?: string,
+): void {
+  createNotification({
+    title: "New Maintenance Request",
+    body: `${description} - ${propertyName}`,
+    category: "creation",
+    resourceType: "maintenance",
+    resourceId: requestId,
+    tenantId,
+    actionUrl: "/dashboard/maintenance",
+    metadata: { propertyName },
+  });
 }
 
-export function notifyNewMessage(senderName: string, preview: string, messageId?: string): void {
-  addNotification({
-    title: 'New Message Received',
-    message: `${senderName}: ${preview}`,
-    type: 'message',
-    actionUrl: '/dashboard/communications',
-    relatedId: messageId,
-  })
-  // Refresh notifications in UI
-  if (typeof window !== 'undefined' && (window as any).refreshNotifications) {
-    (window as any).refreshNotifications();
-  }
+export function notifyNewMessage(
+  senderName: string,
+  preview: string,
+  messageId?: string,
+  tenantId?: string,
+): void {
+  createNotification({
+    title: "New Message Received",
+    body: `${senderName}: ${preview}`,
+    category: "message",
+    resourceType: "message",
+    resourceId: messageId,
+    tenantId,
+    actionUrl: tenantId ? "/tenant/messages" : "/dashboard/communications",
+    metadata: { senderName },
+  });
 }
 
-export function notifyNewTenant(tenantName: string, propertyName: string, tenantId: string): void {
-  addNotification({
-    title: 'New Tenant Added',
-    message: `Tenant "${tenantName}" has been added to property "${propertyName}".`,
-    type: 'general',
+export function notifyNewTenant(
+  tenantName: string,
+  propertyName: string,
+  tenantId: string,
+): void {
+  createNotification({
+    title: "New Tenant Added",
+    body: `Tenant "${tenantName}" was added to ${propertyName}.`,
+    category: "creation",
+    resourceType: "tenant",
+    resourceId: tenantId,
     actionUrl: `/dashboard/tenants/${tenantId}`,
-    relatedId: tenantId,
-  })
-  // Refresh notifications in UI
-  if (typeof window !== 'undefined' && (window as any).refreshNotifications) {
-    (window as any).refreshNotifications();
-  }
+    metadata: { tenantName, propertyName },
+  });
+}
+
+export function notifyTenantProfileUpdated(
+  tenantId: string,
+  changedFields: string[],
+): void {
+  createNotification({
+    title: "Tenant Profile Updated",
+    body: `Profile update fields: ${changedFields.join(", ")}`,
+    category: "update",
+    resourceType: "tenant",
+    resourceId: tenantId,
+    actionUrl: `/dashboard/tenants/${tenantId}`,
+    metadata: { changedFields },
+  });
+}
+
+export function notifyTenantProfileUpdateToAdmin(
+  tenantName: string,
+  changedFields: string[],
+): void {
+  createNotification({
+    title: "Tenant Updated Their Profile",
+    body: `Tenant ${tenantName} updated: ${changedFields.join(", ")}`,
+    category: "update",
+    resourceType: "tenant",
+    actionUrl: "/dashboard/tenants",
+    metadata: { changedFields },
+  });
+}
+
+export function notifyPropertyUpdated(
+  propertyName: string,
+  propertyId: string,
+  changedFields: string[],
+  targetTenantIds?: string[],
+): void {
+  createNotification({
+    title: "Property Updated",
+    body: `Changes: ${changedFields.join(", ")}`,
+    category: "update",
+    resourceType: "property",
+    resourceId: propertyId,
+    targetTenantIds,
+    actionUrl: `/tenant/property/${propertyId}`,
+    metadata: { propertyName, changedFields },
+  });
+}
+
+export function notifyPaymentMade(
+  tenantId: string,
+  amount: number,
+  balance?: number,
+  paymentId?: string,
+): void {
+  createNotification({
+    title: "Payment Received",
+    body: `A payment of ${amount} was processed.${
+      balance !== undefined ? ` Balance: ${balance}.` : ""
+    }`,
+    category: "payment",
+    resourceType: "payment",
+    resourceId: paymentId,
+    tenantId,
+    actionUrl: tenantId ? "/tenant/payments" : "/dashboard/finances",
+    metadata: { amount, balance },
+  });
+}
+
+export function notifySystemChange(
+  title: string,
+  body: string,
+  resourceId?: string,
+  actionUrl?: string,
+): void {
+  createNotification({
+    title,
+    body,
+    category: "sys",
+    resourceType: "settings",
+    resourceId,
+    actionUrl,
+  });
 }

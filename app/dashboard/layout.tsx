@@ -112,6 +112,7 @@ export default function DashboardLayout({
         const resp = await fetchNotifications(
           undefined,
           undefined,
+          undefined,
           token ?? undefined,
         );
         const list = normalizeNotificationsResponse(resp);
@@ -132,13 +133,17 @@ export default function DashboardLayout({
   }, [token]);
 
   // Function to delete all notifications from DB and UI
-  const clearAllNotifications = () => {
-    notifications.forEach((n) => deleteNotification(n.id));
-    setTimeout(() => {
-      setNotifications(getNotifications());
-      // Force UI update if needed
-      window.dispatchEvent(new Event("storage"));
-    }, 150);
+  const clearAllNotifications = async () => {
+    await Promise.all(
+      notifications.map(async (n) => {
+        try {
+          await deleteNotification(n.id);
+        } catch (error) {
+          console.error("Failed to delete notification", error);
+        }
+      }),
+    );
+    setNotifications([]);
   };
 
   // Load maintenance and messages counts
@@ -173,6 +178,7 @@ export default function DashboardLayout({
   const refreshNotifications = React.useCallback(async () => {
     try {
       const resp = await fetchNotifications(
+        undefined,
         undefined,
         undefined,
         token ?? undefined,
@@ -524,8 +530,8 @@ export default function DashboardLayout({
                     [...notifications]
                       .sort(
                         (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime(),
+                          new Date(b.createdAt || b.date).getTime() -
+                          new Date(a.createdAt || a.date).getTime(),
                       )
                       .map((notif, index) => (
                         <Link
@@ -569,14 +575,16 @@ export default function DashboardLayout({
                                     {notif.title}
                                   </p>
                                   <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
-                                    {notif.type}
+                                    {notif.category || notif.type}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                  {notif.message}
+                                  {notif.body || notif.message}
                                 </p>
                                 <p className="text-xs text-muted-foreground mt-2">
-                                  {new Date(notif.date).toLocaleDateString()}
+                                  {new Date(
+                                    notif.createdAt || notif.date,
+                                  ).toLocaleDateString()}
                                 </p>
                               </div>
                               <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
@@ -652,11 +660,11 @@ export default function DashboardLayout({
                                   {notif.title}
                                 </p>
                                 <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded whitespace-nowrap">
-                                  {notif.type}
+                                  {notif.category || notif.type}
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {notif.message}
+                                {notif.body || notif.message}
                               </p>
                               <p className="text-xs text-muted-foreground mt-2">
                                 {new Date(notif.date).toLocaleDateString()}

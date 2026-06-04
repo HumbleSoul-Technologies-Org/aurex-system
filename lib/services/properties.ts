@@ -5,7 +5,10 @@ import {
   removeFromCollection,
   generateId,
 } from "@/lib/local-store";
-import { notifyNewProperty } from "@/lib/services/notifications";
+import {
+  notifyNewProperty,
+  notifyPropertyUpdated,
+} from "@/lib/services/notifications";
 import { listTenants, TenantRecord } from "@/lib/services/tenants";
 import { getCategoryForType } from "@/lib/constants/property-types";
 import { apiRequest, queryClient } from "../query-client";
@@ -334,6 +337,35 @@ export async function updateProperty(
         : [updated],
     );
     queryClient.invalidateQueries({ queryKey: ["properties"], exact: false });
+
+    const changedFields = Object.keys(finalPatch).filter(
+      (key) => finalPatch[key as keyof PropertyRecord] !== undefined,
+    );
+
+    try {
+      const allTenants = listTenants();
+      const propertyTenantIds = allTenants
+        .filter(
+          (tenant) =>
+            tenant.propertyId === id ||
+            tenant.propertyId === existingProperty?._id ||
+            existingProperty?.tenants?.includes(
+              tenant?.id || tenant?._id || "",
+            ),
+        )
+        .map((tenant) => tenant.id);
+
+      if (propertyTenantIds.length > 0 && changedFields.length > 0) {
+        notifyPropertyUpdated(
+          updated.name,
+          updated.id,
+          changedFields,
+          propertyTenantIds,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to notify property update to tenants", error);
+    }
   }
 
   return updated;
@@ -342,7 +374,7 @@ export async function updateProperty(
 export async function deleteProperty(
   id: string,
   adminPassword: string,
-  token: string,
+  token?: string,
 ): Promise<boolean> {
   try {
     const res = await apiRequest(

@@ -28,6 +28,7 @@ import { changePassword } from "@/lib/services/authApi";
 import { getTenantTypeConfig } from "@/lib/services/settings";
 import { getAuthToken } from "@/lib/token-manager";
 import { useTenantContext } from "@/lib/tenant-context";
+import { notifyTenantProfileUpdateToAdmin } from "@/lib/services/notifications";
 
 const tabItems = [
   { id: "profile", label: "Profile" },
@@ -206,6 +207,14 @@ export default function TenantSettingsPage() {
     try {
       setSaveError((prev) => ({ ...prev, [section]: null }));
       await updateTenantApi(tenant.id, fullPatch);
+      const changedFields = Object.entries(fullPatch)
+        .filter(([key, value]) => (tenant as any)[key] !== value)
+        .map(([key]) => key);
+
+      if (changedFields.length > 0) {
+        notifyTenantProfileUpdateToAdmin(tenant.name, changedFields);
+      }
+
       setSaveStatus((prev) => ({ ...prev, [section]: true }));
       window.setTimeout(
         () => setSaveStatus((prev) => ({ ...prev, [section]: false })),

@@ -61,6 +61,9 @@ export function PaymentMethodsList({
   onDelete,
   onToggleEnable,
   onAddNew,
+  deletingId,
+  togglingId,
+  isSaving,
 }: PaymentMethodsListProps) {
   if (!paymentMethods || paymentMethods.length === 0) {
     return (

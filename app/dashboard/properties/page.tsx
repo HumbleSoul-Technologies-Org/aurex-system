@@ -309,7 +309,7 @@ export default function PropertiesPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground flex items-center gap-2">
                         <DollarSign className="w-4 h-4" />
-                        Price per Unit
+                        Amount per Unit
                       </span>
                       <span className="font-semibold text-foreground">
                         {formatCurrency(

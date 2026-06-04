@@ -13,6 +13,7 @@ import {
   deleteTenantApi,
   updateTenantApi,
 } from "@/lib/services/tenants";
+import { notifyTenantProfileUpdateToAdmin } from "@/lib/services/notifications";
 import { useAppData } from "@/lib/data-context";
 import { createTransaction } from "@/app/lib/transactions-client";
 import TenantForm from "@/components/forms/tenant-form";
@@ -1304,7 +1305,20 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               updatedTenant.id || updatedTenant._id || "",
               updatedTenant,
             );
-            if (savedTenant) setTenant(savedTenant);
+            if (savedTenant) {
+              const changedFields = Object.entries(updatedTenant)
+                .filter(([key, value]) => (tenant as any)[key] !== value)
+                .map(([key]) => key);
+
+              if (changedFields.length > 0) {
+                notifyTenantProfileUpdateToAdmin(
+                  `${tenant.name || tenant.email || "Tenant"}`,
+                  changedFields,
+                );
+              }
+
+              setTenant(savedTenant);
+            }
             setIsEditOpen(false);
           } catch (error) {
             console.error("Error updating tenant:", error);

@@ -28,8 +28,11 @@ import {
   getAnnouncementsByProperty,
 } from "./services/announcements";
 import { PaymentRecord, getPaymentsForTenant } from "./services/payments";
-import { Notification, getNotifications } from "./services/notifications";
-import { fetchNotifications } from "@/app/lib/notifications-client";
+import {
+  Notification,
+  getNotifications,
+  loadNotifications as fetchTenantNotifications,
+} from "./services/notifications";
 import { DocumentRecord, listDocuments } from "./services/documents";
 import {
   getConversationsByTenant,
@@ -333,27 +336,9 @@ export function TenantContextProvider({
   const loadNotifications = useCallback(async () => {
     setLoadingState("notifications", true);
     try {
-      const allNotifications = await (async () => {
-        try {
-          // try server-side fetch first when available
-          const resp = await fetchNotifications(
-            currentTenant?.id,
-            undefined,
-            token ? token : undefined,
-          );
-          // server returns { success: true, data: [...] } or array
-          if (!resp) return getNotifications();
-          if (Array.isArray(resp)) return resp as Notification[];
-          if (resp?.success && Array.isArray(resp.data)) return resp.data;
-          return getNotifications();
-        } catch (e) {
-          console.error(
-            "Server notifications fetch failed, falling back to local",
-            e,
-          );
-          return getNotifications();
-        }
-      })();
+      const allNotifications = await fetchTenantNotifications(
+        currentTenant?.id,
+      );
       setNotifications(allNotifications);
       writeCache(CACHE_KEYS.notifications, allNotifications);
       setErrorState("notifications", null);
@@ -368,7 +353,7 @@ export function TenantContextProvider({
     } finally {
       setLoadingState("notifications", false);
     }
-  }, [currentTenant?.id, setErrorState, setLoadingState, token]);
+  }, [currentTenant?.id, setErrorState, setLoadingState]);
 
   const loadDocuments = useCallback(async () => {
     if (!currentTenant && !currentProperty) return;

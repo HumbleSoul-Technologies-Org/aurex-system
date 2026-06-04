@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const MAINTENANCE_PAGE = "/maintenance";
+const MAINTENANCE_IGNORE_PREFIXES = [
+  "/api",
+  "/_next",
+  "/static",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/manifest.json",
+];
+const MAINTENANCE_IGNORE_EXTENSIONS =
+  /\.(png|jpe?g|webp|avif|svg|ico|css|js|json)$/i;
+
 // Routes that require feature toggles
 const PROTECTED_ROUTES: Record<
   string,
@@ -36,10 +49,33 @@ const UNPROTECTED_TENANT_ROUTES = [
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const maintenanceMode = (
+    process.env.NEXT_PUBLIC_MAINTENANCE_MODE || "live"
+  ).toLowerCase();
+  const isMaintenancePage = pathname === MAINTENANCE_PAGE;
+  const isIgnoredRoute =
+    MAINTENANCE_IGNORE_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+    MAINTENANCE_IGNORE_EXTENSIONS.test(pathname);
+
+  if (!isIgnoredRoute) {
+    if (maintenanceMode === "maintenance" && !isMaintenancePage) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = MAINTENANCE_PAGE;
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (maintenanceMode === "live" && isMaintenancePage) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/";
+      redirectUrl.search = "";
+      return NextResponse.redirect(redirectUrl);
+    }
+  }
 
   // Check if this is a protected tenant route
   const protectedRoute = Object.keys(PROTECTED_ROUTES).find((route) =>
-    pathname.startsWith(route)
+    pathname.startsWith(route),
   );
 
   if (!protectedRoute) {
@@ -59,15 +95,17 @@ export async function middleware(request: NextRequest) {
     }
 
     // Fetch feature toggles from settings API
-    const apiHost = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454').replace(/\/+$/, '');
+    const apiHost = (
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5454"
+    ).replace(/\/+$/, "");
     const settingsResponse = await fetch(
-      `${apiHost.replace(/\/api$/, '')}/api/settings/${settingsId}`,
+      `${apiHost.replace(/\/api$/, "")}/api/settings/${settingsId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
         },
         cache: "no-store",
-      }
+      },
     );
 
     if (!settingsResponse.ok) {
@@ -90,7 +128,7 @@ export async function middleware(request: NextRequest) {
     if (!isFeatureEnabled) {
       const disabledPageUrl = new URL(
         `/tenant/feature-disabled?feature=${routeConfig.feature}`,
-        request.url
+        request.url,
       );
       return NextResponse.redirect(disabledPageUrl);
     }
@@ -124,7 +162,6 @@ function getFeatureKeyMapping(featureKey: string): string {
 // Configure which routes the middleware should run on
 export const config = {
   matcher: [
-    "/tenant/:path*",
-    // Don't match static files, api routes, etc.
+    "/((?!_next/|api/|static/|favicon.ico|robots.txt|sitemap.xml|manifest.json|.*\.(?:png|jpe?g|webp|avif|svg|ico|css|js|json)).*)",
   ],
 };
