@@ -796,12 +796,14 @@ export default function TenantMessagesPage() {
         </div>
 
         {/* Right: message details (desktop) or modal (mobile) */}
-        {selected ? (
+        {selected && (!isMobile || showDetailsOnMobile) ? (
           <div
             className={`${
               isMobile
                 ? `fixed inset-0 z-50 bg-black/50 flex items-end transition-opacity duration-300 ${
-                    modalAnimateIn ? "opacity-100" : "opacity-0"
+                    showDetailsOnMobile
+                      ? "opacity-100 pointer-events-auto"
+                      : "opacity-0 pointer-events-none"
                   }`
                 : "flex flex-col border border-border rounded-xl overflow-hidden bg-card shadow-sm"
             }`}

@@ -29,9 +29,11 @@ import { getTenantTypeConfig } from "@/lib/services/settings";
 import { getAuthToken } from "@/lib/token-manager";
 import { useTenantContext } from "@/lib/tenant-context";
 import { notifyTenantProfileUpdateToAdmin } from "@/lib/services/notifications";
+import { useSettings } from "@/lib/settings-context";
 
 const tabItems = [
   { id: "profile", label: "Profile" },
+  { id: "finances", label: "Finances" },
   // { id: "notifications", label: "Notifications" },
   // { id: "emergency", label: "Emergency Contact" },
   // { id: "moveout", label: "Move-Out Notice" },
@@ -74,12 +76,48 @@ const documentDeliveryOptions = [
   { value: "both", label: "Email & In-App" },
 ];
 
+const autoPayScheduleOptions = [
+  { value: "monthly_day", label: "Monthly on a specific day" },
+  { value: "rent_due_date", label: "On rent due date" },
+] as const;
+
+function getAdminPaymentMethodDisplayName(type: string) {
+  switch (type) {
+    case "Visa_Mastercard":
+      return "Credit / Debit Card";
+    case "Bank_Transfer":
+      return "Bank Transfer";
+    case "MTN_MoMo":
+      return "MTN Mobile Money";
+    case "Airtel_Money":
+      return "Airtel Money";
+    case "M-Pesa":
+      return "M-Pesa";
+    case "Orange_Money":
+      return "Orange Money";
+    default:
+      return type.replace(/[_-]/g, " ");
+  }
+}
+
+function getAdminPaymentMethodDescription(method: any) {
+  if (method.transactionNumber) {
+    return `Use ${method.transactionNumber}`;
+  }
+  if (method.bankDetails?.bankName) {
+    return `Account ${method.bankDetails.bankName}`;
+  }
+  return "";
+}
+
 export default function TenantSettingsPage() {
   const { currentTenant: tenant } = useTenantContext();
+  const { settings: apiSettings } = useSettings();
 
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
     profile: false,
+    finances: false,
     // notifications: false,
     // emergency: false,
     // moveout: false,
@@ -88,6 +126,7 @@ export default function TenantSettingsPage() {
   });
   const [saveError, setSaveError] = useState<Record<TabId, string | null>>({
     profile: null,
+    finances: null,
     // notifications: null,
     // emergency: null,
     // moveout: null,
@@ -138,6 +177,30 @@ export default function TenantSettingsPage() {
     email: tenant?.emergencyContactEmail || "",
   });
 
+  const [paymentMethod, setPaymentMethod] = useState({
+    provider: tenant?.paymentMethod?.provider || "",
+    label: tenant?.paymentMethod?.label || "",
+    externalId: tenant?.paymentMethod?.externalId || "",
+  });
+
+  const availablePaymentMethods = useMemo(
+    () =>
+      (apiSettings?.finance?.paymentMethods || []).filter(
+        (method: any) => method.enabled,
+      ),
+    [apiSettings],
+  );
+
+  const [autoPay, setAutoPay] = useState({
+    enabled: tenant?.autoPay?.enabled ?? false,
+    scheduleType: tenant?.autoPay?.scheduleType || "monthly_day",
+    dayOfMonth: tenant?.autoPay?.dayOfMonth || 1,
+    nextRunDate: tenant?.autoPay?.nextRunDate || "",
+    status: tenant?.autoPay?.status || "active",
+    retryAttempts: tenant?.autoPay?.retryAttempts ?? 0,
+    lastError: tenant?.autoPay?.lastError || "",
+  });
+
   const [moveOutNotice, setMoveOutNotice] = useState({
     noticeDate: tenant?.moveOutNotice?.noticeDate || "",
     reason: tenant?.moveOutNotice?.reason || "end_of_lease",
@@ -183,6 +246,28 @@ export default function TenantSettingsPage() {
         tenant.preferredContactMethod ||
         tenantTypeConfig?.defaultSettings?.preferredContactMethod ||
         "email",
+    });
+
+    const provider = tenant.paymentMethod?.provider || "";
+    const adminLabel = getAdminPaymentMethodDisplayName(provider);
+    const isAdminMethod = apiSettings?.finance?.paymentMethods?.some(
+      (method: any) => method.type === provider,
+    );
+
+    setPaymentMethod({
+      provider,
+      label: isAdminMethod ? adminLabel : tenant.paymentMethod?.label || "",
+      externalId: tenant.paymentMethod?.externalId || "",
+    });
+
+    setAutoPay({
+      enabled: tenant.autoPay?.enabled ?? false,
+      scheduleType: tenant.autoPay?.scheduleType || "monthly_day",
+      dayOfMonth: tenant.autoPay?.dayOfMonth || 1,
+      nextRunDate: tenant.autoPay?.nextRunDate || "",
+      status: tenant.autoPay?.status || "active",
+      retryAttempts: tenant.autoPay?.retryAttempts ?? 0,
+      lastError: tenant.autoPay?.lastError || "",
     });
   }, [tenant, tenantTypeConfig]);
 
@@ -402,6 +487,264 @@ export default function TenantSettingsPage() {
               }}
               isSaving={saveStatus.profile}
             />
+          )}
+
+          {activeTab === "finances" && (
+            <Card className="border border-border p-4 md:p-6">
+              <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
+                <div className="rounded-lg bg-primary/10 p-3 text-primary">
+                  <ClipboardCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground mb-1">
+                    Finances & Auto-Pay
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Choose a payment method and configure automatic rent
+                    payments.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Preferred Payment Method
+                    </label>
+                    {availablePaymentMethods.length > 0 ? (
+                      <div className="space-y-3">
+                        {availablePaymentMethods.map((method: any) => {
+                          const methodId = method._id || method.type;
+                          const displayName = getAdminPaymentMethodDisplayName(
+                            method.type,
+                          );
+                          const description =
+                            getAdminPaymentMethodDescription(method);
+                          const selected =
+                            paymentMethod.provider === method.type;
+
+                          return (
+                            <button
+                              key={methodId}
+                              type="button"
+                              onClick={() =>
+                                setPaymentMethod({
+                                  provider: method.type,
+                                  label: displayName,
+                                  externalId: paymentMethod.externalId,
+                                })
+                              }
+                              className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                                selected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border bg-background hover:border-primary/50"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="font-semibold text-foreground">
+                                    {displayName}
+                                  </p>
+                                  {description ? (
+                                    <p className="text-sm text-muted-foreground">
+                                      {description}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div
+                                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                    selected
+                                      ? "border-primary bg-primary"
+                                      : "border-border"
+                                  }`}
+                                >
+                                  {selected ? (
+                                    <div className="w-2 h-2 rounded-full bg-white" />
+                                  ) : null}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
+                        No active payment methods are configured. Contact your
+                        property manager to enable a payment option.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Payment Method Reference
+                    </label>
+                    <input
+                      value={paymentMethod.externalId}
+                      onChange={(e) =>
+                        setPaymentMethod((prev) => ({
+                          ...prev,
+                          externalId: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
+                      placeholder="Card last 4 digits, account label, or reference"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="lg:col-span-2">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Enable Auto-Pay
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={autoPay.enabled}
+                          onChange={(e) =>
+                            setAutoPay((prev) => ({
+                              ...prev,
+                              enabled: e.target.checked,
+                            }))
+                          }
+                          className="w-4 h-4 rounded border-border"
+                        />
+                        <span className="text-sm text-foreground">
+                          Activate auto-pay
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Auto-Pay Schedule
+                    </label>
+                    <select
+                      value={autoPay.scheduleType}
+                      onChange={(e) =>
+                        setAutoPay((prev) => ({
+                          ...prev,
+                          scheduleType: e.target
+                            .value as typeof autoPay.scheduleType,
+                        }))
+                      }
+                      disabled={!autoPay.enabled}
+                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
+                    >
+                      {autoPayScheduleOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {autoPay.scheduleType === "monthly_day" && (
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-2 block">
+                        Day of Month
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={28}
+                        value={autoPay.dayOfMonth}
+                        onChange={(e) =>
+                          setAutoPay((prev) => ({
+                            ...prev,
+                            dayOfMonth: Number(e.target.value) || 1,
+                          }))
+                        }
+                        disabled={!autoPay.enabled}
+                        className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Next Auto-Pay Date
+                    </label>
+                    <input
+                      type="date"
+                      value={autoPay.nextRunDate}
+                      onChange={(e) =>
+                        setAutoPay((prev) => ({
+                          ...prev,
+                          nextRunDate: e.target.value,
+                        }))
+                      }
+                      disabled={!autoPay.enabled}
+                      className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background p-4">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Auto-pay status is stored for reference and can help if a
+                    scheduled payment fails.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="font-medium text-foreground">
+                        {autoPay.enabled ? autoPay.status : "Disabled"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Retry Attempts
+                      </p>
+                      <p className="font-medium text-foreground">
+                        {autoPay.retryAttempts}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Last Error
+                      </p>
+                      <p className="font-medium text-foreground">
+                        {autoPay.lastError || "None"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-border mt-6">
+                <Button
+                  onClick={() =>
+                    handleSave("finances", {
+                      paymentMethod,
+                      autoPay,
+                    })
+                  }
+                  className="bg-primary hover:bg-primary/90 text-white gap-2"
+                >
+                  {saveStatus.finances ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Finances Settings
+                    </>
+                  )}
+                </Button>
+                {saveError.finances ? (
+                  <p className="text-sm text-destructive mt-3">
+                    {saveError.finances}
+                  </p>
+                ) : null}
+              </div>
+            </Card>
           )}
 
           {/* {activeTab === "notifications" && (

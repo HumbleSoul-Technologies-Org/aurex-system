@@ -37,6 +37,22 @@ export interface MoveOutNotice {
   status?: "draft" | "submitted";
 }
 
+export interface PaymentMethod {
+  provider?: string;
+  label?: string;
+  externalId?: string;
+}
+
+export interface AutoPaySettings {
+  enabled?: boolean;
+  scheduleType?: "monthly_day" | "rent_due_date";
+  dayOfMonth?: number;
+  nextRunDate?: string;
+  status?: "active" | "paused" | "failed";
+  retryAttempts?: number;
+  lastError?: string;
+}
+
 export interface TenantRecord {
   announcements: boolean;
   messages: any;
@@ -80,6 +96,8 @@ export interface TenantRecord {
   emergencyContactPhone?: string;
   emergencyContactEmail?: string;
   notificationPreferences?: NotificationPreferences;
+  paymentMethod?: PaymentMethod;
+  autoPay?: AutoPaySettings;
   documentDelivery?: "email" | "in-app" | "both";
   moveOutNotice?: MoveOutNotice;
   avatar?: { url?: string; public_id?: string };

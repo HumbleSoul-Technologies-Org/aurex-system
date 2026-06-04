@@ -110,6 +110,115 @@ export default function PaymentsPage() {
     setMethod("bank_transfer");
   };
 
+  const handleDownloadPaymentHistory = async () => {
+    if (typeof window === "undefined") return;
+
+    const tenantName = tenant?.name || "Tenant";
+    const propertyName = currentProperty?.name || "Property";
+    const title = `Payment History - ${tenantName}`;
+
+    const module = await import("jspdf/dist/jspdf.umd.min.js");
+    const { jsPDF } = module;
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "letter",
+    });
+    const margin = 40;
+    let cursorY = 48;
+
+    doc.setFontSize(18);
+    doc.text(title, margin, cursorY);
+
+    doc.setFontSize(11);
+    cursorY += 24;
+    doc.text(`Tenant: ${tenantName}`, margin, cursorY);
+    doc.text(`Property: ${propertyName}`, 320, cursorY);
+
+    cursorY += 18;
+    doc.text(
+      `Total Paid: ${formatCurrency(totalPaid, activeCurrency)}`,
+      margin,
+      cursorY,
+    );
+    doc.text(`Downloaded: ${new Date().toLocaleDateString()}`, 320, cursorY);
+
+    cursorY += 28;
+
+    const headers = [
+      "Date",
+      "Transaction",
+      "Amount",
+      "Balance",
+      "Status",
+      "Method",
+      "Property",
+      "Unit",
+    ];
+    const columnWidths = [80, 110, 80, 80, 80, 100, 120, 60];
+    const rowHeight = 18;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const availableWidth = pageWidth - margin * 2;
+    const totalColumnWidth = columnWidths.reduce(
+      (sum, width) => sum + width,
+      0,
+    );
+    const scale = availableWidth / totalColumnWidth;
+    const scaledWidths = columnWidths.map((width) => width * scale);
+
+    doc.setFontSize(10);
+    doc.setTextColor("#000");
+    doc.setDrawColor(200);
+
+    let x = margin;
+    headers.forEach((header, index) => {
+      doc.text(header, x + 2, cursorY);
+      x += scaledWidths[index];
+    });
+
+    cursorY += rowHeight;
+    doc.setLineWidth(0.5);
+    doc.line(margin, cursorY - 10, pageWidth - margin, cursorY - 10);
+
+    if (tenantPayments.length === 0) {
+      doc.text("No payment history available.", margin, cursorY + 6);
+    }
+
+    tenantPayments.forEach((payment) => {
+      if (
+        cursorY + rowHeight * 2 >
+        doc.internal.pageSize.getHeight() - margin
+      ) {
+        doc.addPage();
+        cursorY = margin;
+      }
+
+      x = margin;
+      const paymentDate = payment.paidOn || payment.paymentDate || payment.date;
+      const row = [
+        paymentDate ? new Date(paymentDate).toLocaleDateString() : "—",
+        payment.transId || payment.id || "—",
+        formatCurrency(payment.amount || 0, activeCurrency),
+        formatCurrency(payment.balance || 0, activeCurrency),
+        payment.status || "—",
+        payment.method || "—",
+        propertyName,
+        tenant?.unitNumber || "—",
+      ];
+
+      row.forEach((cell, index) => {
+        doc.text(String(cell), x + 2, cursorY);
+        x += scaledWidths[index];
+      });
+      cursorY += rowHeight;
+    });
+
+    const safeName = tenantName
+      .replace(/[^a-zA-Z0-9-_ ]/g, "")
+      .replace(/\s+/g, "-");
+    doc.save(`${safeName}-payment-history.pdf`);
+  };
+
   if (!featuresLoaded) {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center text-muted-foreground">
@@ -200,10 +309,11 @@ export default function PaymentsPage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
+                onClick={handleDownloadPaymentHistory}
                 className="border-border gap-2 text-foreground flex-1 sm:flex-none bg-transparent"
               >
                 <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download</span>
+                <span className="hidden sm:inline">Download PDF</span>
               </Button>
               <Button
                 disabled={true}

@@ -345,14 +345,14 @@ export async function updateProperty(
     try {
       const allTenants = listTenants();
       const propertyTenantIds = allTenants
-        .filter(
-          (tenant) =>
+        .filter((tenant) => {
+          const tenantId = tenant?.id || tenant?._id;
+          return (
             tenant.propertyId === id ||
             tenant.propertyId === existingProperty?._id ||
-            existingProperty?.tenants?.includes(
-              tenant?.id || tenant?._id || "",
-            ),
-        )
+            (tenantId != null && existingProperty?.tenants?.includes(tenantId))
+          );
+        })
         .map((tenant) => tenant.id);
 
       if (propertyTenantIds.length > 0 && changedFields.length > 0) {

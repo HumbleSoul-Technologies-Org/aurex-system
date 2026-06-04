@@ -56,7 +56,7 @@ export function formatCurrency(
   currency: string = "USD",
   locale?: string,
 ) {
-  const numeric = Number(amount ?? 0).toFixed(0);
+  const numeric = Number(amount ?? 0);
   const code = String(currency || "USD").toUpperCase();
   const resolvedLocale = locale || getLocaleForCurrency(code);
 
