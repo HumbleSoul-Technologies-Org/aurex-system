@@ -53,10 +53,19 @@ function getTokenExpiry(token: string) {
  */
 export async function setAuthToken(token: string, user: any) {
   if (typeof window === "undefined") return; // SSR check
+  try {
+    await setStorageEncryptionKey(token);
+  } catch (e) {
+    console.error("token-manager: setStorageEncryptionKey failed", e);
+  }
 
-  await setStorageEncryptionKey(token);
-
-  localStorage.setItem(TOKEN_KEY, token);
+  // Always store token/user in localStorage so login can complete even if
+  // encrypted DB initialization fails.
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch (e) {
+    console.error("token-manager: failed to write token to localStorage", e);
+  }
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 
   const expiry = getTokenExpiry(token);

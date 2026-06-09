@@ -160,6 +160,26 @@ export function getProperty(id: string): PropertyRecord | null {
   );
 }
 
+export async function getPropertyById(
+  id: string,
+  token?: string,
+): Promise<PropertyRecord> {
+  const response = await apiRequest("GET", `/property/${id}`, undefined, token);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || "Failed to fetch property");
+  }
+
+  const payload = await response.json();
+  const propertyData = payload?.property || payload?.data || payload || null;
+
+  if (!propertyData) {
+    throw new Error("Property response did not contain expected data");
+  }
+
+  return normalizePropertyRecord(propertyData);
+}
+
 export function getAvailablePropertiesWithUnits() {
   const properties = listProperties();
   const tenants = listTenants();

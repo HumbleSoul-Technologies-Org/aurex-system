@@ -195,7 +195,8 @@ export type CollectionName =
   | "documents"
   | "server:notifications"
   | "settings"
-  | "system-settings";
+  | "system-settings"
+  | "visits";
 
 export interface DBSchema {
   version: string;
@@ -213,6 +214,7 @@ export interface DBSchema {
   "server:notifications": any[];
   settings: SystemSettings[];
   "system-settings": SystemSettings[];
+  visits: any[];
 }
 
 const CURRENT_VERSION = "2.1.0";
@@ -233,6 +235,7 @@ const defaultDB: DBSchema = {
   "server:notifications": [],
   settings: [],
   "system-settings": [],
+  visits: [],
 };
 
 declare global {
@@ -287,7 +290,23 @@ async function loadCachedDatabase() {
     cachedDb = { ...defaultDB, ...JSON.parse(txt) };
     await writeEncryptedRaw(cachedDb);
   } catch (error) {
-    console.error("local-store encrypted cache load error", error);
+    console.warn(
+      "local-store encrypted cache load error — clearing invalid payload",
+    );
+    try {
+      // If the stored value was an encrypted payload that failed to decrypt,
+      // remove it to avoid repeated failures on subsequent init attempts.
+      const raw = localStorage.getItem(DB_KEY);
+      if (raw && raw.startsWith(ENCRYPTION_PREFIX)) {
+        localStorage.removeItem(DB_KEY);
+        console.warn(
+          "local-store: removed invalid encrypted payload from storage",
+        );
+      }
+    } catch (e) {
+      console.warn("local-store: failed to clean invalid encrypted payload", e);
+    }
+
     cachedDb = defaultDB;
   }
 }

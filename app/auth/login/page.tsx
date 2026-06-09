@@ -28,10 +28,18 @@ export default function LoginPage() {
       const newUser = await login(email, password);
       const role = newUser?.role?.toString().trim().toLowerCase();
 
+      // Small delay to ensure storage/cookies settle and avoid navigation race
+      // that can cause the app to re-check session and snap back to login.
+      // Also log role for debugging.
+      console.log("login: role=", role, "isActivated=", newUser?.isActivated);
+      await new Promise((res) => setTimeout(res, 250));
+
       if (role === "admin" && newUser?.isActivated === false) {
         router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
       } else if (role === "admin") {
         router.push("/dashboard");
+      } else if (role === "security_guard") {
+        router.push("/security");
       } else if (role === "tenant") {
         router.push("/tenant");
       } else if (role === "property_manager") {

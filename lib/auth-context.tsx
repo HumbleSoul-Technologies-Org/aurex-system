@@ -22,6 +22,24 @@ interface User {
   isActivated?: boolean;
   createdAt: string;
   settingsId?: string;
+  propertyId?: string;
+  assignedProperty?: {
+    id?: string;
+    name?: string;
+    city?: string;
+    address?: string;
+    tenants?: Array<{
+      id?: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      unitNumber?: string;
+      leaseStartDate?: string;
+      leaseEndDate?: string;
+      status?: string;
+      propertyId?: string;
+    }>;
+  };
 }
 
 function normalizeRole(role?: string | null): string {
@@ -113,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
 
         const response = await authApi.login({ email, password });
+        console.debug("auth.login response:", response);
         const normalizedUser = normalizeUser(response.data.user);
 
         // Store token and user
@@ -122,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return normalizedUser;
       } catch (err: any) {
         const errorMessage = err.message || "Login failed";
+        console.warn("auth.login error:", err);
         setError(errorMessage);
         throw err;
       } finally {

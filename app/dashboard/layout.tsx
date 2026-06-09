@@ -284,6 +284,15 @@ export default function DashboardLayout({
           icon: <Wrench className="w-4 h-4" />,
           badge: pendingMaintenanceCount,
         },
+        ...(authUser?.role === "admin"
+          ? [
+              {
+                label: "Visit History",
+                href: "/dashboard/admin/visits",
+                icon: <FileText className="w-4 h-4" />,
+              },
+            ]
+          : []),
         // {
         //   label: "Map",
         //   href: "/dashboard/map",
@@ -677,10 +686,10 @@ export default function DashboardLayout({
                       No notifications
                     </p>
                   ) : (
-                    notifications.map((notif) => (
+                    notifications.map((notif, index) => (
                       <Link
-                        key={notif.id}
-                        href={notif.actionUrl}
+                        key={notif.id || index}
+                        href={notif?.actionUrl?.toString() || "#"}
                         onClick={async () => {
                           if (!notif.read) {
                             try {

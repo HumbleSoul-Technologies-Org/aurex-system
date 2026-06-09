@@ -67,6 +67,7 @@ import {
 } from "@/components/ui/command";
 import { PaymentMethodsModal } from "./payment-methods-modal";
 import { PaymentMethodsList } from "./payment-methods-list";
+import UsersSection from "./users-section";
 
 function PasswordChangeForm({ settings, updateSettings }: any) {
   const [current, setCurrent] = useState("");
@@ -900,6 +901,13 @@ export default function SettingsPage() {
               Portal
             </TabsTrigger>
             <TabsTrigger
+              value="users"
+              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+            >
+              <User className="w-4 h-4 mr-2" />
+              Users
+            </TabsTrigger>
+            <TabsTrigger
               value="finance"
               className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
@@ -1233,6 +1241,11 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
+          </TabsContent>
+
+          {/* Users Tab */}
+          <TabsContent value="users" className="p-6 space-y-6">
+            <UsersSection />
           </TabsContent>
 
           {/* Finance Tab (placeholder) */}

@@ -4,7 +4,11 @@ import React, { createContext, useContext, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "./query-client";
 import { useAuth } from "./auth-context";
-import { listProperties, PropertyRecord } from "./services/properties";
+import {
+  getPropertyById,
+  listProperties,
+  PropertyRecord,
+} from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
 import {
   getPaymentsForProperty,
@@ -227,6 +231,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     refetchOnMount: true,
   });
 
+  const assignedPropertyQuery = useQuery({
+    queryKey: ["property", user?.propertyId || ""],
+    queryFn: async () =>
+      getPropertyById(user?.propertyId ?? "", token ?? undefined),
+    enabled: Boolean(user?.role === "security_guard" && user?.propertyId),
+    staleTime: 1000 * 60 * 5,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+  });
+
   const maintenanceRequestsQuery = useQuery({
     queryKey: ["maintenanceRequests"],
     queryFn: fetchMaintenanceRequests,
@@ -236,7 +250,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
   });
 
   // derive tenants from properties (API now returns populated tenant subdocuments)
-  const propertiesData = propertiesQuery.data ?? listProperties();
+  const propertiesData = React.useMemo(() => {
+    const baseProperties = propertiesQuery.data ?? listProperties();
+    const assignedProperty = assignedPropertyQuery.data;
+
+    if (!assignedProperty) {
+      return baseProperties;
+    }
+
+    const matchIndex = baseProperties.findIndex(
+      (property) =>
+        property.id === assignedProperty.id ||
+        property._id === assignedProperty.id,
+    );
+
+    if (matchIndex >= 0) {
+      return [
+        ...baseProperties.slice(0, matchIndex),
+        assignedProperty,
+        ...baseProperties.slice(matchIndex + 1),
+      ];
+    }
+
+    return [...baseProperties, assignedProperty];
+  }, [propertiesQuery.data, assignedPropertyQuery.data]);
 
   const expensePropertyIds = React.useMemo(() => {
     return propertiesData
@@ -347,17 +384,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const isInitialDataLoading =
     propertiesQuery.isLoading ||
+    assignedPropertyQuery.isLoading ||
     paymentsQuery.isLoading ||
     expensesQuery.isLoading ||
     maintenanceRequestsQuery.isLoading ||
     (propertiesQuery.isFetching && !propertiesQuery.isFetchedAfterMount) ||
+    (assignedPropertyQuery.isFetching &&
+      !assignedPropertyQuery.isFetchedAfterMount) ||
     (paymentsQuery.isFetching && !paymentsQuery.isFetchedAfterMount) ||
     (expensesQuery.isFetching && !expensesQuery.isFetchedAfterMount) ||
     (maintenanceRequestsQuery.isFetching &&
       !maintenanceRequestsQuery.isFetchedAfterMount);
 
   const value: DataContextValue = {
-    properties: propertiesQuery.data ?? listProperties(),
+    properties: propertiesData,
     tenants: tenantsData,
     currentTenant,
     currentProperty,
@@ -385,6 +425,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     expensesError,
     isError:
       propertiesQuery.isError ||
+      assignedPropertyQuery.isError ||
       paymentsQuery.isError ||
       expensesQuery.isError ||
       maintenanceRequestsQuery.isError ||
@@ -392,9 +433,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       Boolean(expensesError),
     refetch: () => {
       propertiesQuery.refetch();
+      assignedPropertyQuery.refetch();
     },
     refetchAll: () => {
       propertiesQuery.refetch();
+      assignedPropertyQuery.refetch();
       paymentsQuery.refetch();
       expensesQuery.refetch();
       maintenanceRequestsQuery.refetch();

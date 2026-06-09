@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "api-smoke-test": "node ./scripts/api-smoke-test.mjs"
+    "api-smoke-test": "node ./scripts/api-smoke-test.mjs",
+    "security-user-smoke-test": "node ./scripts/security-user-smoke-test.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

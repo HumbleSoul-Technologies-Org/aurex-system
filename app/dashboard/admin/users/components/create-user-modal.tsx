@@ -56,7 +56,7 @@ export default function CreateUserModal({
         lastName,
         email,
         phone: phone || undefined,
-        role: role as "admin" | "property_manager",
+        role: role as "admin" | "property_manager" | "security_guard",
       });
 
       if (response.success) {
@@ -190,6 +190,7 @@ export default function CreateUserModal({
                 <SelectItem value="property_manager">
                   Property Manager
                 </SelectItem>
+                <SelectItem value="security_guard">Security Guard</SelectItem>
               </SelectContent>
             </Select>
           </div>

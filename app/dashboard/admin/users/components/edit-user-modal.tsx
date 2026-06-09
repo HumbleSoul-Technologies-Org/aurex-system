@@ -139,7 +139,10 @@ export default function EditUserModal({
           {/* Role */}
           <div>
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={setRole}>
+            <Select
+              value={role}
+              onValueChange={(value) => setRole(value as any)}
+            >
               <SelectTrigger id="role">
                 <SelectValue />
               </SelectTrigger>
@@ -149,6 +152,7 @@ export default function EditUserModal({
                   Property Manager
                 </SelectItem>
                 <SelectItem value="tenant">Tenant</SelectItem>
+                <SelectItem value="security_guard">Security Guard</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -156,7 +160,10 @@ export default function EditUserModal({
           {/* Status */}
           <div>
             <Label htmlFor="status">Status</Label>
-            <Select value={status} onValueChange={setStatus}>
+            <Select
+              value={status}
+              onValueChange={(value) => setStatus(value as any)}
+            >
               <SelectTrigger id="status">
                 <SelectValue />
               </SelectTrigger>

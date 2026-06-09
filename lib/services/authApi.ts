@@ -3,7 +3,8 @@
  * Handles all API calls to the backend auth endpoints
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5454/api';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5454/api";
 
 export interface LoginRequest {
   email: string;
@@ -22,7 +23,7 @@ export interface SignupSendCodeRequest {
   firstName: string;
   lastName: string;
   email: string;
-  role: 'admin' | 'property_manager';
+  role: "admin" | "property_manager";
   password: string;
   acceptedTermsAndConditions: boolean;
 }
@@ -30,6 +31,26 @@ export interface SignupSendCodeRequest {
 export interface SignupVerifyCodeRequest {
   email: string;
   code: string;
+}
+
+export interface TenantSummary {
+  id?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  unitNumber?: string;
+  leaseStartDate?: string;
+  leaseEndDate?: string;
+  status?: string;
+  propertyId?: string;
+}
+
+export interface AssignedProperty {
+  id?: string;
+  name?: string;
+  city?: string;
+  address?: string;
+  tenants?: TenantSummary[];
 }
 
 export interface AuthResponse {
@@ -46,6 +67,8 @@ export interface AuthResponse {
       isActivated?: boolean;
       createdAt: string;
       settingsId?: string;
+      propertyId?: string;
+      assignedProperty?: AssignedProperty;
     };
     token: string;
   };
@@ -63,6 +86,8 @@ export interface User {
   isActivated?: boolean;
   createdAt: string;
   settingsId?: string;
+  propertyId?: string;
+  assignedProperty?: AssignedProperty;
 }
 
 export interface AuthError {
@@ -77,11 +102,13 @@ export interface AuthError {
 /**
  * Register new user
  */
-export async function register(payload: RegisterRequest): Promise<AuthResponse> {
+export async function register(
+  payload: RegisterRequest,
+): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -89,7 +116,7 @@ export async function register(payload: RegisterRequest): Promise<AuthResponse> 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Registration failed');
+    throw new Error(data.error?.message || "Registration failed");
   }
 
   return data;
@@ -100,9 +127,9 @@ export async function register(payload: RegisterRequest): Promise<AuthResponse> 
  */
 export async function login(payload: LoginRequest): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -110,17 +137,19 @@ export async function login(payload: LoginRequest): Promise<AuthResponse> {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Login failed');
+    throw new Error(data.error?.message || "Login failed");
   }
 
   return data;
 }
 
-export async function signupSendCode(payload: SignupSendCodeRequest): Promise<{ success: boolean; message: string }> {
+export async function signupSendCode(
+  payload: SignupSendCodeRequest,
+): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/signup-send-code`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -128,17 +157,21 @@ export async function signupSendCode(payload: SignupSendCodeRequest): Promise<{ 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to send signup verification code');
+    throw new Error(
+      data.error?.message || "Failed to send signup verification code",
+    );
   }
 
   return data;
 }
 
-export async function verifySignupCode(payload: SignupVerifyCodeRequest): Promise<{ success: boolean; message: string }> {
+export async function verifySignupCode(
+  payload: SignupVerifyCodeRequest,
+): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/verify-signup-code`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -146,7 +179,7 @@ export async function verifySignupCode(payload: SignupVerifyCodeRequest): Promis
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to verify signup code');
+    throw new Error(data.error?.message || "Failed to verify signup code");
   }
 
   return data;
@@ -155,11 +188,13 @@ export async function verifySignupCode(payload: SignupVerifyCodeRequest): Promis
 /**
  * Verify email token
  */
-export async function verifyEmail(token: string): Promise<{ success: boolean; message: string }> {
+export async function verifyEmail(
+  token: string,
+): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ token }),
   });
@@ -167,7 +202,7 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Email verification failed');
+    throw new Error(data.error?.message || "Email verification failed");
   }
 
   return data;
@@ -176,11 +211,14 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
 /**
  * Verify product/license key for a user
  */
-export async function verifyProductKey(email: string, key: string): Promise<{ success: boolean; message: string; data?: any }> {
+export async function verifyProductKey(
+  email: string,
+  key: string,
+): Promise<{ success: boolean; message: string; data?: any }> {
   const response = await fetch(`${API_BASE_URL}/auth/verify-product-key`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, productKey: key }),
   });
@@ -188,7 +226,7 @@ export async function verifyProductKey(email: string, key: string): Promise<{ su
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Product key verification failed');
+    throw new Error(data.error?.message || "Product key verification failed");
   }
 
   return data;
@@ -197,19 +235,21 @@ export async function verifyProductKey(email: string, key: string): Promise<{ su
 /**
  * Get current user profile
  */
-export async function getCurrentUser(token: string): Promise<{ success: boolean; data: { user: User } }> {
+export async function getCurrentUser(
+  token: string,
+): Promise<{ success: boolean; data: { user: User } }> {
   const response = await fetch(`${API_BASE_URL}/auth/me`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to fetch user');
+    throw new Error(data.error?.message || "Failed to fetch user");
   }
 
   return data;
@@ -230,13 +270,13 @@ export async function updateProfile(
       title?: string;
       bio?: string;
     };
-  }
+  },
 ): Promise<{ success: boolean; data: { user: User } }> {
   const response = await fetch(`${API_BASE_URL}/auth/profile`, {
-    method: 'PUT',
+    method: "PUT",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -244,7 +284,7 @@ export async function updateProfile(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to update profile');
+    throw new Error(data.error?.message || "Failed to update profile");
   }
 
   return data;
@@ -256,13 +296,13 @@ export async function updateProfile(
 export async function changePassword(
   token: string,
   currentPassword: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ currentPassword, newPassword }),
   });
@@ -270,7 +310,7 @@ export async function changePassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to change password');
+    throw new Error(data.error?.message || "Failed to change password");
   }
 
   return data;
@@ -279,11 +319,13 @@ export async function changePassword(
 /**
  * Request password reset
  */
-export async function forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
+export async function forgotPassword(
+  email: string,
+): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ email }),
   });
@@ -291,7 +333,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to request password reset');
+    throw new Error(data.error?.message || "Failed to request password reset");
   }
 
   return data;
@@ -302,12 +344,12 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
  */
 export async function resetPassword(
   token: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<AuthResponse> {
   const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ token, password: newPassword }),
   });
@@ -315,7 +357,7 @@ export async function resetPassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to reset password');
+    throw new Error(data.error?.message || "Failed to reset password");
   }
 
   return data;
@@ -326,12 +368,12 @@ export async function resetPassword(
  */
 export async function verifyResetCode(
   email: string,
-  code: string
+  code: string,
 ): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/verify-reset-code`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, code }),
   });
@@ -339,7 +381,7 @@ export async function verifyResetCode(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to verify code');
+    throw new Error(data.error?.message || "Failed to verify code");
   }
 
   return data;
@@ -351,12 +393,12 @@ export async function verifyResetCode(
 export async function setNewPassword(
   email: string,
   code: string,
-  password: string
+  password: string,
 ): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/set-new-password`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, code, password }),
   });
@@ -364,7 +406,7 @@ export async function setNewPassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to set new password');
+    throw new Error(data.error?.message || "Failed to set new password");
   }
 
   return data;
@@ -380,8 +422,8 @@ export async function createAdminUser(
     lastName: string;
     email: string;
     phone?: string;
-    role: 'admin' | 'property_manager';
-  }
+    role: "admin" | "property_manager";
+  },
 ): Promise<{
   success: boolean;
   data: {
@@ -390,10 +432,10 @@ export async function createAdminUser(
   };
 }> {
   const response = await fetch(`${API_BASE_URL}/auth/admin/create-user`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -401,7 +443,7 @@ export async function createAdminUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to create user');
+    throw new Error(data.error?.message || "Failed to create user");
   }
 
   return data;
@@ -417,7 +459,7 @@ export async function listUsers(
     limit?: number;
     role?: string;
     status?: string;
-  }
+  },
 ): Promise<{
   success: boolean;
   data: User[];
@@ -429,23 +471,23 @@ export async function listUsers(
   };
 }> {
   const params = new URLSearchParams();
-  if (options?.page) params.append('page', String(options.page));
-  if (options?.limit) params.append('limit', String(options.limit));
-  if (options?.role) params.append('role', options.role);
-  if (options?.status) params.append('status', options.status);
+  if (options?.page) params.append("page", String(options.page));
+  if (options?.limit) params.append("limit", String(options.limit));
+  if (options?.role) params.append("role", options.role);
+  if (options?.status) params.append("status", options.status);
 
   const response = await fetch(`${API_BASE_URL}/auth/admin/users?${params}`, {
-    method: 'GET',
+    method: "GET",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to fetch users');
+    throw new Error(data.error?.message || "Failed to fetch users");
   }
 
   return data;
@@ -464,13 +506,13 @@ export async function updateUser(
     phone?: string;
     role?: string;
     status?: string;
-  }
+  },
 ): Promise<{ success: boolean; data: { user: User } }> {
   const response = await fetch(`${API_BASE_URL}/auth/admin/users/${userId}`, {
-    method: 'PUT',
+    method: "PUT",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
   });
@@ -478,7 +520,7 @@ export async function updateUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to update user');
+    throw new Error(data.error?.message || "Failed to update user");
   }
 
   return data;
@@ -489,20 +531,20 @@ export async function updateUser(
  */
 export async function deleteUser(
   token: string,
-  userId: string
+  userId: string,
 ): Promise<{ success: boolean; message: string }> {
   const response = await fetch(`${API_BASE_URL}/auth/admin/users/${userId}`, {
-    method: 'DELETE',
+    method: "DELETE",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'Failed to delete user');
+    throw new Error(data.error?.message || "Failed to delete user");
   }
 
   return data;
