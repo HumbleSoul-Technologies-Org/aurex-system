@@ -46,6 +46,40 @@ const currencySymbolAlias: Record<string, string> = {
   HKD: "HK$",
 };
 
+const DEFAULT_EXCHANGE_RATES: Record<string, number> = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  KES: 140,
+};
+
+export function getExchangeRates(): Record<string, number> {
+  const settings = getSystemSettings();
+  return (
+    settings?.tenantPortalSettings?.financeSettings?.exchangeRates ||
+    DEFAULT_EXCHANGE_RATES
+  );
+}
+
+export function convertCurrency(
+  amount: number | string | null | undefined,
+  currency: string = "USD",
+  baseCurrency: string = "USD",
+) {
+  const numeric = Number(amount ?? 0);
+  const target = String(currency || "USD").toUpperCase();
+  const base = String(baseCurrency || "USD").toUpperCase();
+  const rates = getExchangeRates();
+
+  const baseRate = rates[base] ?? (base === "USD" ? 1 : undefined);
+  const targetRate = rates[target] ?? (target === "USD" ? 1 : undefined);
+  if (baseRate === undefined || targetRate === undefined) {
+    return numeric;
+  }
+
+  return (numeric / baseRate) * targetRate;
+}
+
 export function getLocaleForCurrency(currencyCode: string = "USD") {
   const normalized = String(currencyCode || "USD").toUpperCase();
   return currencyLocaleMap[normalized] || "en-US";
@@ -57,6 +91,7 @@ export function formatCurrency(
   locale?: string,
 ) {
   const numeric = Number(amount ?? 0);
+  const convertedAmount = convertCurrency(numeric, currency);
   const code = String(currency || "USD").toUpperCase();
   const resolvedLocale = locale || getLocaleForCurrency(code);
 
@@ -66,7 +101,7 @@ export function formatCurrency(
       currency: code,
     });
 
-    let formatted = formatter.format(numeric);
+    let formatted = formatter.format(convertedAmount);
     const narrowSymbol = new Intl.NumberFormat(resolvedLocale, {
       style: "currency",
       currency: code,

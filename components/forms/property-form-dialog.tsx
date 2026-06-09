@@ -753,8 +753,9 @@ export default function PropertyFormDialog({
                   <p className="text-sm font-semibold text-foreground">
                     Customize Units
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Enable custom unit rent, numbering, and specifications.
+                  <p className="text-xs text-muted-foreground">
+                    Enable custom unit rent ( if the property units vary in
+                    usage/pricing ).
                   </p>
                 </div>
                 <label className="inline-flex items-center gap-2 text-sm">
@@ -1000,7 +1001,7 @@ export default function PropertyFormDialog({
                 name="features"
                 value={formData.features}
                 onChange={handleChange}
-                placeholder="List key property features..."
+                placeholder="List key property features... (separate with  commas ie `parking, gym, pet-friendly` )"
                 className="h-20"
               />
             </div>

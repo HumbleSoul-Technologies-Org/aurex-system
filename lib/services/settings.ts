@@ -357,6 +357,16 @@ function ensureTenantPortalSettings(settings: SystemSettings): SystemSettings {
       ...defaultTenantPortalSettings.securitySettings,
       ...existing.securitySettings,
     },
+    financeSettings: {
+      ...defaultTenantPortalSettings.financeSettings,
+      ...existing.financeSettings,
+      exchangeRates:
+        existing.financeSettings?.exchangeRates ||
+        defaultTenantPortalSettings.financeSettings.exchangeRates,
+      paymentMethods:
+        existing.financeSettings?.paymentMethods ||
+        defaultTenantPortalSettings.financeSettings.paymentMethods,
+    },
   };
 
   return {
@@ -928,6 +938,7 @@ export interface SettingsPayload {
       country?: string;
       symbol?: string;
     };
+    exchangeRates?: Record<string, number>;
     paymentMethods?: AdminPaymentMethod[];
   };
   notifications?: {
@@ -1041,6 +1052,7 @@ export function convertToSettingsPayload(
       currency: {
         code: settings.financeSettings?.currency || "USD",
       },
+      exchangeRates: settings.financeSettings?.exchangeRates,
       paymentMethods: settings.financeSettings?.paymentMethods?.map(
         formatPaymentMethodForPayload,
       ),
@@ -1158,7 +1170,7 @@ export function convertPayloadToTenantPortalSettings(
     },
     financeSettings: {
       currency: payload.finance?.currency?.code || "USD",
-      exchangeRates: {
+      exchangeRates: payload.finance?.exchangeRates || {
         USD: 1,
         EUR: 0.92,
         GBP: 0.79,
@@ -1295,6 +1307,13 @@ export async function fetchSettingsFromApi(
           currency: {
             code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
           },
+          exchangeRates: sys.tenantPortalSettings?.financeSettings
+            ?.exchangeRates || {
+            USD: 1,
+            EUR: 0.92,
+            GBP: 0.79,
+            KES: 140,
+          },
         },
       };
 
@@ -1348,6 +1367,13 @@ export async function fetchSettingsByIdFromApi(
           currency: {
             code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
           },
+          exchangeRates: sys.tenantPortalSettings?.financeSettings
+            ?.exchangeRates || {
+            USD: 1,
+            EUR: 0.92,
+            GBP: 0.79,
+            KES: 140,
+          },
         },
       };
       return payload;
@@ -1399,6 +1425,13 @@ export async function fetchSettingsByTenantId(
         finance: {
           currency: {
             code: sys.tenantPortalSettings?.financeSettings?.currency || "USD",
+          },
+          exchangeRates: sys.tenantPortalSettings?.financeSettings
+            ?.exchangeRates || {
+            USD: 1,
+            EUR: 0.92,
+            GBP: 0.79,
+            KES: 140,
           },
         },
       };
@@ -1513,6 +1546,7 @@ export async function updateSettingsOnApi(
             currency: {
               code: tenantSettings.financeSettings?.currency || "USD",
             },
+            exchangeRates: tenantSettings.financeSettings?.exchangeRates,
             paymentMethods:
               tenantSettings.financeSettings?.paymentMethods || [],
           },
@@ -1546,6 +1580,7 @@ export async function updateSettingsOnApi(
         tenantPortal: { portalFeatures: tenantSettings.featureToggles as any },
         finance: {
           currency: { code: tenantSettings.financeSettings?.currency || "USD" },
+          exchangeRates: tenantSettings.financeSettings?.exchangeRates,
           paymentMethods: tenantSettings.financeSettings?.paymentMethods || [],
         },
       };
@@ -1575,6 +1610,13 @@ export async function deleteSettingsOnApi(id: string): Promise<boolean> {
 
 /**
  * Simple debounce helper
+          exchangeRates:
+            sys.tenantPortalSettings?.financeSettings?.exchangeRates || {
+              USD: 1,
+              EUR: 0.92,
+              GBP: 0.79,
+              KES: 140,
+            },
  * Delays function execution, cancels previous pending calls on new invocation
  */
 export function debounce<T extends (...args: any[]) => Promise<any>>(

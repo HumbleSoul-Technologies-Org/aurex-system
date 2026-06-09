@@ -2,6 +2,7 @@ import React from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth-context";
+import { startExchangeRefreshLoop } from "@/lib/exchange";
 import { SettingsProvider } from "@/lib/settings-context";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/components/query-provider";
@@ -24,6 +25,14 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Start background exchange rate refresh (server-side)
+  if (typeof window === "undefined") {
+    try {
+      startExchangeRefreshLoop();
+    } catch (e) {
+      // ignore
+    }
+  }
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
