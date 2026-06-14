@@ -22,13 +22,21 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { createInvite } from "@/lib/services/adminApi";
+import {
+  createInvite,
+  listInvites,
+  resendInvite,
+  deleteInvite,
+} from "@/lib/services/adminApi";
+import { addAuditLog } from "@/lib/services/audit";
 
 interface Invite {
   id: string;
   email: string;
   role: string;
   status: "pending" | "accepted" | "expired";
+  message?: string;
+  resendCount?: number;
   createdAt: string;
   expiresAt: string;
   inviteLink?: string;
@@ -43,6 +51,26 @@ export default function AdminInvitePage() {
   const [loading, setLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [inviteListLoading, setInviteListLoading] = useState(false);
+
+  const refreshInvites = async () => {
+    setInviteListLoading(true);
+    try {
+      const response = await listInvites();
+      if (response.success && Array.isArray(response.data)) {
+        setInvites(response.data);
+      }
+    } catch (err) {
+      console.error("Failed to refresh invites", err);
+    } finally {
+      setInviteListLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshInvites();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,6 +96,15 @@ export default function AdminInvitePage() {
         if (response.data && "inviteLink" in response.data) {
           setGeneratedLink((response.data as any).inviteLink);
         }
+        await addAuditLog({
+          action: "Invite created",
+          actor: "admin",
+          details: `Created invite for ${email} with role ${role}`,
+          resourceType: "invite",
+          resourceId: (response.data as any)?.id,
+        });
+        await refreshInvites();
+
         // Reset form
         setEmail("");
         setRole("tenant");
@@ -92,6 +129,48 @@ export default function AdminInvitePage() {
       navigator.clipboard.writeText(generatedLink);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleResendInvite = async (inviteId: string) => {
+    setLoading(true);
+    try {
+      const response = await resendInvite(inviteId);
+      if (response.success) {
+        await refreshInvites();
+        await addAuditLog({
+          action: "Invite resent",
+          actor: "admin",
+          details: `Resent invite ${inviteId}`,
+          resourceType: "invite",
+          resourceId: inviteId,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend invite");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteInvite = async (inviteId: string) => {
+    setLoading(true);
+    try {
+      const response = await deleteInvite(inviteId);
+      if (response.success) {
+        await refreshInvites();
+        await addAuditLog({
+          action: "Invite deleted",
+          actor: "admin",
+          details: `Deleted invite ${inviteId}`,
+          resourceType: "invite",
+          resourceId: inviteId,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete invite");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -240,11 +319,86 @@ export default function AdminInvitePage() {
         )}
       </div>
 
-      {/* Placeholder for Invite List */}
-      <Card className="p-8 text-center">
-        <p className="text-muted-foreground">
-          Invite tracking and management coming soon...
-        </p>
+      <Card className="p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground mb-1">
+              Invite Tracking
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Manage emailed invitations, resend pending invites, or cancel
+              outdated invites.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refreshInvites}
+            disabled={inviteListLoading}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {inviteListLoading ? "Refreshing..." : "Refresh List"}
+          </Button>
+        </div>
+
+        {inviteListLoading ? (
+          <div className="text-sm text-muted-foreground">
+            Loading invites...
+          </div>
+        ) : invites.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            No invites have been created yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {invites.map((invite) => (
+              <div
+                key={invite.id}
+                className="border border-slate-200 rounded-md p-4 bg-slate-50"
+              >
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {invite.email}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Role: {invite.role} • Status: {invite.status} • Sent:{" "}
+                      {new Date(invite.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleResendInvite(invite.id)}
+                      disabled={loading}
+                    >
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Resend
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDeleteInvite(invite.id)}
+                      disabled={loading}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+                {invite.inviteLink && (
+                  <div className="mt-3 bg-white border border-slate-200 rounded-md p-3 text-xs text-slate-600 break-all">
+                    <strong>Invite Link:</strong> {invite.inviteLink}
+                  </div>
+                )}
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Expires on {new Date(invite.expiresAt).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

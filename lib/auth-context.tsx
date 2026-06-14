@@ -272,6 +272,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  // Get token fresh on every render so DataProvider gets the current token
+  const token = React.useMemo(() => tokenManager.getAuthToken(), [user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -288,7 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         changePassword,
         forgotPassword,
         resetPassword,
-        token: tokenManager.getAuthToken(),
+        token,
       }}
     >
       {children}

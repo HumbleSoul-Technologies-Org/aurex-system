@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
@@ -47,17 +48,58 @@ import LockUnlockModal from "./components/lock-unlock-modal";
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Search and Filter
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   // Selection
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+
+  const {
+    data: usersData,
+    isLoading,
+    isError,
+    error: queryError,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: [
+      "adminUsers",
+      searchQuery,
+      roleFilter,
+      statusFilter,
+      currentPage,
+      pageSize,
+    ],
+    queryFn: async () =>
+      listAdminUsers({
+        role: roleFilter === "all" ? undefined : roleFilter,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        search: searchQuery || undefined,
+        page: currentPage,
+        limit: pageSize,
+      }),
+    enabled: Boolean(user),
+    keepPreviousData: true,
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const users = usersData?.data.users ?? [];
+  const totalUsers = usersData?.data.total ?? users.length;
+  const totalPages = usersData?.data.pages ?? 1;
+  const error = isError
+    ? queryError instanceof Error
+      ? queryError.message
+      : "Failed to load users"
+    : null;
+  const loading = isLoading;
 
   // Modals
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
@@ -149,15 +191,15 @@ export default function AdminUsersPage() {
   };
 
   const toggleAllSelection = () => {
-    if (selectedUsers.size === filteredUsers.length) {
+    if (selectedUsers.size === users.length) {
       setSelectedUsers(new Set());
     } else {
-      setSelectedUsers(new Set(filteredUsers.map((u) => u.id)));
+      setSelectedUsers(new Set(users.map((u) => u.id)));
     }
   };
 
   const getSelectedUsersData = () => {
-    return filteredUsers.filter((u) => selectedUsers.has(u.id));
+    return users.filter((u) => selectedUsers.has(u.id));
   };
 
   return (
@@ -401,9 +443,49 @@ export default function AdminUsersPage() {
 
       {/* Result Count */}
       {!loading && (
-        <p className="text-sm text-muted-foreground">
-          Showing {filteredUsers.length} of {users.length} users
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {users.length} users on page {currentPage} of {totalPages}{" "}
+            (total {totalUsers})
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage >= totalPages}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(page + 1, totalPages))
+              }
+            >
+              Next
+            </Button>
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setCurrentPage(1);
+              }}
+              className="rounded border border-border bg-background px-3 py-2 text-sm"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       )}
 
       {/* Modals */}
@@ -428,19 +510,7 @@ export default function AdminUsersPage() {
               onSave={() => {
                 setShowEditModal(false);
                 setSelectedUser(null);
-                // Refresh the list
-                const refetch = async () => {
-                  const response = await listAdminUsers({
-                    role: roleFilter === "all" ? undefined : roleFilter,
-                    status: statusFilter === "all" ? undefined : statusFilter,
-                    search: searchQuery || undefined,
-                    limit: 100,
-                  });
-                  if (response.success) {
-                    setUsers(response.data.users);
-                  }
-                };
-                refetch();
+                refetchUsers();
               }}
             />
           )}
@@ -454,19 +524,7 @@ export default function AdminUsersPage() {
               onSuccess={() => {
                 setShowLockUnlockModal(false);
                 setSelectedUser(null);
-                // Refresh the list
-                const refetch = async () => {
-                  const response = await listAdminUsers({
-                    role: roleFilter === "all" ? undefined : roleFilter,
-                    status: statusFilter === "all" ? undefined : statusFilter,
-                    search: searchQuery || undefined,
-                    limit: 100,
-                  });
-                  if (response.success) {
-                    setUsers(response.data.users);
-                  }
-                };
-                refetch();
+                refetchUsers();
               }}
             />
           )}
@@ -478,20 +536,8 @@ export default function AdminUsersPage() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            // Refresh the list
-            const refetch = async () => {
-              const response = await listAdminUsers({
-                role: roleFilter === "all" ? undefined : roleFilter,
-                status: statusFilter === "all" ? undefined : statusFilter,
-                search: searchQuery || undefined,
-                limit: 100,
-              });
-              if (response.success) {
-                setUsers(response.data.users);
-                setSelectedUsers(new Set());
-              }
-            };
-            refetch();
+            setSelectedUsers(new Set());
+            refetchUsers();
           }}
         />
       )}
@@ -503,19 +549,7 @@ export default function AdminUsersPage() {
           onSuccess={() => {
             setShowBulkRoleModal(false);
             setSelectedUsers(new Set());
-            // Refresh the list
-            const refetch = async () => {
-              const response = await listAdminUsers({
-                role: roleFilter === "all" ? undefined : roleFilter,
-                status: statusFilter === "all" ? undefined : statusFilter,
-                search: searchQuery || undefined,
-                limit: 100,
-              });
-              if (response.success) {
-                setUsers(response.data.users);
-              }
-            };
-            refetch();
+            refetchUsers();
           }}
         />
       )}

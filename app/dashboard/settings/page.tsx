@@ -24,6 +24,7 @@ import {
   CreditCard,
   Users,
   Eye,
+  EyeOff,
   Building,
   Settings as SettingsIcon,
   Shield,
@@ -77,6 +78,7 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [localProfile, setLocalProfile] = useState({
     firstName: user?.firstName || "",
@@ -146,27 +148,46 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
           ✓ Password changed successfully!
         </div>
       )}
-      <Input
-        type="password"
-        placeholder="Current password"
-        value={current}
-        onChange={(e) => setCurrent(e.target.value)}
-        disabled={isLoading}
-      />
-      <Input
-        type="password"
-        placeholder="New password"
-        value={newPw}
-        onChange={(e) => setNewPw(e.target.value)}
-        disabled={isLoading}
-      />
-      <Input
-        type="password"
-        placeholder="Confirm new password"
-        value={confirm}
-        onChange={(e) => setConfirm(e.target.value)}
-        disabled={isLoading}
-      />
+
+      <div className="relative flex">
+        <Input
+          type={showPassword ? "text" : "password"}
+          placeholder="Current password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          disabled={isLoading}
+        />
+        {showPassword ? (
+          <EyeOff
+            className="absolute cursor-pointer right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            onClick={() => setShowPassword(false)}
+          />
+        ) : (
+          <Eye
+            className="absolute cursor-pointer right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+            onClick={() => setShowPassword(true)}
+          />
+        )}
+      </div>
+      <div className="relative flex">
+        <Input
+          type={showPassword ? "text" : "password"}
+          placeholder="New password"
+          value={newPw}
+          onChange={(e) => setNewPw(e.target.value)}
+          disabled={isLoading}
+        />
+      </div>
+
+      <div className="relative flex">
+        <Input
+          type={showPassword ? "text" : "password"}
+          placeholder="Confirm new password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          disabled={isLoading}
+        />
+      </div>
       <div className="flex justify-end">
         <Button
           onClick={handleChange}

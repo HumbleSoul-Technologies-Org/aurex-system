@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/query-client";
+import { buildQueryParams, QueryOptions } from "@/lib/api-utils";
 import { getCollection } from "@/lib/local-store";
 
 function dispatchExpensesUpdatedEvent() {
@@ -71,15 +72,26 @@ function normalizeExpenseList(json: any): any[] {
   return [];
 }
 
+export interface ListExpensesOptions extends QueryOptions {
+  token?: string;
+}
+
 export async function getExpensesByProperty(
   propertyId: string,
-  token?: string,
+  options?: ListExpensesOptions,
 ): Promise<ExpenseRecord[]> {
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+  });
+
   const res = await apiRequest(
     "GET",
     `/expenses/property/${encodeURIComponent(propertyId)}/all`,
-    undefined,
-    token,
+    params,
+    options?.token,
   );
   const json = await res.json();
   return normalizeExpenseList(json).map(
@@ -89,13 +101,20 @@ export async function getExpensesByProperty(
 
 export async function getExpensesByTenant(
   tenantId: string,
-  token?: string,
+  options?: ListExpensesOptions,
 ): Promise<ExpenseRecord[]> {
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+  });
+
   const res = await apiRequest(
     "GET",
     `/expenses/tenant/${encodeURIComponent(tenantId)}/all`,
-    undefined,
-    token,
+    params,
+    options?.token,
   );
   const json = await res.json();
   return normalizeExpenseList(json).map(
@@ -130,13 +149,37 @@ export async function getExpensesForProperties(
       `Failed to fetch expenses for properties ${propertyIds.join(", ")}:`,
       err,
     );
-    return [];
+    try {
+      const local = getCollection("expenses") as any[];
+      return local
+        .filter((expense) => propertyIds.includes(expense.propertyId || ""))
+        .map((expense) => normalizeExpenseRecord(expense));
+    } catch (fallbackErr) {
+      console.error("Failed to fallback to local expense cache:", fallbackErr);
+      return [];
+    }
   }
 }
 
-export async function getAllExpenses(token?: string): Promise<ExpenseRecord[]> {
+export async function getAllExpenses(
+  options?: ListExpensesOptions,
+): Promise<ExpenseRecord[]> {
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+    search: options?.search,
+    status: options?.status,
+  });
+
   try {
-    const res = await apiRequest("GET", `/expenses/all`, undefined, token);
+    const res = await apiRequest(
+      "GET",
+      `/expenses/all`,
+      params,
+      options?.token,
+    );
     const json = await res.json();
     return normalizeExpenseList(json).map(
       normalizeExpenseRecord,

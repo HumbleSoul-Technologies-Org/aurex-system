@@ -142,6 +142,37 @@ export const getQueryFn: <T>(options: {
         message?: string;
       };
 
+      // Handle rate limiting globally by dispatching a window event
+      try {
+        const status = axiosError.response?.status;
+        const headers = (axiosError as any).response?.headers || {};
+        if (status === 429 && typeof window !== "undefined") {
+          let retryAfter = headers["retry-after"] || headers["Retry-After"];
+          let retrySeconds = undefined as number | undefined;
+          if (retryAfter) {
+            const parsed = parseInt(String(retryAfter), 10);
+            if (!Number.isNaN(parsed)) retrySeconds = parsed;
+            else {
+              const date = Date.parse(String(retryAfter));
+              if (!Number.isNaN(date)) {
+                retrySeconds = Math.max(
+                  0,
+                  Math.ceil((date - Date.now()) / 1000),
+                );
+              }
+            }
+          }
+
+          window.dispatchEvent(
+            new CustomEvent("rate-limit", {
+              detail: { retryAfter: retrySeconds },
+            }),
+          );
+        }
+      } catch (evErr) {
+        // ignore
+      }
+
       if (axiosError.response?.status === 401 && on401 === "returnNull") {
         return null;
       }
@@ -161,9 +192,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: 5000,
       refetchOnWindowFocus: false,
-      staleTime: 30000, // 30 seconds - reduces lag while preventing excessive polling
+      refetchInterval: 5000, // refetch every 5 seconds
+      staleTime: 0, // always consider data stale so polling runs continuously
       retry: 2,
     },
     mutations: {

@@ -1,4 +1,5 @@
 import { apiRequest } from "../query-client";
+import { buildQueryParams, QueryOptions } from "@/lib/api-utils";
 import {
   getCollection,
   insertIntoCollection,
@@ -92,7 +93,13 @@ export interface RentPayment {
   txdId?: string;
   transId?: string;
   amount: number;
-  paymentMethod: "cash" | "bank_transfer" | "check" | "card" | "manual";
+  paymentMethod:
+    | "cash"
+    | "bank_transfer"
+    | "check"
+    | "card"
+    | "manual"
+    | "mpesa";
   leaseType?: string;
   paidOn: string;
   paidBy?: string;
@@ -161,6 +168,23 @@ export async function createManualPayment(
     return record;
   } catch (err) {
     console.warn("Failed to create manual payment:", err);
+    return null;
+  }
+}
+
+export async function createMpesaPayment(
+  payload: Partial<RentPayment> & { phoneNumber: string },
+): Promise<RentPayment | null> {
+  try {
+    const res = await apiRequest("POST", "/payments/mpesa/initiate", payload);
+    const raw = res?.data?.data || res?.data?.payment || res?.data || null;
+    if (!raw) return null;
+    const record = mapServerPaymentToClient(raw);
+    applyTenantStatusFromPayment(record);
+    dispatchPaymentsUpdatedEvent();
+    return record;
+  } catch (err) {
+    console.warn("Failed to initiate M-Pesa payment:", err);
     return null;
   }
 }
@@ -343,13 +367,50 @@ export async function getTenantOutstandingBalance(tenantId: string): Promise<{
   }
 }
 
+export const PAYMENT_LIST_FIELDS = [
+  "id",
+  "_id",
+  "tenantId",
+  "propertyId",
+  "amount",
+  "currency",
+  "paidOn",
+  "paymentDate",
+  "date",
+  "status",
+  "paymentMethod",
+  "method",
+  "transId",
+  "receiptUrl",
+  "reference",
+  "balance",
+  "priorBalance",
+  "balanceAfterPayment",
+  "reasonForPayment",
+];
+
+export interface ListPaymentsOptions extends QueryOptions {
+  token?: string;
+}
+
 export async function getPaymentsForTenant(
   tenantId: string,
+  options?: ListPaymentsOptions | string,
 ): Promise<RentPayment[]> {
+  const token = typeof options === "string" ? options : options?.token;
+  const params = buildQueryParams({
+    fields: typeof options === "object" ? options?.fields : undefined,
+    page: typeof options === "object" ? options?.page : undefined,
+    limit: typeof options === "object" ? options?.limit : undefined,
+    sort: typeof options === "object" ? options?.sort : undefined,
+  });
+
   try {
     const res = await apiRequest(
       "GET",
       `/payments/tenant/${encodeURIComponent(tenantId)}/all`,
+      params,
+      token,
     );
     const data = await res.json();
     const rawList: any[] = Array.isArray(data?.data)
@@ -385,10 +446,62 @@ export async function getPaymentsForTenant(
   }
 }
 
+export async function listPaymentsApi(
+  options?: ListPaymentsOptions,
+): Promise<RentPayment[]> {
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+    search: options?.search,
+    status: options?.status,
+  });
+
+  try {
+    const res = await apiRequest(
+      "GET",
+      "/payments/all",
+      params,
+      options?.token,
+    );
+    const data = await res.json();
+    const rawList: any[] = Array.isArray(data?.data)
+      ? data.data
+      : Array.isArray(data?.payments)
+        ? data.payments
+        : Array.isArray(data)
+          ? data
+          : [];
+    return rawList
+      .map((raw: any) => mapServerPaymentToClient(raw))
+      .filter((payment): payment is RentPayment => payment !== null);
+  } catch (err) {
+    console.warn(
+      "Failed to fetch payments via API, falling back to local store:",
+      err,
+    );
+    try {
+      const local = listPayments();
+      return local.map((p) => ({
+        id: p.id,
+        tenantId: p.tenantId || "",
+        propertyId: p.propertyId || "",
+        amount: Number(p.amount || 0),
+        currency: p.currency || "USD",
+        paidOn: p.paidOn || p.date || new Date().toISOString(),
+      })) as RentPayment[];
+    } catch (e) {
+      return [];
+    }
+  }
+}
+
 export async function getPaymentsForProperty(
   propertyIdOrIds: string | string[],
-  token?: string,
+  options?: ListPaymentsOptions | string,
 ): Promise<RentPayment[]> {
+  const token = typeof options === "string" ? options : options?.token;
   const propertyIds = Array.isArray(propertyIdOrIds)
     ? propertyIdOrIds.filter(Boolean)
     : [propertyIdOrIds];
@@ -398,20 +511,40 @@ export async function getPaymentsForProperty(
   }
 
   if (propertyIds.length > 1) {
-    const allPayments = await Promise.all(
-      propertyIds.map(async (propertyId) => {
-        try {
-          return await getPaymentsForProperty(propertyId, token);
-        } catch (error) {
-          console.warn(
-            `Failed to fetch payments for property ${propertyId}:`,
-            error,
-          );
-          return [] as RentPayment[];
-        }
-      }),
-    );
-    return allPayments.flat();
+    // Use server-side batch endpoint to fetch payments for multiple properties
+    try {
+      const sortedIds = [...propertyIds].sort();
+      const payload = {
+        propertyIds: sortedIds,
+        filters: { limitPerProperty: 100 },
+      };
+      const res = await apiRequest("POST", "/payments/batch", payload, token);
+      const data = await res.json();
+      const map = data?.data || {};
+      const all: any[] = Object.values(map).flat();
+      return all
+        .map((raw: any) => mapServerPaymentToClient(raw))
+        .filter((p): p is RentPayment => p !== null);
+    } catch (error) {
+      console.warn(
+        "Failed to fetch batch payments for properties, falling back to per-property calls:",
+        error,
+      );
+      const allPayments = await Promise.all(
+        propertyIds.map(async (propertyId) => {
+          try {
+            return await getPaymentsForProperty(propertyId, token);
+          } catch (error) {
+            console.warn(
+              `Failed to fetch payments for property ${propertyId}:`,
+              error,
+            );
+            return [] as RentPayment[];
+          }
+        }),
+      );
+      return allPayments.flat();
+    }
   }
 
   const propertyId = propertyIds[0];
@@ -420,10 +553,16 @@ export async function getPaymentsForProperty(
   }
 
   try {
+    const params = buildQueryParams({
+      fields: typeof options === "object" ? options?.fields : undefined,
+      page: typeof options === "object" ? options?.page : undefined,
+      limit: typeof options === "object" ? options?.limit : undefined,
+      sort: typeof options === "object" ? options?.sort : undefined,
+    });
     const res = await apiRequest(
       "GET",
       `/payments/property/${encodeURIComponent(propertyId)}/all`,
-      undefined,
+      params,
       token,
     );
     const data = await res.json();
@@ -531,7 +670,7 @@ function mapServerPaymentToClient(p: any): any {
     status,
     receiptUrl: p.receiptUrl || p.receiptURL || p.receipt || null,
     reference: p.reference || null,
-    notes: p.notes || p.reference || null,
+    notes: p.notes || p.note || p.reference || null,
     recordedBy: p.recordedBy || p.recorded_by || null,
     leaseType: p.leaseType || p.lease_type || null,
     createdAt: p.createdAt,
@@ -557,13 +696,14 @@ export interface PaymentRecord {
   unit?: string;
   amount: number;
   price_per_unit?: number;
+  monthlyRent?: number;
   currency?: string;
   date: string;
   paidOn?: string;
   paidBy?: string;
   paymentMethod?: string;
   method?: string;
-  reasonForPayment?: "securityDeposit" | "rentPayment";
+  reasonForPayment?: "securityDeposit" | "rentPayment" | "balancePayment";
   paymentType?:
     | "rent"
     | "commercial"
@@ -577,6 +717,8 @@ export interface PaymentRecord {
   description?: string;
   balance?: number;
   note?: string;
+  reference?: string;
+  raw?: any;
   total?: number;
   value?: number;
   paymentAmount?: number;
@@ -640,7 +782,9 @@ export function deletePayment(id: string): boolean {
   return removeFromCollection("payments", id);
 }
 
-export function createPayment(payload: Partial<PaymentRecord>): PaymentRecord {
+export function createPayment(
+  payload: Partial<PaymentRecord> & { monthlyRent?: number },
+): PaymentRecord {
   const now = new Date().toISOString();
   const rec: PaymentRecord = {
     id: generateId("pay"),
@@ -666,6 +810,8 @@ export function createPayment(payload: Partial<PaymentRecord>): PaymentRecord {
           : undefined),
     status: payload.status ?? "complete",
     note: payload.note,
+    reference: payload.reference,
+    raw: payload.raw,
     lease_start: payload.lease_start,
     lease_type: payload.lease_type ?? payload.leaseType,
     balance: payload.balance ?? 0,

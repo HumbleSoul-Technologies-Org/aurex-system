@@ -12,6 +12,7 @@ import {
   PropertyRecord,
 } from "@/lib/services/properties";
 import { apiRequest, queryClient } from "@/lib/query-client";
+import { buildQueryParams, QueryOptions } from "@/lib/api-utils";
 import { notifyNewTenant } from "@/lib/services/notifications";
 import { useAuth } from "../auth-context";
 import { getStoredUser } from "@/lib/token-manager";
@@ -116,6 +117,61 @@ export function normalizeTenantRecord(tenant: any): TenantRecord {
     ...tenant,
     id: tenant.id || tenant._id || "",
   } as TenantRecord;
+}
+
+export interface ListTenantsOptions extends QueryOptions {
+  token?: string;
+}
+
+export const TENANT_LIST_FIELDS = [
+  "id",
+  "_id",
+  "name",
+  "email",
+  "phone",
+  "tenantType",
+  "unitNumber",
+  "propertyId",
+  "rentAmount",
+  "leaseType",
+  "leaseStartDate",
+  "leaseRenewDate",
+  "leaseEndDate",
+  "status",
+  "currentBalance",
+];
+
+export async function listTenantsApi(
+  options?: ListTenantsOptions,
+): Promise<TenantRecord[]> {
+  const endpoint = "/tenants/all";
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+  });
+
+  try {
+    const res = await apiRequest("GET", endpoint, params, options?.token);
+    const data = await res.json();
+
+    const rawTenants = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.tenants)
+          ? data.tenants
+          : [];
+
+    return rawTenants.map(normalizeTenantRecord);
+  } catch (err) {
+    console.warn(
+      "Failed to fetch tenants from API, falling back to local store:",
+      err,
+    );
+    return listTenants();
+  }
 }
 
 export function listTenants(): TenantRecord[] {

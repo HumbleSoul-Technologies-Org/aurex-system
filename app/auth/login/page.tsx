@@ -9,12 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const { login, user } = useAuth();
   const router = useRouter();
@@ -103,7 +104,7 @@ export default function LoginPage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     type="text"
-                    placeholder="you@example.com, John Doe, or (555) 123-4567"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
@@ -119,13 +120,24 @@ export default function LoginPage() {
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    type="password"
-                    placeholder="••••••••"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="*********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     className="pl-10"
                   />
+                  {showPassword ? (
+                    <EyeOff
+                      className="absolute cursor-pointer right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+                      onClick={() => setShowPassword(false)}
+                    />
+                  ) : (
+                    <Eye
+                      className="absolute cursor-pointer right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+                      onClick={() => setShowPassword(true)}
+                    />
+                  )}
                 </div>
               </div>
 

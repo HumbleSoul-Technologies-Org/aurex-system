@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PropertyFormDialog from "@/components/forms/property-form-dialog";
-import { createProperty, PropertyRecord } from "@/lib/services/properties";
+import {
+  createProperty,
+  listPropertiesApi,
+  PROPERTY_LIST_FIELDS,
+  PropertyRecord,
+} from "@/lib/services/properties";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { getSpecificationsForType } from "@/lib/constants/property-types";
 import { useAppData } from "@/lib/data-context";
@@ -40,7 +46,39 @@ export default function PropertiesPage() {
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
   const { properties, isInitialDataLoading } = useAppData();
-  const isPageLoading = isInitialDataLoading;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
+  const propertiesQuery = useQuery({
+    queryKey: [
+      "propertiesList",
+      user?.id || "guest",
+      token || "",
+      searchQuery,
+      currentPage,
+      pageSize,
+    ],
+    queryFn: async () =>
+      listPropertiesApi(user?.id ?? "", {
+        token,
+        fields: PROPERTY_LIST_FIELDS,
+        page: currentPage,
+        limit: pageSize,
+        search: searchQuery || undefined,
+      }),
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const propertiesData = propertiesQuery.data ?? properties;
+  const isServerPropertyPagination = propertiesQuery.data !== undefined;
+  const isPageLoading = isInitialDataLoading || propertiesQuery.isLoading;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, pageSize]);
 
   if (!mounted || isPageLoading) {
     return (
@@ -71,13 +109,34 @@ export default function PropertiesPage() {
     );
   }
 
-  const filteredProperties = properties.filter((prop) => {
-    const matchesSearch =
-      prop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prop.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prop.city.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredProperties = isServerPropertyPagination
+    ? propertiesData
+    : propertiesData.filter((prop) => {
+        const matchesSearch =
+          prop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          prop.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          prop.city.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchesSearch;
+      });
+
+  const totalPages = isServerPropertyPagination
+    ? currentPage + 1
+    : Math.max(1, Math.ceil(filteredProperties.length / pageSize));
+  const paginatedProperties = filteredProperties.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  const propertyDisplay = isServerPropertyPagination
+    ? propertiesData
+    : paginatedProperties;
+  const propertyPageStart = (currentPage - 1) * pageSize + 1;
+  const propertyPageEnd = isServerPropertyPagination
+    ? propertyPageStart + propertyDisplay.length - 1
+    : Math.min(currentPage * pageSize, filteredProperties.length);
+  const hasNextPropertyPage = isServerPropertyPagination
+    ? propertyDisplay.length === pageSize
+    : currentPage < totalPages;
 
   const propertyCsvColumns: CsvColumn<PropertyRecord>[] = [
     { label: "ID", value: (item) => item.id },
@@ -302,7 +361,7 @@ export default function PropertiesPage() {
       {/* Grid View */}
       {viewMode === "grid" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProperties.map((property, index) => {
+          {propertyDisplay.map((property, index) => {
             const imageUrl =
               typeof property.images?.[0] === "string"
                 ? property.images[0]
@@ -443,7 +502,7 @@ export default function PropertiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredProperties.map((property) => (
+                {propertyDisplay.map((property) => (
                   <tr
                     key={property.id}
                     className="border-b border-border hover:bg-secondary transition-colors"
@@ -494,6 +553,51 @@ export default function PropertiesPage() {
             </table>
           </div>
         </Card>
+      )}
+
+      {propertyDisplay.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row items-center justify-between mt-6">
+          <p className="text-sm text-muted-foreground">
+            Showing {propertyPageStart}-{propertyPageEnd}{" "}
+            {isServerPropertyPagination
+              ? "properties"
+              : `of ${filteredProperties.length} properties`}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-foreground">
+              Page {currentPage}
+              {!isServerPropertyPagination && ` of ${totalPages}`}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!hasNextPropertyPage}
+              onClick={() => setCurrentPage((page) => page + 1)}
+            >
+              Next
+            </Button>
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+              className="rounded border border-border bg-background px-3 py-2 text-sm"
+            >
+              {[6, 12, 24, 48].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       )}
 
       {/* Empty State */}

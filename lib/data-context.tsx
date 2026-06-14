@@ -7,7 +7,9 @@ import { useAuth } from "./auth-context";
 import {
   getPropertyById,
   listProperties,
+  listPropertiesApi,
   PropertyRecord,
+  PROPERTY_LIST_FIELDS,
 } from "./services/properties";
 import { listTenants, TenantRecord } from "./services/tenants";
 import {
@@ -86,6 +88,7 @@ function normalizePropertyRecord(property: any): PropertyRecord {
 async function fetchProperties(
   adminId: string | null,
   userRole: string | null,
+  token?: string,
 ): Promise<PropertyRecord[]> {
   const normalizedRole = userRole?.toLowerCase() || "";
   if (
@@ -95,24 +98,11 @@ async function fetchProperties(
     return listProperties();
   }
 
-  const endpoint = `/property/${adminId}/all`;
   try {
-    const res = await apiRequest("GET", endpoint);
-    const data = await res.json();
-
-    const rawProperties = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.data)
-        ? data.data
-        : Array.isArray(data?.properties)
-          ? data.properties
-          : Array.isArray(data?.data?.properties)
-            ? data.data.properties
-            : Array.isArray(data?.property)
-              ? data.property
-              : [];
-
-    return rawProperties.map(normalizePropertyRecord);
+    return await listPropertiesApi(adminId, {
+      token,
+      fields: PROPERTY_LIST_FIELDS,
+    });
   } catch (err) {
     console.warn(
       "Failed to fetch properties from API, falling back to local store:",
@@ -188,7 +178,7 @@ async function fetchMaintenanceRequests(): Promise<MaintenanceRequest[]> {
 // If you still need a standalone tenant endpoint later, re-introduce a fetch function.
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user, token } = useAuth();
+  const { user, token, isLoading: authLoading } = useAuth();
   const adminId = user?.id || null;
   const [paymentsError, setPaymentsError] = React.useState<string | null>(null);
   const [expensesError, setExpensesError] = React.useState<string | null>(null);
@@ -199,10 +189,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
   ): Promise<PaymentRecord[]> {
     try {
       setPaymentsError(null);
-      return await fetchPayments(propertyIds, token);
+      console.log(
+        "[DataProvider] fetchPaymentsWithErrorHandling - propertyIds:",
+        propertyIds,
+        "has token:",
+        !!token,
+      );
+      const result = await fetchPayments(propertyIds, token);
+      console.log(
+        "[DataProvider] Payment fetch succeeded, returned:",
+        result.length,
+        "payments",
+      );
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error("Payment fetch error:", message);
+      console.error("[DataProvider] Payment fetch error:", message);
       setPaymentsError(message);
       return [];
     }
@@ -224,18 +226,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }
 
   const propertiesQuery = useQuery({
-    queryKey: ["properties", adminId, user?.role] as const,
-    queryFn: () => fetchProperties(adminId, user?.role ?? null),
-    initialData: () => listProperties(),
-    staleTime: 1000 * 60 * 2,
+    queryKey: ["properties", adminId, user?.role, token || ""] as const,
+    queryFn: () => {
+      console.log(
+        "[DataProvider] propertiesQuery queryFn triggered - adminId:",
+        adminId,
+        "role:",
+        user?.role,
+        "token exists:",
+        !!token,
+      );
+      return fetchProperties(adminId, user?.role ?? null, token ?? undefined);
+    },
+    initialData: authLoading ? undefined : () => listProperties(),
+    staleTime: 1000 * 60 * 5,
     refetchOnMount: true,
+    enabled: !authLoading,
   });
 
   const assignedPropertyQuery = useQuery({
     queryKey: ["property", user?.propertyId || ""],
     queryFn: async () =>
       getPropertyById(user?.propertyId ?? "", token ?? undefined),
-    enabled: Boolean(user?.role === "security_guard" && user?.propertyId),
+    enabled:
+      !authLoading &&
+      Boolean(
+        (user?.role === "security_guard" || user?.role === "tenant") &&
+        user?.propertyId,
+      ),
     staleTime: 1000 * 60 * 5,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
@@ -245,7 +263,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryKey: ["maintenanceRequests"],
     queryFn: fetchMaintenanceRequests,
     initialData: () => [] as MaintenanceRequest[],
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 5000,
     refetchOnMount: true,
   });
 
@@ -285,9 +304,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     queryKey: ["expenses", expensePropertyIds, token || ""],
     queryFn: () =>
       fetchExpensesWithErrorHandling(expensePropertyIds, token ?? null),
-    enabled: expensePropertyIds.length > 0,
-    initialData: () => [] as ExpenseRecord[],
-    staleTime: 1000 * 60 * 2,
+    enabled: !authLoading && expensePropertyIds.length > 0,
+    initialData: authLoading ? undefined : () => [] as ExpenseRecord[],
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 5000,
     refetchOnMount: true,
   });
 
@@ -334,29 +354,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [currentTenant, propertiesData]);
 
   const paymentPropertyIds = React.useMemo(() => {
+    console.log(
+      "[DataProvider] paymentPropertyIds computed - currentTenant:",
+      currentTenant?.id,
+      "currentProperty:",
+      currentProperty?.id,
+      "propertiesData count:",
+      propertiesData.length,
+    );
     if (currentProperty?.id) {
+      console.log(
+        "[DataProvider] Using currentProperty ID:",
+        currentProperty.id,
+      );
       return [currentProperty.id];
     }
 
-    return propertiesData
+    const ids = propertiesData
       .map((property) => property.id || property._id || "")
       .filter(Boolean);
+    console.log("[DataProvider] Using all property IDs:", ids);
+    return ids;
   }, [currentProperty, propertiesData]);
 
   const paymentsQuery = useQuery({
     queryKey: ["payments", paymentPropertyIds.join(","), token || ""] as const,
-    queryFn: () =>
-      fetchPaymentsWithErrorHandling(paymentPropertyIds, token ?? null),
-    enabled: paymentPropertyIds.length > 0,
-    initialData: () =>
-      listPayments().filter((payment) =>
-        paymentPropertyIds.includes(payment.propertyId || ""),
-      ),
+    queryFn: () => {
+      console.log(
+        "[DataProvider] paymentsQuery queryFn triggered - paymentPropertyIds:",
+        paymentPropertyIds,
+        "token exists:",
+        !!token,
+      );
+      return fetchPaymentsWithErrorHandling(paymentPropertyIds, token ?? null);
+    },
+    enabled: !authLoading && paymentPropertyIds.length > 0,
+    initialData: authLoading
+      ? undefined
+      : () =>
+          listPayments().filter((payment) =>
+            paymentPropertyIds.includes(payment.propertyId || ""),
+          ),
     staleTime: 1000 * 60 * 2,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    refetchInterval: 30_000,
-    refetchIntervalInBackground: true,
   });
 
   const tenantPayments = React.useMemo(() => {
@@ -383,6 +424,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (expensesQuery.isFetching && !expensesQuery.isFetchedAfterMount);
 
   const isInitialDataLoading =
+    authLoading ||
     propertiesQuery.isLoading ||
     assignedPropertyQuery.isLoading ||
     paymentsQuery.isLoading ||
@@ -455,6 +497,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       writeCollection("tenants", tenantsDerived as any[]);
     }
   }, [JSON.stringify(tenantsDerived)]);
+
+  React.useEffect(() => {
+    if (paymentsQuery.isSuccess && Array.isArray(paymentsQuery.data)) {
+      writeCollection("payments", paymentsQuery.data);
+    }
+  }, [paymentsQuery.data, paymentsQuery.isSuccess]);
+
+  React.useEffect(() => {
+    if (expensesQuery.isSuccess && Array.isArray(expensesQuery.data)) {
+      writeCollection("expenses", expensesQuery.data);
+    }
+  }, [expensesQuery.data, expensesQuery.isSuccess]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;

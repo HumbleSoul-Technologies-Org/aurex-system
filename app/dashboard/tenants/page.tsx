@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AddTenantForm from "@/components/forms/add-tenant-form";
-import { createTenantApi, TenantRecord } from "@/lib/services/tenants";
+import {
+  createTenantApi,
+  listTenantsApi,
+  TENANT_LIST_FIELDS,
+  TenantRecord,
+} from "@/lib/services/tenants";
 import { useAppData } from "@/lib/data-context";
 import { queryClient } from "@/lib/query-client";
 import {
@@ -48,6 +54,8 @@ export default function TenantsPage() {
   >("all");
 
   const activeCurrency = useActiveCurrency();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
@@ -57,27 +65,40 @@ export default function TenantsPage() {
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
 
-  if (isPageLoading) {
-    return (
-      <div className="space-y-6">
-        <AdminSkeletonHeader />
-
-        <Card className="border border-border p-4">
-          <Skeleton className="h-12 rounded-full w-full" />
-        </Card>
-
-        <Card className="border border-border overflow-hidden">
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-10 w-1/4 rounded-xl" />
-            <AdminTableSkeleton rowCount={5} />
-          </div>
-        </Card>
-      </div>
-    );
-  }
   const { token } = useAuth();
+  const apiStatus = filterStatus === "moving-out" ? "moving out" : filterStatus;
 
-  const enrichedTenants = tenants.map((tenant) => {
+  const tenantsQuery = useQuery({
+    queryKey: [
+      "tenantsList",
+      token || "",
+      searchQuery,
+      apiStatus,
+      currentPage,
+      pageSize,
+    ],
+    queryFn: async () =>
+      listTenantsApi({
+        token: token ?? undefined,
+        fields: TENANT_LIST_FIELDS,
+        page: currentPage,
+        limit: pageSize,
+        search: searchQuery || undefined,
+        status: apiStatus === "all" ? undefined : apiStatus,
+      }),
+    enabled: Boolean(token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const tenantsData = tenantsQuery.data ?? tenants;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, pageSize]);
+
+  const enrichedTenants = tenantsData.map((tenant) => {
     const property =
       properties.find(
         (p) => p.id === tenant.propertyId || p._id === tenant.propertyId,
@@ -88,22 +109,48 @@ export default function TenantsPage() {
     };
   });
 
-  const filteredTenants = enrichedTenants.filter((tenant) => {
-    const matchesSearch =
-      tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tenant.email.toLowerCase().includes(searchQuery.toLowerCase());
+  const isServerTenantPagination = tenantsQuery.data !== undefined;
 
-    let matchesStatus = true;
-    if (filterStatus === "paid") {
-      matchesStatus = tenant.status === "paid";
-    } else if (filterStatus === "due") {
-      matchesStatus = tenant.status === "due";
-    } else if (filterStatus === "moving-out") {
-      matchesStatus = tenant.status === "moving out";
-    }
+  const filteredTenants = isServerTenantPagination
+    ? enrichedTenants
+    : enrichedTenants.filter((tenant) => {
+        const matchesSearch =
+          tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          tenant.email.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch && matchesStatus;
-  });
+        let matchesStatus = true;
+        if (filterStatus === "paid") {
+          matchesStatus = tenant.status === "paid";
+        } else if (filterStatus === "due") {
+          matchesStatus = tenant.status === "due";
+        } else if (filterStatus === "moving-out") {
+          matchesStatus = tenant.status === "moving out";
+        }
+
+        return matchesSearch && matchesStatus;
+      });
+
+  const totalTenantPages = isServerTenantPagination
+    ? currentPage + 1
+    : Math.max(1, Math.ceil(filteredTenants.length / pageSize));
+
+  const paginatedTenants = filteredTenants.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  const tenantDisplay = isServerTenantPagination
+    ? enrichedTenants
+    : paginatedTenants;
+
+  const tenantPageStart = (currentPage - 1) * pageSize + 1;
+  const tenantPageEnd = isServerTenantPagination
+    ? tenantPageStart + tenantDisplay.length - 1
+    : Math.min(currentPage * pageSize, filteredTenants.length);
+
+  const hasNextTenantPage = isServerTenantPagination
+    ? tenantDisplay.length === pageSize
+    : currentPage < totalTenantPages;
 
   const tenantCsvColumns: CsvColumn<(typeof enrichedTenants)[number]>[] = [
     { label: "ID", value: (item) => item.id },
@@ -116,7 +163,7 @@ export default function TenantsPage() {
     { label: "Property ID", value: (item) => item.propertyId },
     {
       label: "Property Name",
-      value: (item) => item.property?.name || item.propertyName || "",
+      value: (item) => item.property?.name || "",
     },
     { label: "Rent Amount", value: (item) => item.rentAmount },
     { label: "Lease Type", value: (item) => item.leaseType },
@@ -359,7 +406,7 @@ export default function TenantsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredTenants.map((tenant, index) => (
+              {tenantDisplay.map((tenant, index) => (
                 <tr
                   key={tenant.id || index}
                   className="border-b border-border hover:bg-secondary transition-colors"
@@ -465,6 +512,51 @@ export default function TenantsPage() {
           </table>
         </div>
       </Card>
+
+      {tenantDisplay.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row items-center justify-between mt-6">
+          <p className="text-sm text-muted-foreground">
+            Showing {tenantPageStart}-{tenantPageEnd}{" "}
+            {isServerTenantPagination
+              ? `tenants`
+              : `of ${filteredTenants.length} tenants`}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-foreground">
+              Page {currentPage}
+              {!isServerTenantPagination && ` of ${totalTenantPages}`}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!hasNextTenantPage}
+              onClick={() => setCurrentPage((page) => page + 1)}
+            >
+              Next
+            </Button>
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+              className="rounded border border-border bg-background px-3 py-2 text-sm"
+            >
+              {[10, 20, 40].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
 
       <RecordPaymentModal
         open={showRecordPayment}

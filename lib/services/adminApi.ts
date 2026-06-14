@@ -11,6 +11,13 @@ function getServerErrorMessage(errorData: any, defaultMessage: string) {
   );
 }
 
+const SERVER_ROOT = API_URL?.replace(/\/$/, "") || "http://localhost:5454";
+const ADMIN_API_BASE = `${SERVER_ROOT}/api/admin`;
+
+function adminFetch(path: string, options: RequestInit = {}) {
+  return fetch(`${ADMIN_API_BASE}${path}`, options);
+}
+
 export interface AdminUser {
   id: string;
   firstName: string;
@@ -91,10 +98,10 @@ export async function listAdminUsers(
     if (options?.limit) params.append("limit", options.limit.toString());
 
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/auth/admin/users?${params}`, {
+    const response = await adminFetch(`/invites?${params}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
     });
@@ -191,10 +198,10 @@ export async function updateAdminUser(
 ): Promise<AdminApiResponse<AdminUser>> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/auth/admin/users/${userId}`, {
-      method: "PUT",
+    const response = await adminFetch("/invites", {
+      method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
@@ -305,10 +312,10 @@ export async function createInvite(data: {
 }): Promise<AdminApiResponse<any>> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/auth/admin/invites`, {
+    const response = await adminFetch("/invites", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
@@ -338,10 +345,10 @@ export async function listInvites(options?: {
     if (options?.limit) params.append("limit", options.limit.toString());
 
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/auth/admin/invites?${params}`, {
+    const response = await adminFetch(`/invites?${params}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
     });
@@ -363,16 +370,13 @@ export async function resendInvite(
 ): Promise<AdminApiResponse<any>> {
   try {
     const token = getAuthToken();
-    const response = await fetch(
-      `${API_URL}/auth/admin/invites/${inviteId}/resend`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+    const response = await adminFetch(`/invites/${inviteId}/resend`, {
+      method: "POST",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json",
       },
-    );
+    });
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -391,10 +395,10 @@ export async function deleteInvite(
 ): Promise<AdminApiResponse<{ message: string }>> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_URL}/auth/admin/invites/${inviteId}`, {
+    const response = await adminFetch(`/invites/${inviteId}`, {
       method: "DELETE",
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         "Content-Type": "application/json",
       },
     });

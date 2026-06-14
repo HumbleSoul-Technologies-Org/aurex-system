@@ -121,12 +121,23 @@ export interface BankDetails {
   routingNumber?: string;
 }
 
+export interface MpesaDetails {
+  shortcode?: string;
+  consumerKey?: string;
+  // secrets are stored encrypted on the server; UI will treat these as masked values
+  consumerSecret?: string;
+  passkey?: string;
+  environment?: "sandbox" | "production";
+  is_active?: boolean;
+}
+
 export interface AdminPaymentMethod {
   _id?: string;
   type: PaymentMethodType;
   enabled: boolean;
   transactionNumber?: string;
   bankDetails?: BankDetails;
+  mpesa?: MpesaDetails;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -641,6 +652,17 @@ export function createDefaultSystemSettings(): SystemSettings {
           conditions: ["payment_history"],
         },
       },
+    },
+    emailSettings: {
+      provider: "smtp",
+      host: "smtp.gmail.com",
+      port: 587,
+      user: "",
+      password: "",
+      enableEmailNotifications: true,
+      enableInviteEmails: true,
+      enableWelcomeEmails: true,
+      enablePasswordResetEmails: true,
     },
     tenantPortalSettings: {
       notificationPreferences: {
@@ -1272,6 +1294,12 @@ export async function fetchSettingsFromApi(
 ): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest("GET", "/settings", undefined, token);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(
+        `Failed to fetch settings from API: ${res.status} ${res.statusText} - ${errorText}`,
+      );
+    }
     const data = await res.json();
     return data || null;
   } catch (error) {
@@ -1333,6 +1361,12 @@ export async function fetchSettingsByIdFromApi(
 ): Promise<SettingsPayload | null> {
   try {
     const res = await apiRequest("GET", `/settings/${id}`, undefined, token);
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(
+        `Failed to fetch settings by ID from API: ${res.status} ${res.statusText} - ${errorText}`,
+      );
+    }
     const data = await res.json();
     return data || null;
   } catch (error) {
@@ -1393,6 +1427,12 @@ export async function fetchSettingsByTenantId(
       undefined,
       token,
     );
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(
+        `Failed to fetch settings by tenant ID from API: ${res.status} ${res.statusText} - ${errorText}`,
+      );
+    }
     const data = normalizeSettingsResponse<SettingsPayload>(await res.json());
     return data || null;
   } catch (error) {

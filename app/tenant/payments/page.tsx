@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,17 +28,24 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
-import { createManualPayment, RentPayment } from "@/lib/services/payments";
+import {
+  createManualPayment,
+  PAYMENT_LIST_FIELDS,
+  RentPayment,
+  getPaymentsForTenant,
+} from "@/lib/services/payments";
 import { useTenantContext } from "@/lib/tenant-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 
 export default function PaymentsPage() {
   const router = useRouter();
   const activeCurrency = useActiveCurrency();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { payments, currentTenant, currentProperty } = useTenantContext();
   const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("paymentPortal");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   // Make Payment state
   const [step, setStep] = useState<
@@ -69,6 +77,33 @@ export default function PaymentsPage() {
   const tenantPayments = tenant
     ? payments.filter((p) => p.tenantId === tenant.id)
     : [];
+  const tenantPaymentsQuery = useQuery({
+    queryKey: [
+      "tenantPayments",
+      tenant?.id,
+      currentPage,
+      pageSize,
+      token || "",
+    ],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
+      return await getPaymentsForTenant(tenant.id, {
+        token: token ?? undefined,
+        fields: PAYMENT_LIST_FIELDS,
+        page: currentPage,
+        limit: pageSize,
+        sort: "-paidOn",
+      });
+    },
+    enabled: Boolean(tenant?.id && token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+  });
+
+  const tenantPaymentsData = tenantPaymentsQuery.data ?? tenantPayments;
+  const isTenantPaymentsLoading =
+    tenantPaymentsQuery.isLoading || tenantPaymentsQuery.isFetching;
+
   const totalPaid = tenantPayments
     .filter((p) => p.status === "complete")
     .reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -109,6 +144,10 @@ export default function PaymentsPage() {
     setAmount(defaultRent);
     setMethod("bank_transfer");
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tenant?.id, pageSize]);
 
   const getPaymentGroup = (payment: RentPayment) => {
     const groupKey =
@@ -452,7 +491,7 @@ export default function PaymentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {tenantPayments.map((payment) => (
+                  {tenantPaymentsData.map((payment) => (
                     <tr
                       key={payment.id}
                       className="hover:bg-secondary transition-colors"
@@ -558,6 +597,51 @@ export default function PaymentsPage() {
               </table>
             </div>
           </Card>
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-sm text-muted-foreground">
+            <p>
+              Showing{" "}
+              {Math.min(
+                (currentPage - 1) * pageSize + 1,
+                tenantPaymentsData.length,
+              )}
+              -{Math.min(currentPage * pageSize, tenantPaymentsData.length)}{" "}
+              payments on this page
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={currentPage <= 1 || isTenantPaymentsLoading}
+                onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+              >
+                Previous
+              </Button>
+              <span className="text-sm">Page {currentPage}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  isTenantPaymentsLoading ||
+                  tenantPaymentsData.length < pageSize
+                }
+                onClick={() => setCurrentPage((page) => page + 1)}
+              >
+                Next
+              </Button>
+              <select
+                className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+              >
+                {[6, 12, 24, 48].map((size) => (
+                  <option key={size} value={size}>
+                    {size} per page
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </TabsContent>
 
         {/* Make Payment Tab */}

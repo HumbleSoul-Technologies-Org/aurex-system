@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
 import {
   ResponsiveContainer,
   LineChart,
@@ -19,6 +21,8 @@ import {
   Cell,
 } from "recharts";
 import { useAppData } from "@/lib/data-context";
+import { getAllExpenses } from "@/lib/services/expenses";
+import { listPaymentsApi } from "@/lib/services/payments";
 import {
   AdminSkeletonHeader,
   AdminTableSkeleton,
@@ -72,6 +76,38 @@ export default function DashboardPage() {
     paymentsError,
     expensesError,
   } = useAppData();
+  const { token } = useAuth();
+
+  const dashboardPaymentsQuery = useQuery({
+    queryKey: ["dashboardPayments", token || ""],
+    queryFn: async () =>
+      listPaymentsApi({
+        token: token ?? undefined,
+        limit: 1000,
+        sort: "-paidOn",
+      }),
+    enabled: Boolean(token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const dashboardExpensesQuery = useQuery({
+    queryKey: ["dashboardExpenses", token || ""],
+    queryFn: async () =>
+      getAllExpenses({
+        token: token ?? undefined,
+        limit: 1000,
+        sort: "-date",
+      }),
+    enabled: Boolean(token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const paymentsData = dashboardPaymentsQuery.data ?? payments;
+  const expensesData = dashboardExpensesQuery.data ?? expenses;
   const [isHydrated, setIsHydrated] = useState(false);
   const activeCurrency = useActiveCurrency();
 
@@ -95,9 +131,10 @@ export default function DashboardPage() {
   );
   const [showMovingAverage, setShowMovingAverage] = useState<boolean>(true);
   const isPageLoading = !isHydrated || isInitialDataLoading;
-  const showPaymentCardSkeleton = isPaymentsInitialLoading && !isPageLoading;
+  // Show skeletons for finance cards while auth/initial queries are resolving
+  const showPaymentCardSkeleton = isPageLoading || isPaymentsInitialLoading;
   const showFinancialCardSkeleton =
-    (isPaymentsInitialLoading || isExpensesInitialLoading) && !isPageLoading;
+    isPageLoading || isPaymentsInitialLoading || isExpensesInitialLoading;
 
   // Load real data on mount
   useEffect(() => {
@@ -191,7 +228,7 @@ export default function DashboardPage() {
       );
     };
 
-    const totalMonthlyRevenue = payments.reduce((sum, payment) => {
+    const totalMonthlyRevenue = paymentsData.reduce((sum, payment) => {
       const status = String(payment.status || "").toLowerCase();
       if (!revenueStatuses.has(status)) return sum;
       const paymentDate =
@@ -229,7 +266,7 @@ export default function DashboardPage() {
       return sum + unitRent * unitCount;
     }, 0);
 
-    const totalYtdRevenue = payments.reduce((sum, payment) => {
+    const totalYtdRevenue = paymentsData.reduce((sum, payment) => {
       const status = String(payment.status || "").toLowerCase();
       if (!revenueStatuses.has(status)) return sum;
       const paymentDate =
@@ -245,7 +282,7 @@ export default function DashboardPage() {
       );
     }, 0);
 
-    const totalCollectedRent = payments.reduce((sum, payment) => {
+    const totalCollectedRent = paymentsData.reduce((sum, payment) => {
       const status = String(payment.status || "").toLowerCase();
       if (!revenueStatuses.has(status)) return sum;
       const reason = normalizePaymentKey(payment.reasonForPayment);
@@ -261,7 +298,7 @@ export default function DashboardPage() {
       );
     }, 0);
 
-    const totalExpenses = expenses.reduce(
+    const totalExpenses = expensesData.reduce(
       (sum, expense) => sum + Number(expense.amount || 0),
       0,
     );
@@ -299,7 +336,7 @@ export default function DashboardPage() {
       expectedRent: totalExpectedRent,
       collectedRent: totalCollectedRent,
     };
-  }, [properties, tenants, payments, maintenanceRequests, expenses]);
+  }, [properties, tenants, paymentsData, maintenanceRequests, expensesData]);
 
   // Prepare chart data from real data: monthly revenue/expenses, fill missing months
   const chartData = useMemo(() => {
@@ -321,7 +358,7 @@ export default function DashboardPage() {
 
     const map: Record<string, { revenue: number; expenses: number }> = {};
 
-    payments.forEach((payment) => {
+    paymentsData.forEach((payment) => {
       if (!payment) return;
       const paymentDate =
         payment.date ||
@@ -359,7 +396,7 @@ export default function DashboardPage() {
       }
     });
 
-    expenses.forEach((expense) => {
+    expensesData.forEach((expense) => {
       if (!expense) return;
       const expenseDate =
         expense.date ||

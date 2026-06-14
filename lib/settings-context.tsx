@@ -89,7 +89,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       setHasFetched(true);
     }
-  }, [user]);
+  }, [user, token]);
 
   // Trigger fetch on auth state change (login/restore/logout)
   useEffect(() => {
@@ -97,10 +97,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       return; // Wait for auth to finish loading
     }
 
-    if (user && !hasFetched) {
-      // User logged in and we haven't fetched yet
+    if (!hasFetched) {
       fetchSettings();
-    } else if (!user) {
+      return;
+    }
+
+    if (!user) {
       // User logged out
       setSettings(null);
       setSettingsId(null);

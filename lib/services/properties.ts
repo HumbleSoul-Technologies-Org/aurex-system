@@ -12,6 +12,7 @@ import {
 import { listTenants, TenantRecord } from "@/lib/services/tenants";
 import { getCategoryForType } from "@/lib/constants/property-types";
 import { apiRequest, queryClient } from "../query-client";
+import { buildQueryParams, QueryOptions } from "@/lib/api-utils";
 import { useAuth } from "../auth-context";
 import { use } from "react";
 
@@ -144,6 +145,67 @@ export function normalizePropertyRecord(property: any): PropertyRecord {
   }
 
   return normalized;
+}
+
+export interface ListPropertiesOptions extends QueryOptions {
+  token?: string;
+}
+
+export const PROPERTY_LIST_FIELDS = [
+  "id",
+  "_id",
+  "name",
+  "address",
+  "city",
+  "country",
+  "category",
+  "units_available",
+  "price_per_unit",
+  "propertyType",
+  "type",
+  "tenants",
+  "occupancy",
+  "monthlyRevenue",
+  "images",
+  "description",
+];
+
+export async function listPropertiesApi(
+  adminId: string,
+  options?: ListPropertiesOptions,
+): Promise<PropertyRecord[]> {
+  const endpoint = `/property/${adminId}/all`;
+  const params = buildQueryParams({
+    fields: options?.fields,
+    page: options?.page,
+    limit: options?.limit,
+    sort: options?.sort,
+  });
+
+  try {
+    const res = await apiRequest("GET", endpoint, params, options?.token);
+    const data = await res.json();
+
+    const rawProperties = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data?.properties)
+          ? data.properties
+          : Array.isArray(data?.data?.properties)
+            ? data.data.properties
+            : Array.isArray(data?.property)
+              ? data.property
+              : [];
+
+    return rawProperties.map(normalizePropertyRecord);
+  } catch (err) {
+    console.warn(
+      "Failed to fetch properties from API, falling back to local store:",
+      err,
+    );
+    return listProperties();
+  }
 }
 
 export function listProperties(): PropertyRecord[] {

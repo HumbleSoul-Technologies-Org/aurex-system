@@ -63,22 +63,22 @@ export default function MaintenanceTrendsLine({ maintenanceRequests }: Props) {
     return chartData;
   }, [maintenanceRequests]);
 
-  // Debug: log incoming requests and computed chart data
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line no-console
-    console.log(
-      "MaintenanceTrendsLine - maintenanceRequests",
-      maintenanceRequests,
-    );
-    // eslint-disable-next-line no-console
-    console.log("MaintenanceTrendsLine - data", data);
-    // expose for external debugging
-    try {
-      (window as any).__MAINT_TRENDS_DATA__ = data;
-    } catch (e) {
-      // ignore
-    }
-  }
+  // // Debug: log incoming requests and computed chart data
+  // if (typeof window !== "undefined") {
+  //   // eslint-disable-next-line no-console
+  //   console.log(
+  //     "MaintenanceTrendsLine - maintenanceRequests",
+  //     maintenanceRequests,
+  //   );
+  //   // eslint-disable-next-line no-console
+  //   console.log("MaintenanceTrendsLine - data", data);
+  //   // expose for external debugging
+  //   try {
+  //     (window as any).__MAINT_TRENDS_DATA__ = data;
+  //   } catch (e) {
+  //     // ignore
+  //   }
+  // }
 
   const averageRequests = useMemo(() => {
     if (data.length === 0) return 0;

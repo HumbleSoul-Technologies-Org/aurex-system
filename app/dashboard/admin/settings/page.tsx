@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,18 +18,32 @@ import {
   CheckCircle,
   Loader2,
 } from "lucide-react";
+import {
+  getSystemSettings,
+  initializeSystemSettings,
+  updateSystemSettings,
+} from "@/lib/services/settings";
+import {
+  addAuditLog,
+  AuditLogEntry,
+  listAuditLogs,
+} from "@/lib/services/audit";
 
 export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [testEmailStatus, setTestEmailStatus] = useState<string>("");
 
   // General Settings
   const [organizationName, setOrganizationName] = useState("My Organization");
   const [adminEmail, setAdminEmail] = useState("admin@example.com");
 
   // Email Settings
-  const [emailProvider, setEmailProvider] = useState("smtp");
+  const [emailProvider, setEmailProvider] = useState<
+    "smtp" | "sendgrid" | "mailgun"
+  >("smtp");
   const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
@@ -43,21 +57,123 @@ export default function AdminSettingsPage() {
   const [enablePasswordResetEmails, setEnablePasswordResetEmails] =
     useState(true);
 
+  useEffect(() => {
+    async function loadSettingsAndAudit() {
+      const settings = getSystemSettings() || initializeSystemSettings();
+      setOrganizationName(settings.companyInfo?.name || "My Organization");
+      setAdminEmail(settings.companyInfo?.email || "admin@example.com");
+
+      const emailCfg = settings.emailSettings || {};
+      setEmailProvider(emailCfg.provider || "smtp");
+      setSmtpHost(emailCfg.host || "smtp.gmail.com");
+      setSmtpPort(String(emailCfg.port || 587));
+      setSmtpUser(emailCfg.user || "");
+      setSmtpPassword(emailCfg.password || "");
+      setEnableEmailNotifications(emailCfg.enableEmailNotifications ?? true);
+      setEnableInviteEmails(emailCfg.enableInviteEmails ?? true);
+      setEnableWelcomeEmails(emailCfg.enableWelcomeEmails ?? true);
+      setEnablePasswordResetEmails(emailCfg.enablePasswordResetEmails ?? true);
+
+      const auditEntries = await listAuditLogs();
+      setAuditLogs(auditEntries || []);
+    }
+
+    loadSettingsAndAudit();
+  }, []);
+
   const handleSave = async () => {
     setSaving(true);
     setSaveSuccess(false);
 
     try {
-      // Simulate saving
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const currentSettings = getSystemSettings() || initializeSystemSettings();
+      const updated = updateSystemSettings({
+        companyInfo: {
+          name: organizationName,
+          email: adminEmail,
+        },
+        emailSettings: {
+          provider: emailProvider,
+          host: smtpHost,
+          port: Number(smtpPort) || 587,
+          user: smtpUser,
+          password: smtpPassword,
+          enableEmailNotifications,
+          enableInviteEmails,
+          enableWelcomeEmails,
+          enablePasswordResetEmails,
+        },
+        systemFeatures: {
+          ...currentSettings.systemFeatures,
+          auditing: true,
+        },
+      });
+
+      if (!updated) {
+        throw new Error("Unable to persist settings.");
+      }
+
+      await addAuditLog({
+        action: "Admin settings updated",
+        actor: "admin",
+        details: `Saved settings for ${organizationName}`,
+      });
+      const refreshedLogs = await listAuditLogs();
+      setAuditLogs(refreshedLogs || []);
       setSaveSuccess(true);
 
-      // Clear success message after 3 seconds
       setTimeout(() => {
         setSaveSuccess(false);
       }, 3000);
     } catch (error) {
       console.error("Error saving settings:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setSaving(true);
+    setTestEmailStatus("");
+    try {
+      const response = await fetch("/api/notifications/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "paymentReminder",
+          tenant: {
+            name: organizationName,
+            email: adminEmail,
+          },
+          data: {
+            amount: 250,
+            dueDate: new Date(
+              Date.now() + 7 * 24 * 60 * 60 * 1000,
+            ).toLocaleDateString(),
+            currency: "USD",
+          },
+        }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        await addAuditLog({
+          action: "Test email sent",
+          actor: "admin",
+          details: `Sent test payment reminder to ${adminEmail}`,
+        });
+        setTestEmailStatus("Email sent successfully.");
+      } else {
+        setTestEmailStatus(
+          result.error ||
+            "Failed to send test email. Check your configuration.",
+        );
+      }
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      setTestEmailStatus("Failed to send test email.");
     } finally {
       setSaving(false);
     }
@@ -151,7 +267,11 @@ export default function AdminSettingsPage() {
                 <select
                   id="provider"
                   value={emailProvider}
-                  onChange={(e) => setEmailProvider(e.target.value)}
+                  onChange={(e) =>
+                    setEmailProvider(
+                      e.target.value as "smtp" | "sendgrid" | "mailgun",
+                    )
+                  }
                   className="w-full px-3 py-2 border border-input rounded-md text-sm"
                 >
                   <option value="smtp">SMTP</option>
@@ -213,15 +333,36 @@ export default function AdminSettingsPage() {
                 </p>
               </div>
 
-              <div className="border-t pt-4">
-                <Button
-                  onClick={handleSave}
-                  className="bg-primary hover:bg-primary/90"
-                  disabled={saving}
-                >
-                  {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  {saving ? "Saving..." : "Save Changes"}
-                </Button>
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                  <Button
+                    onClick={handleSave}
+                    className="bg-primary hover:bg-primary/90"
+                    disabled={saving}
+                  >
+                    {saving && (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    )}
+                    {saving ? "Saving..." : "Save Changes"}
+                  </Button>
+                  <Button
+                    onClick={handleSendTestEmail}
+                    variant="outline"
+                    disabled={saving || !adminEmail}
+                  >
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Mail className="w-4 h-4 mr-2" />
+                    )}
+                    Send Test Email
+                  </Button>
+                </div>
+                {testEmailStatus && (
+                  <p className="text-sm text-muted-foreground">
+                    {testEmailStatus}
+                  </p>
+                )}
               </div>
             </div>
           </Card>
@@ -346,22 +487,59 @@ export default function AdminSettingsPage() {
         {/* Audit Logs */}
         <TabsContent value="audit" className="space-y-4">
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">
-              Audit Logs
-            </h2>
-
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <div className="flex gap-2">
-                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-yellow-900">Coming Soon</p>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    Audit logs will show all admin actions and system changes.
-                    This feature is coming in the next release.
-                  </p>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-1">
+                  Audit Logs
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Recent admin activity and system events.
+                </p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const refreshedLogs = await listAuditLogs();
+                  setAuditLogs(refreshedLogs || []);
+                }}
+              >
+                Refresh Logs
+              </Button>
             </div>
+
+            {auditLogs.length === 0 ? (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-md text-sm text-muted-foreground">
+                No audit entries found yet. Actions such as saving settings or
+                creating invites will appear here.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {auditLogs.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="border border-slate-200 rounded-md p-4 bg-white"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <p className="font-medium text-foreground">
+                        {entry.action}
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(entry.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {entry.details}
+                    </p>
+                    {entry.actor && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Actor: {entry.actor}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </TabsContent>
       </Tabs>

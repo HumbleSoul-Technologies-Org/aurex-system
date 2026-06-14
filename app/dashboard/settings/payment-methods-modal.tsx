@@ -25,6 +25,7 @@ import {
   AdminPaymentMethod,
   BankDetails,
   PaymentMethodType,
+  MpesaDetails,
 } from "@/lib/services/settings";
 
 interface PaymentMethodsModalProps {
@@ -85,15 +86,18 @@ export function PaymentMethodsModal({
   });
 
   const [bankDetails, setBankDetails] = useState<BankDetails>({});
+  const [mpesaDetails, setMpesaDetails] = useState<MpesaDetails>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (editingMethod) {
       setFormData(editingMethod);
       setBankDetails(editingMethod.bankDetails || {});
+      setMpesaDetails((editingMethod as any).mpesa || {});
     } else {
       setFormData({ type: "MTN_MoMo", enabled: false });
       setBankDetails({});
+      setMpesaDetails({});
     }
     setErrors({});
   }, [editingMethod, isOpen]);
@@ -120,6 +124,21 @@ export function PaymentMethodsModal({
       }
     }
 
+    // M-Pesa specific validation when enabling
+    if (formData.type === "M-Pesa") {
+      const mp = mpesaDetails || {};
+      const requires = mp.is_active === true || formData.enabled === true;
+      if (requires) {
+        if (!mp.shortcode || !String(mp.shortcode).trim()) {
+          newErrors.shortcode = "Shortcode is required for M-Pesa when enabled";
+        }
+        if (!mp.consumerKey || !String(mp.consumerKey).trim()) {
+          newErrors.consumerKey =
+            "Consumer key is required for M-Pesa when enabled";
+        }
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -136,6 +155,14 @@ export function PaymentMethodsModal({
         ? formData.transactionNumber
         : undefined,
     };
+
+    if (formData.type === "M-Pesa") {
+      // Only include secrets if admin entered them (empty means keep existing)
+      const mp: any = { ...mpesaDetails };
+      if (!mp.consumerSecret) delete mp.consumerSecret;
+      if (!mp.passkey) delete mp.passkey;
+      method.mpesa = mp;
+    }
 
     onSave(method);
     onClose();
@@ -170,8 +197,17 @@ export function PaymentMethodsModal({
     });
   };
 
+  const handleMpesaChange = (field: keyof MpesaDetails, value: any) => {
+    setMpesaDetails({
+      ...mpesaDetails,
+      [field]: value,
+    });
+  };
+
   const isMobileMoneyType = MOBILE_MONEY_TYPES.includes(formData.type);
   const isBankType = BANK_PAYMENT_TYPES.includes(formData.type);
+
+  const isMpesaType = formData.type === "M-Pesa";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -308,6 +344,110 @@ export function PaymentMethodsModal({
                     }
                   />
                   <p className="text-xs text-gray-500">US transfers</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* M-Pesa Specific Fields */}
+          {isMpesaType && (
+            <div className="space-y-4 border-t pt-4">
+              <h3 className="font-medium">M-Pesa Configuration</h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="mpesa-shortcode">Shortcode</Label>
+                <Input
+                  id="mpesa-shortcode"
+                  placeholder="Shortcode / Till number"
+                  value={mpesaDetails.shortcode || ""}
+                  onChange={(e) =>
+                    handleMpesaChange("shortcode", e.target.value)
+                  }
+                  className={errors.shortcode ? "border-red-500" : ""}
+                />
+                {errors.shortcode && (
+                  <p className="text-sm text-red-500">{errors.shortcode}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="mpesa-consumer-key">Consumer Key</Label>
+                <Input
+                  id="mpesa-consumer-key"
+                  placeholder="Consumer Key"
+                  value={mpesaDetails.consumerKey || ""}
+                  onChange={(e) =>
+                    handleMpesaChange("consumerKey", e.target.value)
+                  }
+                  className={errors.consumerKey ? "border-red-500" : ""}
+                />
+                {errors.consumerKey && (
+                  <p className="text-sm text-red-500">{errors.consumerKey}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="mpesa-consumer-secret">Consumer Secret</Label>
+                  <Input
+                    id="mpesa-consumer-secret"
+                    type="password"
+                    placeholder={
+                      mpesaDetails.consumerSecret
+                        ? "****** (configured)"
+                        : "Consumer Secret"
+                    }
+                    value={mpesaDetails.consumerSecret || ""}
+                    onChange={(e) =>
+                      handleMpesaChange("consumerSecret", e.target.value)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mpesa-passkey">Passkey</Label>
+                  <Input
+                    id="mpesa-passkey"
+                    type="password"
+                    placeholder={
+                      mpesaDetails.passkey ? "****** (configured)" : "Passkey"
+                    }
+                    value={mpesaDetails.passkey || ""}
+                    onChange={(e) =>
+                      handleMpesaChange("passkey", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <div>
+                  <Label htmlFor="mpesa-environment">Environment</Label>
+                  <Select
+                    value={mpesaDetails.environment || "sandbox"}
+                    onValueChange={(v) => handleMpesaChange("environment", v)}
+                  >
+                    <SelectTrigger id="mpesa-environment">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sandbox">Sandbox</SelectItem>
+                      <SelectItem value="production">Production</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="mpesa-active"
+                    checked={Boolean(mpesaDetails.is_active)}
+                    onCheckedChange={(c) =>
+                      handleMpesaChange("is_active", Boolean(c))
+                    }
+                  />
+                  <Label htmlFor="mpesa-active" className="cursor-pointer">
+                    M-Pesa Active
+                  </Label>
                 </div>
               </div>
             </div>

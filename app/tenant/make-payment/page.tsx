@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 import {
   createManualPayment,
+  createMpesaPayment,
   getTenantOutstandingBalance,
   RentPayment,
 } from "@/lib/services/payments";
@@ -70,6 +71,7 @@ export default function MakePaymentPage() {
     null,
   );
   const [method, setMethod] = useState<string>("bank_transfer");
+  const [phoneNumber, setPhoneNumber] = useState<string>("");
   const { settings: apiSettings } = useSettings();
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
@@ -152,18 +154,18 @@ export default function MakePaymentPage() {
     if (step === "amount") setStep("method");
     else if (step === "method") setStep("confirm");
     else if (step === "confirm") {
+      if (method === "M-Pesa" && !phoneNumber) {
+        alert("Please enter your M-Pesa phone number.");
+        return;
+      }
       setProcessing(true);
       try {
         const paymentAmount = Number(amount || 0);
-        const normalizedPaymentMethod =
-          method === "bank_transfer" ? "bank_transfer" : "card";
-
-        const payload: Partial<RentPayment> = {
+        const payload: Partial<RentPayment> & { phoneNumber?: string } = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           amount: paymentAmount,
           monthlyRent,
-          paymentMethod: normalizedPaymentMethod,
           paidOn: new Date().toISOString(),
           paidBy: user?.name || user?.id || "tenant",
           leaseType,
@@ -173,7 +175,22 @@ export default function MakePaymentPage() {
               ? "Tenant-initiated balance payment"
               : "Tenant-initiated rent payment",
         };
-        const rec = await createManualPayment(payload);
+
+        let rec: RentPayment | null = null;
+        if (method === "M-Pesa") {
+          payload.paymentMethod = "mpesa";
+          payload.phoneNumber = phoneNumber;
+          rec = await createMpesaPayment(
+            payload as Partial<RentPayment> & {
+              phoneNumber: string;
+            },
+          );
+        } else {
+          payload.paymentMethod =
+            method === "bank_transfer" ? "bank_transfer" : "card";
+          rec = await createManualPayment(payload);
+        }
+
         setSavedPayment(rec);
         if (typeof window !== "undefined")
           window.dispatchEvent(new CustomEvent("paymentsUpdated"));
@@ -417,12 +434,17 @@ export default function MakePaymentPage() {
                       ? "Credit / Debit Card"
                       : pm.type === "Bank_Transfer"
                         ? "Bank Transfer"
-                        : pm.type.replace(/_/g, " "),
-                  description: pm.transactionNumber
-                    ? `Use ${pm.transactionNumber}`
-                    : pm.bankDetails
-                      ? `Account ${pm.bankDetails.bankName}`
-                      : "",
+                        : pm.type === "M-Pesa"
+                          ? "M-Pesa"
+                          : pm.type.replace(/_/g, " "),
+                  description:
+                    pm.type === "M-Pesa"
+                      ? "Pay with M-Pesa mobile money"
+                      : pm.transactionNumber
+                        ? `Use ${pm.transactionNumber}`
+                        : pm.bankDetails
+                          ? `Account ${pm.bankDetails.bankName}`
+                          : "",
                 }))
                 .concat(
                   // Fallback default methods if none configured
@@ -466,6 +488,25 @@ export default function MakePaymentPage() {
                     </div>
                   </button>
                 ))}
+
+              {method === "M-Pesa" && (
+                <div className="mt-4 p-4 border border-border rounded-lg bg-background">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    M-Pesa Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="254712345678"
+                    className="w-full rounded-lg border border-border px-4 py-3 bg-background text-foreground"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Enter the phone number where the M-Pesa STK Push will be
+                    sent.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -499,7 +540,9 @@ export default function MakePaymentPage() {
                         ? "Bank Transfer"
                         : method === "credit_card"
                           ? "Credit Card"
-                          : "Debit Card"}
+                          : method === "M-Pesa"
+                            ? "M-Pesa"
+                            : "Debit Card"}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -558,11 +601,14 @@ export default function MakePaymentPage() {
 
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-                Payment Successful!
+                {method === "M-Pesa"
+                  ? "M-Pesa Payment Initiated"
+                  : "Payment Successful!"}
               </h2>
               <p className="text-muted-foreground text-sm md:text-base">
-                Your payment of {formatCurrency(amount, activeCurrency)} has
-                been processed successfully.
+                {method === "M-Pesa"
+                  ? `An M-Pesa payment request for ${formatCurrency(amount, activeCurrency)} has been sent to ${phoneNumber}. Please confirm the transaction on your phone.`
+                  : `Your payment of ${formatCurrency(amount, activeCurrency)} has been processed successfully.`}
               </p>
               {paymentReason === "balancePayment" && (
                 <p className="text-muted-foreground text-sm md:text-base">

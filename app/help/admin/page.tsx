@@ -20,63 +20,36 @@ function renderMarkdown(content: string) {
       `<pre class="bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto text-sm"><code>${p1.trim()}</code></pre>`,
   );
 
-  // Helper to generate ID from text
-  const generateId = (text: string) => {
-    return text
-      .toLowerCase()
-      .replace(/<[^>]*>/g, "") // Remove HTML tags
-      .replace(/[^\w\s-]/g, "")
-      .replace(/\s+/g, "-");
-  };
-
   // Headings with IDs for TOC
-  const headingReplacements: [RegExp, (match: string, text: string) => string][] = [
+  const headingReplacements: [RegExp, string][] = [
     [
       /^###### (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h6 id="${id}" class="text-sm font-semibold text-foreground mt-6 mb-3 scroll-mt-20">${text}</h6>`;
-      },
+      '<h6 class="text-sm font-semibold text-foreground mt-6 mb-3 scroll-mt-20">$1</h6>',
     ],
     [
       /^##### (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h5 id="${id}" class="text-base font-semibold text-foreground mt-6 mb-3 scroll-mt-20">${text}</h5>`;
-      },
+      '<h5 class="text-base font-semibold text-foreground mt-6 mb-3 scroll-mt-20">$1</h5>',
     ],
     [
       /^#### (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h4 id="${id}" class="text-lg font-bold text-foreground mt-8 mb-4 flex items-center gap-2 scroll-mt-20"><span class="inline-block w-1 h-6 bg-blue-500 rounded-full"></span>${text}</h4>`;
-      },
+      '<h4 class="text-lg font-bold text-foreground mt-8 mb-4 flex items-center gap-2 scroll-mt-20"><span class="inline-block w-1 h-6 bg-blue-500 rounded-full"></span>$1</h4>',
     ],
     [
       /^### (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h3 id="${id}" class="text-xl font-bold text-foreground mt-8 mb-4 flex items-center gap-2 scroll-mt-20"><span class="inline-block w-1.5 h-7 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></span>${text}</h3>`;
-      },
+      '<h3 class="text-xl font-bold text-foreground mt-8 mb-4 flex items-center gap-2 scroll-mt-20"><span class="inline-block w-1.5 h-7 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></span>$1</h3>',
     ],
     [
       /^## (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h2 id="${id}" class="text-2xl font-bold text-foreground mt-10 mb-5 flex items-center gap-3 scroll-mt-20"><span class="inline-block w-2 h-8 bg-gradient-to-b from-blue-600 to-cyan-500 rounded-full"></span>${text}</h2>`;
-      },
+      '<h2 class="text-2xl font-bold text-foreground mt-10 mb-5 flex items-center gap-3 scroll-mt-20"><span class="inline-block w-2 h-8 bg-gradient-to-b from-blue-600 to-cyan-500 rounded-full"></span>$1</h2>',
     ],
     [
       /^# (.*)$/gm,
-      (_m: string, text: string) => {
-        const id = generateId(text);
-        return `<h1 id="${id}" class="text-3xl font-bold text-foreground mb-6 flex items-center gap-3 scroll-mt-20"><span class="inline-block w-2 h-10 bg-gradient-to-r from-blue-600 via-purple-500 to-cyan-500 rounded-full"></span>${text}</h1>`;
-      },
+      '<h1 class="text-3xl font-bold text-foreground mb-6 flex items-center gap-3 scroll-mt-20"><span class="inline-block w-2 h-10 bg-gradient-to-r from-blue-600 via-purple-500 to-cyan-500 rounded-full"></span>$1</h1>',
     ],
   ];
 
   headingReplacements.forEach(([regex, replacement]) => {
-    html = html.replace(regex, replacement as any);
+    html = html.replace(regex, replacement);
   });
 
   // Links

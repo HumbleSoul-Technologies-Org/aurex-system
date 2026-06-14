@@ -74,24 +74,11 @@ Image placeholder: `/public/help-assets/placeholder-200x120.svg`
 
 ## Tenants
 
-Where: `/dashboard/properties` → Invite
+Where: `/dashboard/tenants` → Create
 
-Steps:
-
-1. Naviget to the Properties page and click on 'View Details' button a property you want to invite the tenant to.
-2. You will then be navigated to the property's details page.
-3. click the 'Genenrate Invite Link' Button
-4. A dialogue will pop up, then fill in the unit you would like to assign to the tenant and then fill in their email address as well(optional)
-5. When done, click the 'Generate Link' button te generate an invitation Link and send an invitation email to the tenant you intending to invite.
-6. Copy the generated link and share it via message, email. whatsapp or any other prefered way.
-7. When the tenant clicks the link, he/she will be redirected to a form to fill in their details then subit when done.
-8. The created profile will then be saved and displayed in the 'Pending Approvals' page awaitibng for the adimn's approval.
-9. When approved, the tenant will sucessfully be saved among the tenants and cleared out from the Pending Approvals page.
-
-If invite email bounces:
-
-- Resend the invite.
-- Ensure your SMTP settings are correct (Settings → Communications).
+- This page display all tenant profiles from various properties.
+- To view a tenants profile, head to the actions section, click, the 3 dot menu, then click view.
+- To a new tenant profile, click the 'Add Tenant' button to create the tenant profile.
 
 Image placeholder: `/public/help-assets/placeholder-200x120.svg`
 

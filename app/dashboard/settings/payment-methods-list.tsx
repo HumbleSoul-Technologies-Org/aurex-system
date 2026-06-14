@@ -39,12 +39,12 @@ const getDisplayName = (type: PaymentMethodType): string => {
 
 const getMethodIcon = (type: PaymentMethodType): string => {
   const icons: Record<PaymentMethodType, string> = {
-    MTN_MoMo: "📱",
-    Airtel_Money: "📲",
-    "M-Pesa": "💰",
-    Orange_Money: "🟠",
-    Visa_Mastercard: "💳",
-    Bank_Transfer: "🏦",
+    MTN_MoMo: "/mtn.png",
+    Airtel_Money: "/airtel.png",
+    "M-Pesa": "/mpesa.png",
+    Orange_Money: "/orange.png",
+    Visa_Mastercard: "/cards.png",
+    Bank_Transfer: "/bank.png",
   };
   return icons[type];
 };
@@ -121,7 +121,15 @@ export function PaymentMethodsList({
 
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
-                <div className="text-2xl">{getMethodIcon(method.type)}</div>
+                <div className="">
+                  <img
+                    className={`w-10 h-10 object-contain rounded ${
+                      method.enabled ? "grayscale-0" : "grayscale"
+                    } ${method.type === "Airtel_Money" ? "w-15 h-15" : ""} transition-all`}
+                    src={getMethodIcon(method.type)}
+                    alt={getDisplayName(method.type)}
+                  />
+                </div>
                 <div className="flex-1 pr-16">
                   <CardTitle className="text-lg">
                     {getDisplayName(method.type)}
@@ -140,6 +148,41 @@ export function PaymentMethodsList({
                   <p className="font-mono text-sm">
                     {method.transactionNumber}
                   </p>
+                </div>
+              )}
+
+              {/* M-Pesa Details */}
+              {method.mpesa && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-600">M-Pesa</p>
+                  <div className="space-y-1 text-sm">
+                    <p>
+                      <span className="text-gray-600">Shortcode:</span>{" "}
+                      {method.mpesa.shortcode || "N/A"}
+                    </p>
+                    <p>
+                      <span className="text-gray-600">Consumer Key:</span>{" "}
+                      {method.mpesa.consumerKey || "N/A"}
+                    </p>
+                    <p>
+                      <span className="text-gray-600">Consumer Secret:</span>{" "}
+                      {method.mpesa.consumerSecret
+                        ? "Configured"
+                        : "Not configured"}
+                    </p>
+                    <p>
+                      <span className="text-gray-600">Passkey:</span>{" "}
+                      {method.mpesa.passkey ? "Configured" : "Not configured"}
+                    </p>
+                    <p>
+                      <span className="text-gray-600">Environment:</span>{" "}
+                      {method.mpesa.environment || "sandbox"}
+                    </p>
+                    <p>
+                      <span className="text-gray-600">Active:</span>{" "}
+                      {method.mpesa.is_active ? "Yes" : "No"}
+                    </p>
+                  </div>
                 </div>
               )}
 

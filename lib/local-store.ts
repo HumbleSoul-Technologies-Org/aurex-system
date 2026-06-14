@@ -84,6 +84,17 @@ export interface SystemSettings {
       }
     >;
   };
+  emailSettings?: {
+    provider?: "smtp" | "sendgrid" | "mailgun";
+    host?: string;
+    port?: number;
+    user?: string;
+    password?: string;
+    enableEmailNotifications?: boolean;
+    enableInviteEmails?: boolean;
+    enableWelcomeEmails?: boolean;
+    enablePasswordResetEmails?: boolean;
+  };
   tenantPortalSettings?: Partial<TenantPortalSettings>;
   systemFeatures?: {
     map?: boolean;
@@ -196,6 +207,8 @@ export type CollectionName =
   | "server:notifications"
   | "settings"
   | "system-settings"
+  | "invites"
+  | "auditLogs"
   | "visits";
 
 export interface DBSchema {
@@ -214,6 +227,8 @@ export interface DBSchema {
   "server:notifications": any[];
   settings: SystemSettings[];
   "system-settings": SystemSettings[];
+  invites: any[];
+  auditLogs: any[];
   visits: any[];
 }
 
@@ -235,6 +250,8 @@ const defaultDB: DBSchema = {
   "server:notifications": [],
   settings: [],
   "system-settings": [],
+  invites: [],
+  auditLogs: [],
   visits: [],
 };
 

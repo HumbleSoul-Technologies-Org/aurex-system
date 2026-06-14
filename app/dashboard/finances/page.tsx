@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth-context";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +21,16 @@ import {
   deleteTransaction,
   updateTransaction,
 } from "@/app/lib/transactions-client";
-import { updateExpenseApi, deleteExpenseApi } from "@/lib/services/expenses";
-import { deletePaymentApi } from "@/lib/services/payments";
+import {
+  updateExpenseApi,
+  deleteExpenseApi,
+  getAllExpenses,
+} from "@/lib/services/expenses";
+import {
+  deletePaymentApi,
+  listPaymentsApi,
+  PAYMENT_LIST_FIELDS,
+} from "@/lib/services/payments";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
 import {
@@ -82,6 +92,10 @@ export default function FinancesPage() {
     | "recorded"
     | "confirmed"
   >("complete");
+  const [rentCurrentPage, setRentCurrentPage] = useState(1);
+  const [expenseCurrentPage, setExpenseCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+
   const {
     tenants: allTenants,
     properties: allProperties,
@@ -98,13 +112,74 @@ export default function FinancesPage() {
     paymentsError,
     expensesError,
   } = useAppData();
+  const { token } = useAuth();
+
+  const rentPaymentsQuery = useQuery({
+    queryKey: [
+      "financeRentPayments",
+      token || "",
+      filterStatus,
+      searchQuery,
+      rentCurrentPage,
+      pageSize,
+    ],
+    queryFn: async () =>
+      listPaymentsApi({
+        token: token ?? undefined,
+        fields: PAYMENT_LIST_FIELDS,
+        page: rentCurrentPage,
+        limit: pageSize,
+        sort: "-paidOn",
+        search: searchQuery || undefined,
+        status: filterStatus === "all" ? undefined : filterStatus,
+      }),
+    enabled: Boolean(token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
+
+  const expensePageQuery = useQuery({
+    queryKey: [
+      "financeExpenses",
+      token || "",
+      searchQuery,
+      expenseCurrentPage,
+      pageSize,
+    ],
+    queryFn: async () =>
+      getAllExpenses({
+        token: token ?? undefined,
+        page: expenseCurrentPage,
+        limit: pageSize,
+        sort: "-date",
+        search: searchQuery || undefined,
+      }),
+    enabled: Boolean(token),
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5000,
+  });
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const activeCurrency = useActiveCurrency();
 
+  const paymentsData =
+    payments.length > 0 ? payments : (rentPaymentsQuery.data ?? []);
+  const expensesData =
+    expenses.length > 0 ? expenses : (expensePageQuery.data ?? []);
+
   useEffect(() => {
-    setTransactions(expenses);
-  }, [expenses]);
+    setTransactions(expensesData);
+  }, [expensesData]);
+
+  useEffect(() => {
+    setRentCurrentPage(1);
+  }, [searchQuery, filterStatus, pageSize]);
+
+  useEffect(() => {
+    setExpenseCurrentPage(1);
+  }, [searchQuery, pageSize]);
 
   useEffect(() => {
     const refreshHandler = () => {
@@ -127,7 +202,7 @@ export default function FinancesPage() {
   }, [refetchAll]);
 
   // Enrich transactions with tenant and property data from real lists
-  const enrichedTransactions = (transactions || []).map((transaction) => {
+  const enrichedTransactions = (expensesData || []).map((transaction) => {
     const tenant = allTenants.find((t) => t.id === transaction.tenantId);
     const property = allProperties.find((p) => p.id === transaction.propertyId);
     return {
@@ -138,7 +213,7 @@ export default function FinancesPage() {
   });
 
   // Calculate financial metrics from persisted payments
-  const enrichedPayments = (payments || []).map((p) => {
+  const enrichedPayments = (paymentsData || []).map((p) => {
     const tenant = allTenants.find((t) => t.id === p.tenantId);
     const property = allProperties.find((pr) => pr.id === p.propertyId);
     return {
@@ -184,16 +259,26 @@ export default function FinancesPage() {
   const totalRevenue = rentPayments
     .filter((t) => {
       const status = String(t.status || "").toLowerCase();
-      return ["complete", "completed", "paid", "balance"].includes(status);
+      return [
+        "complete",
+        "completed",
+        "paid",
+        "balance",
+        "recorded",
+        "confirmed",
+        "settled",
+        "success",
+      ].includes(status);
     })
     .reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalPending = tenantOutstandingBalances.reduce(
     (sum, balance) => sum + balance,
     0,
   );
-  const totalExpenses = enrichedTransactions
-    .filter((t) => t.type === "expense")
-    .reduce((sum, t) => sum + t.amount, 0);
+  const totalExpenses = enrichedTransactions.reduce(
+    (sum, t) => sum + (t.amount || 0),
+    0,
+  );
   const netProfit = totalRevenue - totalExpenses;
   const netLabel = netProfit >= 0 ? "Net Profit" : "Net Loss";
   const netColorClass = netProfit >= 0 ? "text-green-600" : "text-red-600";
@@ -254,7 +339,7 @@ export default function FinancesPage() {
         .slice(0, 7);
     };
 
-    payments.forEach((payment) => {
+    paymentsData.forEach((payment) => {
       const monthKey = paymentMonth(payment);
       if (!monthKey || !map[monthKey]) return;
       const status = String(payment.status || "").toLowerCase();
@@ -269,6 +354,7 @@ export default function FinancesPage() {
         "complete",
         "completed",
         "paid",
+        "balance",
         "recorded",
         "confirmed",
         "settled",
@@ -279,7 +365,7 @@ export default function FinancesPage() {
       }
     });
 
-    expenses.forEach((expense) => {
+    expensesData.forEach((expense) => {
       const monthKey = expenseMonth(expense);
       if (!monthKey || !map[monthKey]) return;
       const amount = normalizeAmount(
@@ -297,11 +383,11 @@ export default function FinancesPage() {
       revenue: Math.round(map[key].revenue),
       expenses: Math.round(map[key].expenses),
     }));
-  }, [payments, expenses]);
+  }, [paymentsData, expensesData]);
 
   const expenseBreakdown = useMemo(() => {
     const categoryMap: Record<string, number> = {};
-    expenses.forEach((expense) => {
+    expensesData.forEach((expense) => {
       const category = (expense.category || "Other").toString();
       categoryMap[category] =
         (categoryMap[category] || 0) + Number(expense.amount || 0);
@@ -363,6 +449,40 @@ export default function FinancesPage() {
         !searchQuery ||
         expense.description.toLowerCase().includes(searchQuery.toLowerCase()),
     );
+
+  const totalRentPages = Math.max(
+    1,
+    Math.ceil(filteredPayments.length / pageSize),
+  );
+  const paginatedPayments = filteredPayments.slice(
+    (rentCurrentPage - 1) * pageSize,
+    rentCurrentPage * pageSize,
+  );
+
+  const totalExpensePages = Math.max(
+    1,
+    Math.ceil(expenseTransactions.length / pageSize),
+  );
+  const paginatedExpenseTransactions = expenseTransactions.slice(
+    (expenseCurrentPage - 1) * pageSize,
+    expenseCurrentPage * pageSize,
+  );
+
+  const isServerRentPagination = rentPaymentsQuery.data !== undefined;
+  const isServerExpensePagination = expensePageQuery.data !== undefined;
+  const rentPaymentsDisplay = isServerRentPagination
+    ? rentPaymentsQuery.data
+    : paginatedPayments;
+  const expenseTransactionsDisplay = isServerExpensePagination
+    ? expensePageQuery.data
+    : paginatedExpenseTransactions;
+
+  const rentHasNextPage = isServerRentPagination
+    ? (rentPaymentsDisplay?.length ?? 0) === pageSize
+    : rentCurrentPage < totalRentPages;
+  const expenseHasNextPage = isServerExpensePagination
+    ? (expenseTransactionsDisplay?.length ?? 0) === pageSize
+    : expenseCurrentPage < totalExpensePages;
 
   const handleRowClick = (tx: any) => {
     setSelectedTx(tx);
@@ -940,8 +1060,8 @@ export default function FinancesPage() {
           </div>
 
           <div className="space-y-3">
-            {filteredPayments.length > 0 ? (
-              filteredPayments.map((payment: any) => (
+            {rentPaymentsDisplay.length > 0 ? (
+              rentPaymentsDisplay.map((payment: any) => (
                 <div
                   key={payment.id}
                   className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary transition-colors"
@@ -1099,6 +1219,61 @@ export default function FinancesPage() {
                 <p className="text-muted-foreground">No rent payments found</p>
               </div>
             )}
+
+            {rentPaymentsDisplay.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-sm text-muted-foreground">
+                <p>
+                  Showing{" "}
+                  {Math.min(
+                    (rentCurrentPage - 1) * pageSize + 1,
+                    rentPaymentsDisplay.length,
+                  )}
+                  -
+                  {Math.min(
+                    rentCurrentPage * pageSize,
+                    rentPaymentsDisplay.length,
+                  )}{" "}
+                  {isServerRentPagination
+                    ? "rent payments"
+                    : `of ${filteredPayments.length} rent payments`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={rentCurrentPage <= 1}
+                    onClick={() =>
+                      setRentCurrentPage((page) => Math.max(page - 1, 1))
+                    }
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm">
+                    Page {rentCurrentPage}
+                    {!isServerRentPagination && ` of ${totalRentPages}`}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!rentHasNextPage}
+                    onClick={() => setRentCurrentPage((page) => page + 1)}
+                  >
+                    Next
+                  </Button>
+                  <select
+                    className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                  >
+                    {[6, 12, 24, 48].map((size) => (
+                      <option key={size} value={size}>
+                        {size} per page
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -1136,9 +1311,9 @@ export default function FinancesPage() {
           />
 
           <div>
-            {expenseTransactions.length > 0 ? (
+            {expenseTransactionsDisplay.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {expenseTransactions.map((expense: any) => (
+                {expenseTransactionsDisplay.map((expense: any) => (
                   <Card
                     key={expense.id}
                     className="p-4 border border-border hover:bg-secondary transition-colors cursor-pointer h-full"
@@ -1198,6 +1373,61 @@ export default function FinancesPage() {
             ) : (
               <div className="text-center py-8 border border-border rounded-lg bg-secondary/30">
                 <p className="text-muted-foreground">No expenses found</p>
+              </div>
+            )}
+
+            {expenseTransactionsDisplay.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 text-sm text-muted-foreground">
+                <p>
+                  Showing{" "}
+                  {Math.min(
+                    (expenseCurrentPage - 1) * pageSize + 1,
+                    expenseTransactionsDisplay.length,
+                  )}
+                  -
+                  {Math.min(
+                    expenseCurrentPage * pageSize,
+                    expenseTransactionsDisplay.length,
+                  )}{" "}
+                  {isServerExpensePagination
+                    ? "expenses"
+                    : `of ${expenseTransactions.length} expenses`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={expenseCurrentPage <= 1}
+                    onClick={() =>
+                      setExpenseCurrentPage((page) => Math.max(page - 1, 1))
+                    }
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm">
+                    Page {expenseCurrentPage}
+                    {!isServerExpensePagination && ` of ${totalExpensePages}`}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!expenseHasNextPage}
+                    onClick={() => setExpenseCurrentPage((page) => page + 1)}
+                  >
+                    Next
+                  </Button>
+                  <select
+                    className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                  >
+                    {[6, 12, 24, 48].map((size) => (
+                      <option key={size} value={size}>
+                        {size} per page
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </div>
