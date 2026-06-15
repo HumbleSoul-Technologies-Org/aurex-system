@@ -17,7 +17,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Aurex Property Manager - Management made easy",
   description:
-    "Manage your rental properties efficiently with Aurex Property Manager",
+    "Aurex Property Manager is a comprehensive property management platform designed to streamline operations, enhance tenant communication, and optimize property performance. Manage your properties with ease and efficiency.",
   generator: "v0.app",
   icons: {
     icon: [
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
         media: "(prefers-color-scheme: dark)",
       },
       {
-        url: "/favicon.svg",
+        url: "/app",
         type: "image/svg+xml",
       },
     ],

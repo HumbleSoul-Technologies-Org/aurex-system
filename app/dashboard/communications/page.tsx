@@ -801,8 +801,10 @@ export default function CommunicationsPage() {
                           )}
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                          All messages of the conversation for this property.
-                          Select a message to view details and replies.
+                          Centralize tenant communication and property-specific
+                          workflows with a unified messaging hub that improves
+                          response times, tracks issues, and keeps every
+                          conversation aligned to the right property.
                         </p>
                       </div>
                       <div>

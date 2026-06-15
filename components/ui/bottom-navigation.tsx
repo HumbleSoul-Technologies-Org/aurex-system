@@ -24,7 +24,9 @@ export function BottomNavigation({ items }: BottomNavigationProps) {
       <div className="flex h-20 items-stretch">
         {items.map((item) => {
           const isActive =
-            pathname === item.href || pathname.startsWith(item.href + "/");
+            item.href === "/tenant"
+              ? pathname === "/tenant"
+              : pathname === item.href || pathname.startsWith(item.href + "/");
 
           return (
             <Link

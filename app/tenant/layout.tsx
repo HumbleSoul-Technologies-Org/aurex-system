@@ -222,6 +222,13 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
 
   const mobileNavItems = allMobileNavItems;
 
+  const isNavItemActive = (href: string) => {
+    if (href === "/tenant") {
+      return pathname === "/tenant";
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -301,8 +308,7 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
         <aside className="hidden md:flex flex-col w-64 border-r border-border bg-secondary">
           <nav className="flex-1 p-4 space-y-2">
             {desktopNavItems.map((item) => {
-              const isActive =
-                pathname === item.href || pathname.startsWith(item.href + "/");
+              const isActive = isNavItemActive(item.href);
               return (
                 <Link
                   key={item.href}

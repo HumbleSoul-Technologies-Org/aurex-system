@@ -41,6 +41,32 @@ export default function TenantDashboard() {
     (r) => r.status !== "completed",
   );
 
+  const formatPaymentMethodLabel = (method?: string | null) => {
+    if (!method) return "_ _";
+    const m = String(method).trim();
+    if (!m) return "_ _";
+    const map: Record<string, string> = {
+      MTN_MoMo: "MTN MoMo",
+      Airtel_Money: "Airtel Money",
+      "M-Pesa": "M-Pesa",
+      mpesa: "M-Pesa",
+      Orange_Money: "Orange Money",
+      Visa_Mastercard: "Credit / Debit Card",
+      Bank_Transfer: "Bank Transfer",
+      bank_transfer: "Bank Transfer",
+      card: "Credit / Debit Card",
+      visa: "Visa / Mastercard",
+      mastercard: "Visa / Mastercard",
+      mobile_money: "Mobile Money",
+      mobilemoney: "Mobile Money",
+    };
+    return map[m] || map[m.toLowerCase()] || m.replace(/_/g, " ");
+  };
+
+  const latestPaymentMethodLabel = formatPaymentMethodLabel(
+    latestPayment?.paymentMethod || latestPayment?.method || null,
+  );
+
   // Calculate lease expiration date
   const getLeaseExpiration = () => {
     const leaseStart = tenant?.leaseStartDate;
@@ -141,15 +167,15 @@ export default function TenantDashboard() {
           </div>
         </Card>
 
-        {/* Payment Status */}
+        {/* Last Payment Method */}
         <Card className="border border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
-                Last Payment
+                Last Payment Method
               </p>
-              <p className="text-2xl md:text-3xl font-bold text-green-600">
-                {latestPayment?.status || "_ _"}
+              <p className="text-2xl md:text-3xl font-bold text-foreground">
+                {latestPaymentMethodLabel}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 {latestPayment?.status === "completed"
@@ -157,8 +183,8 @@ export default function TenantDashboard() {
                   : `Due: ${tenant?.leaseStartDate ? new Date(new Date(tenant?.leaseStartDate).getFullYear(), new Date(tenant?.leaseStartDate).getMonth() + 1, new Date(tenant?.leaseStartDate).getDate()).toLocaleDateString() : "N/A"}`}
               </p>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-              <CheckCircle className="w-5 h-5 md:w-6 md:h-6 text-green-600" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
             </div>
           </div>
         </Card>

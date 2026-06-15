@@ -526,7 +526,9 @@ export default function PaymentsPage() {
       <Tabs defaultValue="history" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="history">Payment History</TabsTrigger>
-          <TabsTrigger value="make-payment">Make Payment</TabsTrigger>
+          <TabsTrigger disabled={true} value="make-payment">
+            Make Payment
+          </TabsTrigger>
         </TabsList>
 
         {/* Payment History Tab */}
