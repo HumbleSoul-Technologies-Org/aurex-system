@@ -402,13 +402,11 @@ export default function DashboardLayout({
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
                   <span className="text-sidebar-primary-foreground font-bold">
-                    PM
+                    AX
                   </span>
                 </div>
                 <div>
-                  <p className="font-bold text-sidebar-foreground">
-                    PropManager
-                  </p>
+                  <p className="font-bold text-sidebar-foreground">Aurex</p>
                   <p className="text-xs text-sidebar-foreground/60">
                     Property Management
                   </p>

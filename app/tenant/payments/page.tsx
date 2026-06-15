@@ -26,22 +26,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useSettings } from "@/lib/settings-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
 import {
   createManualPayment,
+  createMpesaPayment,
   PAYMENT_LIST_FIELDS,
+  PaymentRecord,
   RentPayment,
   getPaymentsForTenant,
 } from "@/lib/services/payments";
+import { AdminPaymentMethod, PaymentMethodType } from "@/lib/services/settings";
 import { useTenantContext } from "@/lib/tenant-context";
-import { useFeatureEnabled } from "@/lib/hooks/use-tenant-portal-features";
+
+type PaymentRow = RentPayment | PaymentRecord;
 
 export default function PaymentsPage() {
   const router = useRouter();
   const activeCurrency = useActiveCurrency();
   const { user, token } = useAuth();
   const { payments, currentTenant, currentProperty } = useTenantContext();
+  const { settings: apiSettings } = useSettings();
   const { enabled: paymentEnabled, isLoaded: featuresLoaded } =
     useFeatureEnabled("paymentPortal");
   const [currentPage, setCurrentPage] = useState(1);
@@ -49,10 +56,11 @@ export default function PaymentsPage() {
 
   // Make Payment state
   const [step, setStep] = useState<
-    "amount" | "method" | "confirm" | "success" | "history"
+    "amount" | "method" | "details" | "confirm" | "success" | "history"
   >("amount");
   const [amount, setAmount] = useState<number>(0);
-  const [method, setMethod] = useState("bank_transfer");
+  const [method, setMethod] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [processing, setProcessing] = useState(false);
   const [savedPayment, setSavedPayment] = useState<RentPayment | null>(null);
 
@@ -61,6 +69,89 @@ export default function PaymentsPage() {
   const property = currentProperty;
 
   const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
+
+  const PAYMENT_METHOD_LABELS: Record<PaymentMethodType | string, string> = {
+    MTN_MoMo: "MTN MoMo",
+    Airtel_Money: "Airtel Money",
+    "M-Pesa": "M-Pesa",
+    Orange_Money: "Orange Money",
+    Visa_Mastercard: "Credit / Debit Card",
+    Bank_Transfer: "Bank Transfer",
+  };
+
+  const MOBILE_MONEY_TYPES = new Set<PaymentMethodType>([
+    "MTN_MoMo",
+    "Airtel_Money",
+    "M-Pesa",
+    "Orange_Money",
+  ]);
+
+  const getPaymentMethodId = (method: AdminPaymentMethod) =>
+    method._id || method.type;
+
+  const getPaymentMethodLabel = (method: AdminPaymentMethod | null) =>
+    method
+      ? PAYMENT_METHOD_LABELS[method.type] || method.type.replace(/_/g, " ")
+      : "Payment Method";
+
+  const getPaymentMethodDescription = (method: AdminPaymentMethod | null) => {
+    if (!method) return "";
+    if (method.type === "M-Pesa") {
+      return "Pay with M-Pesa mobile money via STK Push.";
+    }
+    if (method.type === "Bank_Transfer") {
+      return method.bankDetails?.bankName
+        ? `Use account ${method.bankDetails.accountNumber || "N/A"} at ${method.bankDetails.bankName}.`
+        : "Transfer directly using the bank details provided by your landlord.";
+    }
+    if (method.type === "Visa_Mastercard") {
+      return "Pay with Visa or Mastercard. Card checkout will be processed after confirmation.";
+    }
+    if (MOBILE_MONEY_TYPES.has(method.type as PaymentMethodType)) {
+      return method.transactionNumber
+        ? `Use mobile money account ${method.transactionNumber}.`
+        : "Pay with your mobile money wallet.";
+    }
+    return "Proceed with the selected payment method.";
+  };
+
+  const configuredPaymentMethods = useMemo(
+    () => (apiSettings?.finance?.paymentMethods || []) as AdminPaymentMethod[],
+    [apiSettings?.finance?.paymentMethods],
+  );
+
+  const enabledPaymentMethods = useMemo(
+    () => configuredPaymentMethods.filter((pm) => pm.enabled),
+    [configuredPaymentMethods],
+  );
+
+  const paymentMethods = enabledPaymentMethods;
+
+  const selectedPaymentMethod = useMemo(
+    () =>
+      paymentMethods.find((pm) => getPaymentMethodId(pm) === method) ||
+      paymentMethods[0] ||
+      null,
+    [method, paymentMethods],
+  );
+
+  const hasPaymentMethods = paymentMethods.length > 0;
+
+  const requiresPhoneNumber =
+    selectedPaymentMethod &&
+    MOBILE_MONEY_TYPES.has(selectedPaymentMethod.type as PaymentMethodType);
+
+  useEffect(() => {
+    if (!method && paymentMethods.length > 0) {
+      setMethod(getPaymentMethodId(paymentMethods[0]));
+    } else if (
+      method &&
+      paymentMethods.length > 0 &&
+      !paymentMethods.some((pm) => getPaymentMethodId(pm) === method)
+    ) {
+      setMethod(getPaymentMethodId(paymentMethods[0]));
+    }
+  }, [method, paymentMethods]);
 
   useEffect(() => {
     const defaultAmount = defaultRent > 0 ? defaultRent : 0;
@@ -109,22 +200,75 @@ export default function PaymentsPage() {
     .reduce((sum, p) => sum + (p.amount || 0), 0);
 
   const handlePaymentSubmit = async () => {
-    if (step === "amount") setStep("method");
-    else if (step === "method") setStep("confirm");
-    else if (step === "confirm") {
+    if (step === "amount") {
+      setStep("method");
+      return;
+    }
+
+    if (step === "method") {
+      if (!selectedPaymentMethod) {
+        alert(
+          "No payment methods are available. Please contact your property administrator.",
+        );
+        return;
+      }
+      if (requiresPhoneNumber) {
+        setStep("details");
+      } else {
+        setStep("confirm");
+      }
+      return;
+    }
+
+    if (step === "details") {
+      if (requiresPhoneNumber && !phoneNumber) {
+        alert(
+          `Please enter your ${getPaymentMethodLabel(selectedPaymentMethod)} phone number.`,
+        );
+        return;
+      }
+      setStep("confirm");
+      return;
+    }
+
+    if (step === "confirm") {
       setProcessing(true);
       try {
-        const payload: Partial<RentPayment> = {
+        const payload: Partial<RentPayment> & {
+          phoneNumber?: string;
+          method?: string;
+        } = {
           tenantId: tenant?.id || user?.id || "",
           propertyId: tenant?.propertyId || property?.id,
           amount,
           monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
-          paymentMethod: method as any,
           paymentDate: new Date().toISOString(),
           status: "recorded",
           notes: "Tenant payment created from payments page",
         };
-        const rec = await createManualPayment(payload);
+
+        if (selectedPaymentMethod) {
+          payload.method = selectedPaymentMethod.type;
+          payload.notes += ` - Selected method: ${getPaymentMethodLabel(selectedPaymentMethod)}`;
+        }
+
+        let rec: RentPayment | null = null;
+        if (requiresPhoneNumber) {
+          payload.paymentMethod = "mpesa";
+          payload.phoneNumber = phoneNumber;
+          rec = await createMpesaPayment(
+            payload as Partial<RentPayment> & { phoneNumber: string },
+          );
+        } else {
+          payload.paymentMethod =
+            selectedPaymentMethod?.type === "Bank_Transfer"
+              ? "bank_transfer"
+              : selectedPaymentMethod?.type === "Visa_Mastercard"
+                ? "card"
+                : "manual";
+          rec = await createManualPayment(payload);
+        }
+
         setSavedPayment(rec);
         if (typeof window !== "undefined")
           window.dispatchEvent(new CustomEvent("paymentsUpdated"));
@@ -142,14 +286,19 @@ export default function PaymentsPage() {
   const handlePaymentReset = () => {
     setStep("amount");
     setAmount(defaultRent);
-    setMethod("bank_transfer");
+    setPhoneNumber("");
+    if (paymentMethods.length > 0) {
+      setMethod(getPaymentMethodId(paymentMethods[0]));
+    } else {
+      setMethod("");
+    }
   };
 
   useEffect(() => {
     setCurrentPage(1);
   }, [tenant?.id, pageSize]);
 
-  const getPaymentGroup = (payment: RentPayment) => {
+  const getPaymentGroup = (payment: PaymentRow) => {
     const groupKey =
       payment.transId || payment.reference || payment.receiptUrl || payment.id;
     return tenantPayments.filter((p) => {
@@ -158,7 +307,7 @@ export default function PaymentsPage() {
     });
   };
 
-  const handlePrintPayment = (payment: RentPayment) => {
+  const handlePrintPayment = (payment: PaymentRow) => {
     if (typeof window === "undefined") return;
 
     const relatedPayments = getPaymentGroup(payment);
@@ -247,7 +396,7 @@ export default function PaymentsPage() {
       0,
     );
 
-    const module = await import("jspdf/dist/jspdf.umd.min.js");
+    const module = await import("jspdf");
     const { jsPDF } = module;
     const doc = new jsPDF({
       orientation: "landscape",
@@ -377,9 +526,7 @@ export default function PaymentsPage() {
       <Tabs defaultValue="history" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="history">Payment History</TabsTrigger>
-          <TabsTrigger disabled={true} value="make-payment">
-            Make Payment
-          </TabsTrigger>
+          <TabsTrigger value="make-payment">Make Payment</TabsTrigger>
         </TabsList>
 
         {/* Payment History Tab */}
@@ -400,10 +547,7 @@ export default function PaymentsPage() {
                 Monthly Rent
               </p>
               <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {formatCurrency(
-                  tenant?.rentAmount ?? tenant?.monthlyRent ?? 0,
-                  activeCurrency,
-                )}
+                {formatCurrency(defaultRent, activeCurrency)}
               </p>
             </Card>
 
@@ -497,14 +641,15 @@ export default function PaymentsPage() {
                       className="hover:bg-secondary transition-colors"
                     >
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm text-foreground">
-                        {payment.paidOn || payment.paymentDate || payment.date
-                          ? new Date(
-                              payment.paidOn ||
-                                payment.paymentDate ||
-                                payment.date ||
-                                undefined,
-                            ).toLocaleDateString()
-                          : "—"}
+                        {(() => {
+                          const dateValue =
+                            payment.paidOn ||
+                            payment.paymentDate ||
+                            payment.date;
+                          return dateValue
+                            ? new Date(dateValue).toLocaleDateString()
+                            : "—";
+                        })()}
                       </td>
                       <td className="px-4 md:px-6 py-3 md:py-4 text-sm font-mono text-foreground">
                         {payment.transId || payment.id}
@@ -683,8 +828,8 @@ export default function PaymentsPage() {
                         >
                           <div className="flex flex-col items-start">
                             <span className="font-semibold">
-                              {getCurrencySymbol(activeCurrency)}
-                              {option.value.toFixed(2)}
+                              {getCurrencySymbol(activeCurrency)}{" "}
+                              {option.value.toLocaleString()}
                             </span>
                             {option.label !== "Custom" && (
                               <span className="text-xs opacity-70">
@@ -711,7 +856,7 @@ export default function PaymentsPage() {
                       </span>
                       <input
                         type="text"
-                        value={amount}
+                        value={amount.toLocaleString()}
                         onChange={(e) => setAmount(Number(e.target.value))}
                         className="flex-1 px-4 py-3 md:py-2 border border-border rounded-lg bg-background text-foreground"
                         placeholder="0.00"
@@ -744,48 +889,86 @@ export default function PaymentsPage() {
                   Select Payment Method
                 </h2>
 
-                <div className="space-y-3">
-                  {[
-                    {
-                      id: "bank_transfer",
-                      name: "Bank Transfer",
-                      description: "Direct transfer from your bank account",
-                    },
-                    {
-                      id: "credit_card",
-                      name: "Credit Card",
-                      description: "Visa, Mastercard, American Express",
-                    },
-                    {
-                      id: "debit_card",
-                      name: "Debit Card",
-                      description: "Direct debit card payment",
-                    },
-                  ].map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => setMethod(m.id)}
-                      className={`w-full p-4 border-2 rounded-lg transition-all text-left ${method === m.id ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${method === m.id ? "border-primary bg-primary" : "border-border"}`}
+                {hasPaymentMethods ? (
+                  <div className="space-y-3">
+                    {paymentMethods.map((pm) => {
+                      const id = getPaymentMethodId(pm);
+                      const isSelected = id === method;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setMethod(id)}
+                          className={`w-full p-4 border-2 rounded-lg transition-all text-left ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
                         >
-                          {method === m.id && (
-                            <div className="w-2 h-2 bg-white rounded-full" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-foreground text-sm md:text-base">
-                            {m.name}
-                          </p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {m.description}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? "border-primary bg-primary" : "border-border"}`}
+                            >
+                              {isSelected && (
+                                <div className="w-2 h-2 bg-white rounded-full" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-foreground text-sm md:text-base">
+                                {getPaymentMethodLabel(pm)}
+                              </p>
+                              <p className="text-xs md:text-sm text-muted-foreground">
+                                {getPaymentMethodDescription(pm)}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border bg-secondary p-6 text-center">
+                    <p className="text-sm text-foreground mb-3">
+                      No payment methods are currently enabled.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Please contact your property administrator to enable a
+                      payment method.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {step === "details" && (
+            <Card className="border border-border p-4 md:p-8 space-y-6">
+              <div>
+                <h2 className="text-xl md:text-2xl font-bold text-foreground mb-4">
+                  Enter Payment Details
+                </h2>
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border bg-secondary p-4">
+                    <p className="text-sm font-semibold text-foreground mb-2">
+                      {getPaymentMethodLabel(selectedPaymentMethod)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {getPaymentMethodDescription(selectedPaymentMethod)}
+                    </p>
+                  </div>
+                  <div className="p-4 border border-border rounded-lg bg-background">
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      {getPaymentMethodLabel(selectedPaymentMethod)} Phone
+                      Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="254712345678"
+                      className="w-full rounded-lg border border-border px-4 py-3 bg-background text-foreground"
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Enter the phone number that will receive the mobile money
+                      request.
+                    </p>
+                  </div>
                 </div>
               </div>
             </Card>
@@ -815,13 +998,17 @@ export default function PaymentsPage() {
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Method</span>
                         <span className="font-semibold text-foreground">
-                          {method === "bank_transfer"
-                            ? "Bank Transfer"
-                            : method === "credit_card"
-                              ? "Credit Card"
-                              : "Debit Card"}
+                          {getPaymentMethodLabel(selectedPaymentMethod)}
                         </span>
                       </div>
+                      {requiresPhoneNumber && phoneNumber && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Phone</span>
+                          <span className="font-semibold text-foreground">
+                            {phoneNumber}
+                          </span>
+                        </div>
+                      )}
                       <div className="border-t border-border pt-3 flex justify-between text-sm">
                         <span className="text-muted-foreground">Total</span>
                         <span className="font-bold text-foreground text-base md:text-lg">
@@ -857,11 +1044,14 @@ export default function PaymentsPage() {
 
                 <div>
                   <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-                    Payment Successful!
+                    {requiresPhoneNumber
+                      ? `${getPaymentMethodLabel(selectedPaymentMethod)} Payment Initiated`
+                      : "Payment Successful!"}
                   </h2>
                   <p className="text-muted-foreground text-sm md:text-base">
-                    Your payment of {formatCurrency(amount, activeCurrency)} has
-                    been processed successfully.
+                    {requiresPhoneNumber
+                      ? `A ${getPaymentMethodLabel(selectedPaymentMethod)} payment request for ${formatCurrency(amount, activeCurrency)} has been sent to ${phoneNumber}. Please confirm the transaction on your phone.`
+                      : `Your payment of ${formatCurrency(amount, activeCurrency)} has been processed successfully.`}
                   </p>
                 </div>
 
@@ -923,6 +1113,7 @@ export default function PaymentsPage() {
                 variant="outline"
                 onClick={() => {
                   if (step === "amount") setStep("history");
+                  else if (step === "details") setStep("method");
                   else if (step === "method") setStep("amount");
                   else if (step === "confirm") setStep("method");
                 }}
@@ -935,6 +1126,8 @@ export default function PaymentsPage() {
                 onClick={handlePaymentSubmit}
                 disabled={
                   (step === "amount" && amount <= 0) ||
+                  (step === "method" && !selectedPaymentMethod) ||
+                  (step === "details" && requiresPhoneNumber && !phoneNumber) ||
                   (step === "confirm" && processing)
                 }
                 className="bg-primary hover:bg-primary/90 text-white flex-1"

@@ -12,7 +12,7 @@ function getServerErrorMessage(errorData: any, defaultMessage: string) {
 }
 
 const SERVER_ROOT = API_URL?.replace(/\/$/, "") || "http://localhost:5454";
-const ADMIN_API_BASE = `${SERVER_ROOT}/api/admin`;
+const ADMIN_API_BASE = `${SERVER_ROOT}/admin`;
 
 function adminFetch(path: string, options: RequestInit = {}) {
   return fetch(`${ADMIN_API_BASE}${path}`, options);

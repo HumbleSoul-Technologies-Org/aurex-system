@@ -177,14 +177,46 @@ export async function createMpesaPayment(
 ): Promise<RentPayment | null> {
   try {
     const res = await apiRequest("POST", "/payments/mpesa/initiate", payload);
-    const raw = res?.data?.data || res?.data?.payment || res?.data || null;
+    const json = await res.json();
+    const raw = json?.data || json?.payment || json || null;
     if (!raw) return null;
+
+    // Attach API-provided ids for client polling
+    raw._api_paymentId = json?.paymentId || raw._id || raw.id;
+    raw._checkoutRequestID =
+      json?.checkoutRequestID || raw?.metadata?.checkoutRequestID;
+
     const record = mapServerPaymentToClient(raw);
+    // expose these helper fields on the client object
+    (record as any).paymentId = raw._api_paymentId;
+    (record as any).checkoutRequestID = raw._checkoutRequestID;
+    (record as any).customerMessage = json?.customerMessage || null;
+
     applyTenantStatusFromPayment(record);
     dispatchPaymentsUpdatedEvent();
     return record;
   } catch (err) {
     console.warn("Failed to initiate M-Pesa payment:", err);
+    return null;
+  }
+}
+
+export async function fetchPaymentById(
+  paymentId: string,
+): Promise<RentPayment | null> {
+  try {
+    const res = await apiRequest(
+      "GET",
+      `/payments/${encodeURIComponent(paymentId)}`,
+    );
+    const data = await res.json();
+    const raw = data?.data || data || null;
+    if (!raw) return null;
+    const record = mapServerPaymentToClient(raw);
+    applyTenantStatusFromPayment(record);
+    return record;
+  } catch (err) {
+    console.warn(`Failed to fetch payment ${paymentId}:`, err);
     return null;
   }
 }
