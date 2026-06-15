@@ -90,27 +90,34 @@ export default function CommunicationsPage() {
 
   const getUserRefId = (userRef?: string | UserReference | null) => {
     if (!userRef) return "";
+
     return typeof userRef === "string"
       ? userRef
       : userRef.id || userRef._id || "";
   };
 
   const getUserName = (userRef?: string | UserReference | null) => {
-    if (!userRef) return "Unknown User";
+    if (!userRef) return "";
 
     const id = getUserRefId(userRef);
+    console.log("[getUserName] called with:", {
+      userRef,
+      id,
+      tenantsCount: tenants.length,
+    });
     if (id) {
       const found = tenants.find((t) => t._id === id || t.id === id);
+      console.log("[getUserName] search result:", {
+        id,
+        found,
+        foundName: found?.name,
+      });
       if (found?.name) return found.name;
     }
 
-    if (typeof userRef !== "string") {
-      if (typeof userRef.name === "string" && userRef.name) return userRef.name;
-      if (typeof userRef.email === "string" && userRef.email)
-        return userRef.email;
-    }
-
-    return id || (typeof userRef === "string" ? userRef : "Unknown User");
+    // Return empty string for non-tenant users (admin/manager)
+    console.log("[getUserName] returning empty string for id:", id);
+    return "";
   };
 
   const getFromUserName = (fromUserId?: string | UserReference | null) => {
@@ -120,6 +127,10 @@ export default function CommunicationsPage() {
   const getToUserName = (toUserId?: string | UserReference | null) => {
     return getUserName(toUserId);
   };
+
+  const [messageFilter, setMessageFilter] = useState<"all" | "sent" | "inbox">(
+    "all",
+  );
 
   const getPropertyName = (propertyId?: string | PropertyReference) => {
     const id = getPropertyRefId(propertyId);
@@ -182,7 +193,7 @@ export default function CommunicationsPage() {
         const convs = await getConversationsByOwner(user.id, token);
 
         setConversations(convs);
-        console.log("Loaded conversations:", convs);
+
         if (convs.length > 0 && !selectedPropertyId) {
           const nested = convs.flatMap((conv) => conv.conversations || []);
           if (nested.length > 0) {
@@ -210,6 +221,7 @@ export default function CommunicationsPage() {
 
   const currentPropertyConversation = useMemo(() => {
     if (!selectedPropertyId) return null;
+
     return (
       propertyConversations.find(
         (conversation) =>
@@ -226,7 +238,7 @@ export default function CommunicationsPage() {
   }, [selectedPropertyId]);
 
   const getProperty = (propertyId?: string | PropertyReference) => {
-    return properties.find((p) => p._id === propertyId);
+    return propertyId?.tenants?.length || 0;
   };
 
   const formatDateTime = (timestamp: string) => {
@@ -516,8 +528,27 @@ export default function CommunicationsPage() {
 
   const allMessages = useMemo(() => {
     if (!currentPropertyConversation) return [];
+
     return currentPropertyConversation.messages || [];
   }, [currentPropertyConversation]);
+
+  const filteredMessages = useMemo(() => {
+    if (!allMessages) return [];
+
+    return allMessages.filter((msg) => {
+      const fromUserId = getUserRefId(msg.fromUserId);
+      const recipientId = getUserRefId(msg.toUserId);
+      const isFromCurrentUser = fromUserId === user?.id;
+
+      if (messageFilter === "sent") {
+        return isFromCurrentUser;
+      }
+      if (messageFilter === "inbox") {
+        return recipientId === user?.id;
+      }
+      return true;
+    });
+  }, [allMessages, messageFilter, user?.id]);
 
   const selectedMessage = useMemo(() => {
     if (!selectedMessageId) return null;
@@ -746,9 +777,7 @@ export default function CommunicationsPage() {
                               {getPropertyName(conv?.propertyId)}
                             </div>
                             <div className="text-xs opacity-75 truncate">
-                              {getProperty(conv?.propertyId)?.tenants?.length ||
-                                0}{" "}
-                              Tenants
+                              {getProperty(conv?.propertyId)} Tenants
                             </div>
                             <div className="text-xs opacity-75 truncate">
                               {conv.messages?.length || 0} Messages
@@ -794,15 +823,43 @@ export default function CommunicationsPage() {
                     </div>
 
                     {/* Message List */}
+                    <div className="space-y-3 p-4 border-b border-border bg-background rounded-xl">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-medium">
+                          Messages ({filteredMessages.length})
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(["all", "inbox", "sent"] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              onClick={() => setMessageFilter(mode)}
+                              className={`rounded-full px-3 py-1.5 text-sm transition ${
+                                messageFilter === mode
+                                  ? "bg-primary text-white"
+                                  : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              {mode === "all"
+                                ? "All"
+                                : mode === "inbox"
+                                  ? "Inbox"
+                                  : "Sent"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                      {allMessages.length === 0 ? (
+                      {filteredMessages.length === 0 ? (
                         <div className="flex h-full min-h-[240px] items-center justify-center text-muted-foreground">
                           No messages yet. Send the first message!
                         </div>
                       ) : (
-                        allMessages?.map((msg, idx) => {
+                        filteredMessages?.map((msg, idx) => {
                           const fromUserId = getUserRefId(msg.fromUserId);
                           const recipientId = getUserRefId(msg.toUserId);
+
                           const isFromCurrentUser = fromUserId === user?.id;
 
                           return (

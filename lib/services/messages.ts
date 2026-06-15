@@ -96,7 +96,13 @@ function getPropertyRefId(propertyId: PropertyReference | undefined): string {
 function getMessageRecipientName(userRef: any): string {
   if (!userRef) return "";
   if (typeof userRef === "string") return "";
-  return userRef.name || userRef.email || userRef.id || userRef._id || "";
+  const fullName =
+    userRef.firstName || userRef.lastName
+      ? `${userRef.firstName || ""} ${userRef.lastName || ""}`.trim()
+      : null;
+  return (
+    userRef.name || fullName || userRef.email || userRef.id || userRef._id || ""
+  );
 }
 
 function getSingleMessageRecipientId(message: any): string {

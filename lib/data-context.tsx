@@ -189,18 +189,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   ): Promise<PaymentRecord[]> {
     try {
       setPaymentsError(null);
-      console.log(
-        "[DataProvider] fetchPaymentsWithErrorHandling - propertyIds:",
-        propertyIds,
-        "has token:",
-        !!token,
-      );
+
       const result = await fetchPayments(propertyIds, token);
-      console.log(
-        "[DataProvider] Payment fetch succeeded, returned:",
-        result.length,
-        "payments",
-      );
+
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -228,14 +219,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const propertiesQuery = useQuery({
     queryKey: ["properties", adminId, user?.role, token || ""] as const,
     queryFn: () => {
-      console.log(
-        "[DataProvider] propertiesQuery queryFn triggered - adminId:",
-        adminId,
-        "role:",
-        user?.role,
-        "token exists:",
-        !!token,
-      );
       return fetchProperties(adminId, user?.role ?? null, token ?? undefined);
     },
     initialData: authLoading ? undefined : () => listProperties(),
@@ -354,38 +337,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [currentTenant, propertiesData]);
 
   const paymentPropertyIds = React.useMemo(() => {
-    console.log(
-      "[DataProvider] paymentPropertyIds computed - currentTenant:",
-      currentTenant?.id,
-      "currentProperty:",
-      currentProperty?.id,
-      "propertiesData count:",
-      propertiesData.length,
-    );
     if (currentProperty?.id) {
-      console.log(
-        "[DataProvider] Using currentProperty ID:",
-        currentProperty.id,
-      );
       return [currentProperty.id];
     }
 
     const ids = propertiesData
       .map((property) => property.id || property._id || "")
       .filter(Boolean);
-    console.log("[DataProvider] Using all property IDs:", ids);
+
     return ids;
   }, [currentProperty, propertiesData]);
 
   const paymentsQuery = useQuery({
     queryKey: ["payments", paymentPropertyIds.join(","), token || ""] as const,
     queryFn: () => {
-      console.log(
-        "[DataProvider] paymentsQuery queryFn triggered - paymentPropertyIds:",
-        paymentPropertyIds,
-        "token exists:",
-        !!token,
-      );
       return fetchPaymentsWithErrorHandling(paymentPropertyIds, token ?? null);
     },
     enabled: !authLoading && paymentPropertyIds.length > 0,

@@ -400,9 +400,13 @@ export default function DashboardLayout({
             {/* Sidebar Header */}
             <div className="p-6 border-b border-sidebar-border">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
+                <div className="w-16 h-16 bg-sidebar-primary rounded-lg flex items-center justify-center">
                   <span className="text-sidebar-primary-foreground font-bold">
-                    AX
+                    <img
+                      src="/logo-light.png"
+                      alt="Aurex Logo"
+                      className="w-full h-full rounded-md object-contain"
+                    />
                   </span>
                 </div>
                 <div>

@@ -163,7 +163,11 @@ export default function TenantMessagesPage() {
   const getUserReferenceName = (ref: any): string => {
     if (!ref) return "";
     if (typeof ref === "string") return "";
-    return ref.name || ref.email || ref.id || ref._id || "";
+    const fullName =
+      ref.firstName || ref.lastName
+        ? `${ref.firstName || ""} ${ref.lastName || ""}`.trim()
+        : null;
+    return ref.name || fullName || ref.email || ref.id || ref._id || "";
   };
 
   const normalizeRecipientId = (value: any): string => {
