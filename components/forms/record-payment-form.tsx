@@ -59,7 +59,13 @@ export default function RecordPaymentForm({
       const rent = Number(
         (t as any)?.rentAmount || (t as any)?.monthlyRent || 0,
       );
-      if (rent > 0) setMonthlyRent(rent);
+      const prop = properties.find(
+        (p: any) =>
+          p.id === (t as any).propertyId || p._id === (t as any).propertyId,
+      );
+      const serviceFee = Number(prop?.serviceFee ?? 0);
+      const total = rent + serviceFee;
+      if (total > 0) setMonthlyRent(total);
 
       // Auto-fill property if tenant has a propertyId
       if ((t as any)?.propertyId && !propertyId) {
@@ -148,6 +154,9 @@ export default function RecordPaymentForm({
       amount: Number(amount),
       currency,
       monthlyRent: monthlyRent ?? undefined,
+      serviceFee:
+        properties.find((p: any) => p.id === propertyId || p._id === propertyId)
+          ?.serviceFee ?? 0,
       paymentMethod,
       paidOn,
       leaseType: leaseType || undefined,

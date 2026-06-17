@@ -75,7 +75,6 @@ export interface TenantRecord {
   rentAmount?: number;
   leaseType?: string;
   leaseStartDate?: string;
-  leaseRenewDate?: string;
   leaseEndDate?: string;
   leaseTerms?: string;
   emergencyContact?: string;
@@ -84,6 +83,32 @@ export interface TenantRecord {
   applicationDate?: string;
   moveInDate?: string;
   dateOfBirth?: string;
+  preferredName?: string;
+  middleName?: string;
+  gender?: "male" | "female" | "non-binary" | "other";
+  maritalStatus?: "single" | "married" | "divorced" | "widowed" | "separated";
+  nationality?: string;
+  placeOfOrigin?: string;
+  hasFamily?: boolean;
+  householdMembers?: Array<{
+    name?: string;
+    relationship?: string;
+    age?: number;
+  }>;
+  cohabitant?: {
+    name?: string;
+    relationship?: string;
+  };
+  occupation?: string;
+  employerName?: string;
+  position?: string;
+  nextOfKin?: {
+    name?: string;
+    relationship?: string;
+    phone?: string;
+    email?: string;
+  };
+  profilePictureUrl?: string;
   employmentInfo?: string;
   previousAddresses?: string[];
   coSigner?: string;
@@ -135,7 +160,6 @@ export const TENANT_LIST_FIELDS = [
   "rentAmount",
   "leaseType",
   "leaseStartDate",
-  "leaseRenewDate",
   "leaseEndDate",
   "status",
   "currentBalance",

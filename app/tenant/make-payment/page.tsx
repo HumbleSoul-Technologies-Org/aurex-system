@@ -63,7 +63,9 @@ export default function MakePaymentPage() {
       [tenant, properties],
     );
 
-  const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
+  const defaultRent =
+    Number(tenant?.rentAmount ?? property?.price_per_unit ?? 0) +
+    Number(property?.serviceFee ?? 0);
   const [amount, setAmount] = useState<number>(defaultRent);
   const [paymentReason, setPaymentReason] = useState<
     "rentPayment" | "balancePayment"
@@ -206,7 +208,9 @@ export default function MakePaymentPage() {
     selectedPaymentMethod &&
     MOBILE_MONEY_TYPES.has(selectedPaymentMethod.type as PaymentMethodType);
 
-  const monthlyRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
+  const monthlyRent =
+    Number(tenant?.rentAmount ?? property?.price_per_unit ?? 0) +
+    Number(property?.serviceFee ?? 0);
   const leaseType = tenant?.leaseType || "monthly";
   const computedOutstandingBalance = Math.max(
     0,

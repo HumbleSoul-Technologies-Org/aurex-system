@@ -173,13 +173,15 @@ export default function PropertyDetailPage({
   // Income Calculations
   const tenantMonthly = propertyTenants.reduce((sum, tenant) => {
     const tenantRent = Number(tenant.rentAmount || 0);
-    if (tenantRent > 0) return sum + tenantRent;
+    const baseRent = tenantRent > 0 ? tenantRent : 0;
+    const serviceFee = Number(property?.serviceFee ?? 0);
+    if (baseRent > 0) return sum + baseRent + serviceFee;
 
     const matchingUnit = unitRecords.find(
       (unit: any) => unit.unitNumber === tenant?.unitNumber,
     );
 
-    return sum + (matchingUnit?.rent || 0);
+    return sum + (matchingUnit?.rent || 0) + Number(property?.serviceFee ?? 0);
   }, 0);
 
   const unitRecords = (() => {
@@ -502,6 +504,31 @@ export default function PropertyDetailPage({
                   if (data.description !== "")
                     updated.description = data.description;
                   if (data.imageUrl !== "") updated.images = [data.imageUrl];
+
+                  if (typeof data.serviceFee !== "undefined") {
+                    updated.serviceFee = Number(data.serviceFee) || 0;
+                  }
+
+                  // Include policies if provided
+                  if (data.policies) {
+                    updated.policies = {
+                      petPolicy: {
+                        allowed: Boolean(data.policies.petPolicy?.allowed),
+                        details: data.policies.petPolicy?.details || "",
+                      },
+                      parkingPolicy: {
+                        allowed: Boolean(data.policies.parkingPolicy?.allowed),
+                        details: data.policies.parkingPolicy?.details || "",
+                      },
+                      leasePolicy: data.policies.leasePolicy || "",
+                      otherPolicies: (data.policies.otherPolicies || [])
+                        .map((p: any) => ({
+                          title: p.title?.trim() || "",
+                          body: p.body?.trim() || "",
+                        }))
+                        .filter((p: any) => p.title || p.body),
+                    };
+                  }
 
                   await updateProperty(property?.id, updated);
                   refreshProperty();
@@ -1182,6 +1209,31 @@ export default function PropertyDetailPage({
                           const payload: Partial<TenantRecord> = {
                             name: data.name,
                             email: data.email,
+                            preferredName: data.preferredName,
+                            middleName: data.middleName,
+                            gender: data.gender,
+                            maritalStatus: data.maritalStatus,
+                            nationality: data.nationality,
+                            placeOfOrigin: data.placeOfOrigin,
+                            hasFamily: data.hasFamily === "yes",
+                            householdMembers: data.householdMembers
+                              ? data.householdMembers
+                                  .split("\n")
+                                  .filter(Boolean)
+                              : undefined,
+                            cohabitant: {
+                              name: data.cohabitantName,
+                              relationship: data.cohabitantRelationship,
+                            },
+                            occupation: data.occupation,
+                            employerName: data.employerName,
+                            position: data.position,
+                            nextOfKin: {
+                              name: data.nextOfKinName,
+                              relationship: data.nextOfKinRelationship,
+                              phone: data.nextOfKinPhone,
+                              email: data.nextOfKinEmail,
+                            },
                             tenantType: data.tenantType,
                             unitNumber: data.unitNumber,
                             propertyId: property?.id,
@@ -1560,18 +1612,37 @@ export default function PropertyDetailPage({
                               <td className="px-4 py-3 text-foreground">
                                 {tenant.name}
                               </td>
-                              <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">
-                                {formatCurrency(
-                                  tenant.rentAmount ?? 0,
-                                  activeCurrency,
-                                )}
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-foreground">
-                                {formatCurrency(
-                                  (tenant.rentAmount ?? 0) * 12,
-                                  activeCurrency,
-                                )}
-                              </td>
+                              {(() => {
+                                const rent = Number(tenant.rentAmount ?? 0);
+                                const serviceFee = Number(
+                                  property?.serviceFee ?? 0,
+                                );
+                                const total = rent + serviceFee;
+                                return (
+                                  <>
+                                    <td className="px-4 py-3 font-semibold text-green-600 dark:text-green-400">
+                                      <div className="text-sm text-muted-foreground">
+                                        {formatCurrency(rent, activeCurrency)}{" "}
+                                        rent ·{" "}
+                                        {formatCurrency(
+                                          serviceFee,
+                                          activeCurrency,
+                                        )}{" "}
+                                        service
+                                      </div>
+                                      <div className="font-semibold text-green-600">
+                                        {formatCurrency(total, activeCurrency)}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-3 font-semibold text-foreground">
+                                      {formatCurrency(
+                                        total * 12,
+                                        activeCurrency,
+                                      )}
+                                    </td>
+                                  </>
+                                );
+                              })()}
                               <td className="px-4 py-3 text-foreground capitalize">
                                 {tenant.leaseType}
                               </td>

@@ -69,6 +69,13 @@ interface PropertyFormData {
   description: string;
   estate: string;
   price_per_unit?: number;
+  policies?: {
+    petPolicy?: { allowed?: boolean; details?: string };
+    parkingPolicy?: { allowed?: boolean; details?: string };
+    leasePolicy?: string;
+    otherPolicies?: { title: string; body: string }[];
+  };
+  serviceFee?: number;
 }
 
 interface PropertyFormDialogProps {
@@ -126,6 +133,13 @@ const getDefaultFormData = (): PropertyFormData => ({
   imageUrl: "",
   description: "",
   estate: "",
+  policies: {
+    petPolicy: { allowed: false, details: "" },
+    parkingPolicy: { allowed: false, details: "" },
+    leasePolicy: "",
+    otherPolicies: [],
+  },
+  serviceFee: 0,
 });
 
 export default function PropertyFormDialog({
@@ -216,6 +230,11 @@ export default function PropertyFormDialog({
         description: initialData.description ?? "",
         estate: initialData.estate ?? "",
       };
+      // include policies if present on initialData
+      initialFormData.policies =
+        initialData.policies ?? initialFormData.policies;
+      initialFormData.serviceFee =
+        initialData.serviceFee ?? initialFormData.serviceFee;
       setFormData(initialFormData);
       setSelectedImage(null);
     }
@@ -242,6 +261,23 @@ export default function PropertyFormDialog({
   ) => {
     const { name, value } = e.target;
 
+    if (e.target.type === "checkbox") {
+      const checked = (e.target as HTMLInputElement).checked;
+      if (name.includes(".")) {
+        const [parent, child] = name.split(".");
+        setFormData((prev: any) => ({
+          ...prev,
+          [parent]: {
+            ...(prev as any)[parent],
+            [child]: checked,
+          },
+        }));
+      } else {
+        setFormData((prev) => ({ ...prev, [name]: checked }));
+      }
+      return;
+    }
+
     if (name.includes(".")) {
       const [parent, child] = name.split(".");
       setFormData((prev: any) => ({
@@ -250,14 +286,6 @@ export default function PropertyFormDialog({
           ...(prev as any)[parent],
           [child]: value,
         },
-      }));
-      return;
-    }
-
-    if (e.target.type === "checkbox") {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: (e.target as HTMLInputElement).checked,
       }));
       return;
     }
@@ -345,6 +373,46 @@ export default function PropertyFormDialog({
         (_, i) => i !== index,
       ),
     }));
+  };
+
+  const addOtherPolicy = () => {
+    setFormData((prev) => ({
+      ...prev,
+      policies: {
+        ...(prev.policies || {}),
+        otherPolicies: [
+          ...(prev.policies?.otherPolicies || []),
+          { title: "", body: "" },
+        ],
+      },
+    }));
+  };
+
+  const removeOtherPolicy = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      policies: {
+        ...(prev.policies || {}),
+        otherPolicies: (prev.policies?.otherPolicies || []).filter(
+          (_, i) => i !== index,
+        ),
+      },
+    }));
+  };
+
+  const updateOtherPolicy = (
+    index: number,
+    field: "title" | "body",
+    value: string,
+  ) => {
+    setFormData((prev) => {
+      const next = [...(prev.policies?.otherPolicies || [])];
+      next[index] = { ...next[index], [field]: value };
+      return {
+        ...prev,
+        policies: { ...(prev.policies || {}), otherPolicies: next },
+      };
+    });
   };
 
   const toggleCustomizeUnits = () => {
@@ -1203,6 +1271,144 @@ export default function PropertyFormDialog({
                 placeholder="Add details about the property..."
                 className="h-24"
               />
+            </div>
+
+            <div className="space-y-4 rounded-lg border border-border p-4 bg-secondary">
+              <div>
+                <h3 className="text-xl font-semibold text-foreground">
+                  Policies
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Define property-level policies (pet, parking, lease terms, and
+                  other policies).
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="policies.petPolicy.allowed"
+                      checked={Boolean(formData.policies?.petPolicy?.allowed)}
+                      onChange={handleChange}
+                      className="h-4 w-4 rounded border-input text-primary"
+                    />
+                    <span className="text-sm font-medium">Allow Pets</span>
+                  </label>
+                  <Textarea
+                    name="policies.petPolicy.details"
+                    value={formData.policies?.petPolicy?.details || ""}
+                    onChange={handleChange}
+                    placeholder="Details about pet policy"
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="policies.parkingPolicy.allowed"
+                      checked={Boolean(
+                        formData.policies?.parkingPolicy?.allowed,
+                      )}
+                      onChange={handleChange}
+                      className="h-4 w-4 rounded border-input text-primary"
+                    />
+                    <span className="text-sm font-medium">Parking Allowed</span>
+                  </label>
+                  <Textarea
+                    name="policies.parkingPolicy.details"
+                    value={formData.policies?.parkingPolicy?.details || ""}
+                    onChange={handleChange}
+                    placeholder="Details about parking policy"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Lease Policy
+                </label>
+                <Textarea
+                  name="policies.leasePolicy"
+                  value={formData.policies?.leasePolicy || ""}
+                  onChange={handleChange}
+                  placeholder="Full lease policy or summary"
+                  rows={4}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">
+                    Other Policies
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={addOtherPolicy}
+                  >
+                    Add Policy
+                  </Button>
+                </div>
+                <div className="space-y-3 mt-2">
+                  {(formData.policies?.otherPolicies || []).map((op, i) => (
+                    <div
+                      key={i}
+                      className="space-y-2 border border-border rounded p-3"
+                    >
+                      <Input
+                        value={op.title}
+                        placeholder="Title"
+                        onChange={(e) =>
+                          updateOtherPolicy(i, "title", e.target.value)
+                        }
+                      />
+                      <Input
+                        value={op.body}
+                        placeholder="Body"
+                        onChange={(e) =>
+                          updateOtherPolicy(i, "body", e.target.value)
+                        }
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => removeOtherPolicy(i)}
+                          className="text-destructive"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Service Fee (monthly)
+                  </label>
+                  <Input
+                    name="serviceFee"
+                    type="number"
+                    value={formData.serviceFee ?? 0}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serviceFee: Number(e.target.value),
+                      }))
+                    }
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Optional monthly service fee added to each tenant's monthly
+                    total.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-6 border-t border-border">

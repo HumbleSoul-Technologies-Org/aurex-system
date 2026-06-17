@@ -168,7 +168,6 @@ export default function TenantsPage() {
     { label: "Rent Amount", value: (item) => item.rentAmount },
     { label: "Lease Type", value: (item) => item.leaseType },
     { label: "Lease Start Date", value: (item) => item.leaseStartDate },
-    { label: "Lease Renew Date", value: (item) => item.leaseRenewDate },
     { label: "Lease End Date", value: (item) => item.leaseEndDate },
     { label: "Lease Terms", value: (item) => item.leaseTerms },
     {
@@ -259,13 +258,35 @@ export default function TenantsPage() {
         email: data.email,
         password: data.password,
         phone: data.phone,
+        preferredName: data.preferredName,
+        middleName: data.middleName,
+        gender: data.gender,
+        maritalStatus: data.maritalStatus,
+        nationality: data.nationality,
+        placeOfOrigin: data.placeOfOrigin,
+        hasFamily: data.hasFamily === "yes",
+        householdMembers: data.householdMembers
+          ? data.householdMembers.split("\n").filter(Boolean)
+          : undefined,
+        cohabitant: {
+          name: data.cohabitantName,
+          relationship: data.cohabitantRelationship,
+        },
+        occupation: data.occupation,
+        employerName: data.employerName,
+        position: data.position,
+        nextOfKin: {
+          name: data.nextOfKinName,
+          relationship: data.nextOfKinRelationship,
+          phone: data.nextOfKinPhone,
+          email: data.nextOfKinEmail,
+        },
         tenantType: data.tenantType,
         unitNumber: data.unitNumber,
         propertyId: data.propertyId,
         rentAmount: data.monthlyRent,
         leaseType: data.leaseType,
         leaseStartDate: data.leaseStartDate,
-        leaseRenewDate: data.leaseRenewDate,
         leaseEndDate: data.leaseEndDate,
         leaseTerms: data.leaseTerms,
         preferredContactMethod: data.preferredContactMethod,
@@ -446,7 +467,24 @@ export default function TenantsPage() {
                     </a>
                   </td>
                   <td className="px-6 py-4 font-semibold text-foreground">
-                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
+                    {(() => {
+                      const rent = Number(tenant.rentAmount ?? 0);
+                      const serviceFee = Number(
+                        tenant.property?.serviceFee ?? 0,
+                      );
+                      const total = rent + serviceFee;
+                      return (
+                        <div className="space-y-1">
+                          <div className="text-sm text-muted-foreground">
+                            {formatCurrency(rent, activeCurrency)} rent +{" "}
+                            {formatCurrency(serviceFee, activeCurrency)} service
+                          </div>
+                          <div className="font-semibold">
+                            {formatCurrency(total, activeCurrency)}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-xs text-foreground capitalize">
                     {(tenant.leaseType || "").replace("_", " ")}

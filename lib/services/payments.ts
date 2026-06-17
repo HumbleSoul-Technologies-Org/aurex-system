@@ -55,7 +55,10 @@ function applyTenantStatusFromPayment(payment: any) {
       payment.amountPaid ??
       payment.paymentAmount,
   );
-  const rent = normalizePaymentAmount(tenant.rentAmount ?? 0);
+  const property = getProperty(tenant.propertyId);
+  const rent =
+    normalizePaymentAmount(tenant.rentAmount ?? 0) +
+    normalizePaymentAmount(property?.serviceFee ?? 0);
   const balanceAfterPayment = normalizePaymentAmount(
     payment.balanceAfterPayment ?? payment.balance ?? 0,
   );

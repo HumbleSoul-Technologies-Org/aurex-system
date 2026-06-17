@@ -68,7 +68,9 @@ export default function PaymentsPage() {
   const tenant = currentTenant;
   const property = currentProperty;
 
-  const defaultRent = tenant?.rentAmount ?? property?.price_per_unit ?? 0;
+  const defaultRent =
+    Number(tenant?.rentAmount ?? property?.price_per_unit ?? 0) +
+    Number(property?.serviceFee ?? 0);
 
   const PAYMENT_METHOD_LABELS: Record<PaymentMethodType | string, string> = {
     MTN_MoMo: "MTN MoMo",
@@ -242,6 +244,7 @@ export default function PaymentsPage() {
           propertyId: tenant?.propertyId || property?.id,
           amount,
           monthlyRent: tenant?.rentAmount ?? property?.price_per_unit,
+          serviceFee: property?.serviceFee ?? 0,
           paymentDate: new Date().toISOString(),
           status: "recorded",
           notes: "Tenant payment created from payments page",

@@ -254,6 +254,30 @@ export default function PropertiesPage() {
             : undefined,
       };
 
+      if (typeof data.serviceFee !== "undefined") {
+        (payload as any).serviceFee = Number(data.serviceFee) || 0;
+      }
+      // Include property-level policies if provided
+      if (data.policies) {
+        payload.policies = {
+          petPolicy: {
+            allowed: Boolean(data.policies.petPolicy?.allowed),
+            details: data.policies.petPolicy?.details || "",
+          },
+          parkingPolicy: {
+            allowed: Boolean(data.policies.parkingPolicy?.allowed),
+            details: data.policies.parkingPolicy?.details || "",
+          },
+          leasePolicy: data.policies.leasePolicy || "",
+          otherPolicies: (data.policies.otherPolicies || [])
+            .map((p: any) => ({
+              title: p.title?.trim() || "",
+              body: p.body?.trim() || "",
+            }))
+            .filter((p: any) => p.title || p.body),
+        };
+      }
+
       if (data.imageUrl) payload.images = [data.imageUrl];
       if (file) {
         try {

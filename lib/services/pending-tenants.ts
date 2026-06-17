@@ -1,5 +1,4 @@
 import { apiRequest } from "@/lib/query-client";
- 
 
 export interface PendingTenant {
   _id: string;
@@ -11,7 +10,6 @@ export interface PendingTenant {
   dateOfBirth?: string;
   tenantType: string;
   leaseStartDate?: string;
-  leaseRenewDate?: string;
   leaseEndDate?: string;
   leaseType: string;
   leaseTerms?: string;
@@ -22,6 +20,31 @@ export interface PendingTenant {
   securityDeposit?: string;
   emergencyContact?: string;
   employmentInfo?: string;
+  preferredName?: string;
+  middleName?: string;
+  gender?: "male" | "female" | "non-binary" | "other";
+  maritalStatus?: "single" | "married" | "divorced" | "widowed" | "separated";
+  nationality?: string;
+  placeOfOrigin?: string;
+  hasFamily?: boolean;
+  householdMembers?: Array<{
+    name?: string;
+    relationship?: string;
+    age?: number;
+  }>;
+  cohabitant?: {
+    name?: string;
+    relationship?: string;
+  };
+  occupation?: string;
+  employerName?: string;
+  position?: string;
+  nextOfKin?: {
+    name?: string;
+    relationship?: string;
+    phone?: string;
+    email?: string;
+  };
   previousAddresses?: string;
   coSigner?: string;
   pets?: string;
@@ -38,9 +61,16 @@ export interface PendingTenant {
 /**
  * Fetch all pending tenants for the authenticated admin
  */
-export async function getPendingTenants(token: string | null): Promise<PendingTenant[]> {
+export async function getPendingTenants(
+  token: string | null,
+): Promise<PendingTenant[]> {
   try {
-    const response = await apiRequest("GET", "/pending-tenants", undefined, token ? token : '');
+    const response = await apiRequest(
+      "GET",
+      "/pending-tenants",
+      undefined,
+      token ? token : "",
+    );
     const data: any = await response.json();
 
     if (!response.ok) {
@@ -62,7 +92,12 @@ export async function approvePendingTenant(
   token?: string,
 ): Promise<any> {
   try {
-    const response = await apiRequest("POST", `/pending-tenants/${pendingTenantId}/approve`, undefined, token);
+    const response = await apiRequest(
+      "POST",
+      `/pending-tenants/${pendingTenantId}/approve`,
+      undefined,
+      token,
+    );
     const data: any = await response.json();
 
     if (!response.ok) {

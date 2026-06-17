@@ -86,6 +86,13 @@ export interface PropertyRecord {
   noi?: number;
   capRate?: number;
   estate?: string;
+  policies?: {
+    petPolicy?: { allowed?: boolean; details?: string };
+    parkingPolicy?: { allowed?: boolean; details?: string };
+    leasePolicy?: string;
+    otherPolicies?: { title: string; body: string }[];
+  };
+  serviceFee?: number;
 }
 
 function makePrefix(name: string, city: string, country: string) {
@@ -353,6 +360,8 @@ export async function createProperty(
     lastAppraisalDate: payload.lastAppraisalDate,
     noi: payload.noi,
     capRate: payload.capRate,
+    serviceFee: payload.serviceFee,
+    policies: payload.policies,
   };
 
   const res = await apiRequest(

@@ -602,9 +602,22 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                   <p className="text-sm text-muted-foreground mb-1">
                     Monthly Rent
                   </p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
-                  </p>
+                  {(() => {
+                    const rent = Number(tenant.rentAmount ?? 0);
+                    const serviceFee = Number(property?.serviceFee ?? 0);
+                    const total = rent + serviceFee;
+                    return (
+                      <div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatCurrency(rent, activeCurrency)} rent +{" "}
+                          {formatCurrency(serviceFee, activeCurrency)} service
+                        </div>
+                        <div className="text-lg font-semibold text-foreground">
+                          {formatCurrency(total, activeCurrency)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">
@@ -863,20 +876,44 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                   <p className="text-sm text-muted-foreground mb-2">
                     Monthly Rent
                   </p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(tenant.rentAmount ?? 0, activeCurrency)}
-                  </p>
+                  {(() => {
+                    const rent = Number(tenant.rentAmount ?? 0);
+                    const serviceFee = Number(property?.serviceFee ?? 0);
+                    const total = rent + serviceFee;
+                    return (
+                      <div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatCurrency(rent, activeCurrency)} rent +{" "}
+                          {formatCurrency(serviceFee, activeCurrency)} service
+                        </div>
+                        <div className="text-2xl font-bold text-foreground">
+                          {formatCurrency(total, activeCurrency)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">
                     Annual Rent
                   </p>
-                  <p className="text-2xl font-bold text-foreground">
-                    {formatCurrency(
-                      (tenant.rentAmount ?? 0) * 12,
-                      activeCurrency,
-                    )}
-                  </p>
+                  {(() => {
+                    const rent = Number(tenant.rentAmount ?? 0);
+                    const serviceFee = Number(property?.serviceFee ?? 0);
+                    const annual = (rent + serviceFee) * 12;
+                    return (
+                      <div>
+                        <div className="text-sm text-muted-foreground">
+                          Includes service fee ·{" "}
+                          {formatCurrency(rent + serviceFee, activeCurrency)} /
+                          month
+                        </div>
+                        <div className="text-2xl font-bold text-foreground">
+                          {formatCurrency(annual, activeCurrency)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </Card>
                 <Card className="border border-border p-4">
                   <p className="text-sm text-muted-foreground mb-2">
@@ -1229,7 +1266,6 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
           propertyId: tenant.propertyId || "",
           unitNumber: tenant.unitNumber || "",
           leaseStartDate: tenant.leaseStartDate || "",
-          leaseRenewDate: tenant.leaseRenewDate || latestRentPaymentDate || "",
           leaseEndDate:
             tenant.leaseEndDate ||
             (tenant.leaseStartDate
@@ -1272,11 +1308,33 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
               name: formData.name,
               email: formData.email,
               phone: formData.phone,
+              preferredName: formData.preferredName,
+              middleName: formData.middleName,
+              gender: formData.gender,
+              maritalStatus: formData.maritalStatus,
+              nationality: formData.nationality,
+              placeOfOrigin: formData.placeOfOrigin,
+              hasFamily: formData.hasFamily === "yes",
+              householdMembers: formData.householdMembers
+                ? formData.householdMembers.split("\n").filter(Boolean)
+                : undefined,
+              cohabitant: {
+                name: formData.cohabitantName,
+                relationship: formData.cohabitantRelationship,
+              },
+              occupation: formData.occupation,
+              employerName: formData.employerName,
+              position: formData.position,
+              nextOfKin: {
+                name: formData.nextOfKinName,
+                relationship: formData.nextOfKinRelationship,
+                phone: formData.nextOfKinPhone,
+                email: formData.nextOfKinEmail,
+              },
               tenantType: formData.tenantType,
               propertyId: formData.propertyId,
               unitNumber: formData.unitNumber,
               leaseStartDate: formData.leaseStartDate,
-              leaseRenewDate: formData.leaseRenewDate,
               leaseEndDate: formData.leaseEndDate,
               leaseType: formData.leaseType,
               leaseTerms: formData.leaseTerms,

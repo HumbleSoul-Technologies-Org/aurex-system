@@ -149,11 +149,24 @@ export default function TenantDashboard() {
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
                 Monthly Rent
               </p>
-              <p
-                className={`${formatCurrency(tenant?.rentAmount || 0, activeCurrency).toString.length > 6 ? "md:text-lg text-lg" : "text-lg md:text-sm"}  font-bold text-foreground`}
-              >
-                {formatCurrency(tenant?.rentAmount || 0, activeCurrency)}
-              </p>
+              {(() => {
+                const rent = Number(tenant?.rentAmount ?? 0);
+                const serviceFee = Number(propertyInfo?.serviceFee ?? 0);
+                const total = rent + serviceFee;
+                return (
+                  <div>
+                    <p
+                      className={`${String(formatCurrency(total, activeCurrency)).length > 6 ? "md:text-lg text-lg" : "text-lg md:text-sm"} font-bold text-foreground`}
+                    >
+                      {formatCurrency(total, activeCurrency)}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatCurrency(rent, activeCurrency)} rent ·{" "}
+                      {formatCurrency(serviceFee, activeCurrency)} service
+                    </p>
+                  </div>
+                );
+              })()}
               <p className="text-xs text-muted-foreground mt-2">
                 Lease Started on:{" "}
                 {tenant?.leaseStartDate
