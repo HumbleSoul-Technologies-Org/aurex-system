@@ -567,3 +567,46 @@ export function deleteTenant(id: string): boolean {
 export function findTenantByEmail(email: string): TenantRecord | null {
   return findInCollection<TenantRecord>("tenants", (t) => t.email === email);
 }
+
+/**
+ * Bulk mark tenants as due via API
+ * Called when client-side due-date checker identifies tenants past lease end date
+ *
+ * @param tenantIds Array of tenant IDs to mark as due
+ * @param token Optional auth token
+ * @returns Promise resolving when API call completes
+ */
+export async function markTenantsAsDueApi(
+  tenantIds: string[],
+  token?: string,
+): Promise<void> {
+  if (!tenantIds || tenantIds.length === 0) {
+    return;
+  }
+
+  try {
+    const res = await apiRequest(
+      "POST",
+      "/tenants/bulk-mark-due",
+      { tenantIds },
+      token,
+    );
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(errorText || "Failed to mark tenants as due");
+    }
+
+    const data = await res.json();
+    console.log(
+      `[Tenant Due Update] Successfully marked ${data.updatedCount || tenantIds.length} tenant(s) as due`,
+    );
+
+    // Invalidate tenants cache to trigger refetch
+    queryClient.invalidateQueries({ queryKey: ["tenantsList"], exact: false });
+    queryClient.invalidateQueries({ queryKey: ["tenants"], exact: false });
+  } catch (err) {
+    console.error("[Tenant Due Update] Error marking tenants as due:", err);
+    throw err;
+  }
+}

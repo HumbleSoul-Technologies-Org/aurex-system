@@ -46,6 +46,12 @@ import {
 } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/currency";
 import { useActiveCurrency } from "@/lib/hooks/use-active-currency";
+import {
+  checkTenantsForDueStatus,
+  getTenantIdsToMarkDue,
+  logDueCheckResults,
+} from "@/lib/services/tenant-due-checker";
+import { markTenantsAsDueApi } from "@/lib/services/tenants";
 
 export default function TenantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,6 +70,8 @@ export default function TenantsPage() {
   const isPageLoading = isLoading || (isFetching && tenants.length === 0);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<any | null>(null);
+  const [isCheckingDues, setIsCheckingDues] = useState(false);
+  const [lastDueCheck, setLastDueCheck] = useState<number>(0);
 
   const { token } = useAuth();
   const apiStatus = filterStatus === "moving-out" ? "moving out" : filterStatus;
@@ -94,10 +102,6 @@ export default function TenantsPage() {
 
   const tenantsData = tenantsQuery.data ?? tenants;
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filterStatus, pageSize]);
-
   const enrichedTenants = tenantsData.map((tenant) => {
     const property =
       properties.find(
@@ -108,6 +112,43 @@ export default function TenantsPage() {
       property,
     };
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus, pageSize]);
+
+  // Auto-check for tenants whose lease end dates have passed
+  // and mark them as due. Runs on load and every 10 seconds.
+  useEffect(() => {
+    const checkAndUpdateDueTenants = async () => {
+      try {
+        // Debounce: skip if we just checked within last 5 seconds
+        const now = Date.now();
+        if (now - lastDueCheck < 5000) return;
+
+        setIsCheckingDues(true);
+        const tenantIds = getTenantIdsToMarkDue(enrichedTenants);
+
+        if (tenantIds.length > 0) {
+          logDueCheckResults(enrichedTenants, false);
+          await markTenantsAsDueApi(tenantIds, token ?? undefined);
+          setLastDueCheck(now);
+        }
+      } catch (error) {
+        console.error("[Tenants Page] Failed to update due tenants:", error);
+      } finally {
+        setIsCheckingDues(false);
+      }
+    };
+
+    // Check immediately on mount
+    checkAndUpdateDueTenants();
+
+    // Then check every 10 seconds while page is open
+    const interval = setInterval(checkAndUpdateDueTenants, 10000);
+
+    return () => clearInterval(interval);
+  }, [enrichedTenants, token, lastDueCheck]);
 
   const isServerTenantPagination = tenantsQuery.data !== undefined;
 
