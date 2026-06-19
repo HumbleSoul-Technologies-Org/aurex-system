@@ -505,7 +505,7 @@ export default function DashboardLayout({
                 {/* Notifications */}
                 <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
-                  className="relative p-2 border border-transparent hover:bg-secondary rounded-lg transition-colors"
+                  className="relative hidden p-2 border border-transparent hover:bg-secondary rounded-lg transition-colors"
                   aria-label="Notifications"
                 >
                   <Bell className="w-5 h-5 text-foreground" />

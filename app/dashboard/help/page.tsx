@@ -14,11 +14,21 @@ import {
   ChevronDown,
   Plus,
   ExternalLink,
+  Send,
+  CheckCircle,
 } from "lucide-react";
+import { apiRequest } from "@/lib/query-client";
 
 export default function HelpPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
+  const [contactFormStatus, setContactFormStatus] = useState<
+    "idle" | "submitting" | "success" | "error"
+  >("idle");
 
   const faqs = [
     {
@@ -154,12 +164,12 @@ export default function HelpPage() {
       icon: Mail,
       title: "Email Support",
       description: "Reach out to our support team via email",
-      link: "mailto:support@propmanager.app",
+      link: "mailto:support@aurexpropmanager.io",
     },
     {
       icon: Phone,
       title: "Phone Support",
-      description: "Call us at +1 (555) 123-4567",
+      description: "Call us at +256 7XX-XXX-XXX",
       link: "tel:+15551234567",
     },
   ];
@@ -167,6 +177,37 @@ export default function HelpPage() {
   const filteredFaqs = faqs.filter((faq) =>
     faq.question.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  const submitContactForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactFormStatus("submitting");
+    try {
+      //validation
+      if (!name || !email || !subject || !message) {
+        alert("Please fill in all fields.");
+        setContactFormStatus("error");
+        return;
+      }
+      const payload = {
+        name: name + "(Aurex Prop Manager User)",
+        email,
+        subject,
+        message,
+        type: "inquiry",
+      };
+      await apiRequest("POST", "/messages/inquiry", payload);
+
+      setName("");
+      setEmail("");
+      setSubject("");
+      setMessage("");
+    } catch (error) {
+      console.error("Error submitting contact form:", error);
+    } finally {
+      setContactFormStatus("success");
+      setTimeout(() => setContactFormStatus("idle"), 3000);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -200,7 +241,7 @@ export default function HelpPage() {
             return (
               <a
                 key={resource.title}
-                href={resource.link}
+                href={resource.title !== "Phone Support" ? resource.link : "#"}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -279,6 +320,8 @@ export default function HelpPage() {
                 Name
               </label>
               <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Your name"
                 className="border-border bg-background text-foreground"
               />
@@ -288,6 +331,8 @@ export default function HelpPage() {
                 Email
               </label>
               <Input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 type="email"
                 placeholder="your@email.com"
                 className="border-border bg-background text-foreground"
@@ -298,7 +343,11 @@ export default function HelpPage() {
             <label className="text-sm font-medium text-foreground block mb-2">
               Subject
             </label>
-            <select className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm">
+            <select
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm"
+            >
               <option>General Inquiry</option>
               <option>Technical Issue</option>
               <option>Feature Request</option>
@@ -311,14 +360,32 @@ export default function HelpPage() {
               Message
             </label>
             <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
               placeholder="Tell us how we can help..."
               rows={4}
               className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-sm resize-none"
             />
           </div>
-          <Button className="bg-primary hover:bg-primary/90 text-white w-full md:w-auto">
-            <Plus className="w-4 h-4 mr-2" />
-            Send Message
+          <Button
+            onClick={submitContactForm}
+            className={`${contactFormStatus === "success" ? "bg-green-500 hover:bg-green-600" : "bg-primary hover:bg-primary/90"} text-white w-full md:w-auto ${
+              contactFormStatus === "submitting" ? "cursor-not-allowed" : ""
+            }`}
+            disabled={contactFormStatus === "submitting"}
+          >
+            {contactFormStatus === "submitting" ? (
+              <>
+                Submitting... <Send className="w-4 h-4 ml-2 animate-bounce" />
+              </>
+            ) : contactFormStatus === "success" ? (
+              <span className="text-white flex items-center gap-2">
+                Submitted!
+                <CheckCircle className="w-4 h-4" />
+              </span>
+            ) : (
+              "Submit"
+            )}
           </Button>
         </form>
       </Card>
