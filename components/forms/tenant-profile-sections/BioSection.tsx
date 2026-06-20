@@ -9,6 +9,8 @@ import {
   Phone,
   Camera,
   ImagePlus,
+  Loader,
+  CheckCircle,
 } from "lucide-react";
 import ImageUploadModal from "./ImageUploadModal";
 
@@ -45,6 +47,7 @@ export default function BioSection({
   isSaving,
 }: Props) {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [saveState, setSaveState] = useState("");
 
   const firstName = value.firstName ?? value.name?.split(" ")[0] ?? "";
   const lastName =
@@ -66,6 +69,12 @@ export default function BioSection({
     onChange({ image });
     onImageUpload?.(image);
     setIsImageModalOpen(false);
+  };
+
+  const handleSave = async () => {
+    await onSave();
+    setSaveState("saved");
+    setTimeout(() => setSaveState(""), 3000);
   };
 
   return (
@@ -279,13 +288,19 @@ export default function BioSection({
 
       <div className="pt-6 border-t border-border mt-6 flex flex-col sm:flex-row items-start gap-3">
         <Button
-          onClick={onSave}
-          className="bg-primary hover:bg-primary/90 text-white gap-2"
+          disabled={isSaving || saveState === "saved"}
+          onClick={handleSave}
+          className={`${saveState === "saved" ? "bg-green-500 hover:bg-green-500/90" : "bg-primary hover:bg-primary/90"} text-white gap-2`}
         >
-          {isSaving ? (
+          {saveState === "saved" ? (
             <>
-              <Check className="w-4 h-4" />
+              <CheckCircle className="w-4 h-4" />
               Saved
+            </>
+          ) : isSaving ? (
+            <>
+              Saving...
+              <Loader className="animate-spin w-4 h-4" />
             </>
           ) : (
             <>
@@ -294,9 +309,9 @@ export default function BioSection({
             </>
           )}
         </Button>
-        <div className="text-sm text-muted-foreground">
+        {/* <div className="text-sm text-muted-foreground">
           Updates are saved to your tenant profile immediately.
-        </div>
+        </div> */}
       </div>
 
       <ImageUploadModal
@@ -308,4 +323,7 @@ export default function BioSection({
       />
     </Card>
   );
+}
+function timeout(arg0: () => void, arg1: number) {
+  throw new Error("Function not implemented.");
 }

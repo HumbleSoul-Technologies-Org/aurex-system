@@ -64,23 +64,27 @@ export default function LoginPage() {
           <div className="p-8">
             {/* Logo/Header */}
             <div className="mb-8">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">PM</span>
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <div className=" rounded-lg flex items-center justify-center">
+                  <img
+                    src="/logo-light.png"
+                    alt="PropManager Logo"
+                    className="w-[200px] h-23"
+                  />
                 </div>
-                <span className="text-xl font-bold text-foreground">
-                  PropManager
-                </span>
+                {/* <span className="text-xl font-bold text-foreground">
+                  Aurex Property Manager
+                </span> */}
+                {/* <span className="text-sm text-muted-foreground">
+                  Property management simplified
+                </span> */}
               </div>
-              <p className="text-sm text-muted-foreground">
-                Professional property management simplified
-              </p>
             </div>
 
             {/* Welcome Message */}
             <div className="mb-6">
-              <h1 className="text-2xl font-bold text-foreground mb-2">
-                Welcome back
+              <h1 className="text-2xl text-center font-bold text-foreground mb-2">
+                Welcome Back...
               </h1>
               <p className="text-sm text-muted-foreground">
                 Sign in to your account to continue managing your properties
@@ -98,7 +102,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
-                  Email, Name, or Phone
+                  Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

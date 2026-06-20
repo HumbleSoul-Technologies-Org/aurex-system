@@ -12,14 +12,15 @@ function getServerErrorMessage(errorData: any, defaultMessage: string) {
 }
 
 const SERVER_ROOT = API_URL?.replace(/\/$/, "") || "http://localhost:5454";
-const ADMIN_API_BASE = `${SERVER_ROOT}/admin`;
+const ADMIN_API_BASE = `${SERVER_ROOT}/auth/admin`;
 
 function adminFetch(path: string, options: RequestInit = {}) {
   return fetch(`${ADMIN_API_BASE}${path}`, options);
 }
 
 export interface AdminUser {
-  id: string;
+  id?: string;
+  _id?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -98,7 +99,7 @@ export async function listAdminUsers(
     if (options?.limit) params.append("limit", options.limit.toString());
 
     const token = getAuthToken();
-    const response = await adminFetch(`/invites?${params}`, {
+    const response = await adminFetch(`/users?${params}`, {
       method: "GET",
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -115,6 +116,8 @@ export async function listAdminUsers(
 
     const json = await response.json();
     const responseData = json.data;
+
+    console.log(responseData);
 
     function normalizeAdminUser(rawUser: any): AdminUser {
       const id = rawUser.id || rawUser._id || "";

@@ -237,11 +237,8 @@ function TenantLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Left: Logo */}
           <div className="flex items-center gap-4">
             <Link href="/tenant" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">TP</span>
-              </div>
               <span className="hidden sm:inline font-bold text-foreground">
-                Tenant Portal
+                Welcome, {mounted ? currentTenant?.name || "Tenant" : "Tenant"}!
               </span>
             </Link>
           </div>

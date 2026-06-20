@@ -40,6 +40,8 @@ import {
   AlertCircle,
   CreditCardIcon,
   ShieldAlert,
+  Loader,
+  CheckCircle,
 } from "lucide-react";
 import {
   getSystemSettings,
@@ -69,6 +71,8 @@ import {
 import { PaymentMethodsModal } from "./payment-methods-modal";
 import { PaymentMethodsList } from "./payment-methods-list";
 import UsersSection from "./users-section";
+import { emitWarning } from "process";
+import { set } from "react-hook-form";
 
 function PasswordChangeForm({ settings, updateSettings }: any) {
   const [current, setCurrent] = useState("");
@@ -79,20 +83,6 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const [localProfile, setLocalProfile] = useState({
-    firstName: user?.firstName || "",
-    lastName: user?.lastName || "",
-    phone: user?.phone || "",
-  });
-
-  useEffect(() => {
-    setLocalProfile({
-      firstName: user?.firstName || "",
-      lastName: user?.lastName || "",
-      phone: user?.phone || "",
-    });
-  }, [user]);
 
   const handleChange = async () => {
     setError(null);
@@ -191,10 +181,20 @@ function PasswordChangeForm({ settings, updateSettings }: any) {
       <div className="flex justify-end">
         <Button
           onClick={handleChange}
-          disabled={isLoading}
-          className="bg-primary text-white"
+          disabled={isLoading || success}
+          className={`bg-primary text-white ${success ? "bg-green-500" : ""}`}
         >
-          {isLoading ? "Changing..." : "Change Password"}
+          {isLoading ? (
+            <>
+              Changing... <Loader className="animate-spin" />
+            </>
+          ) : success ? (
+            <>
+              Password Changed <CheckCircle />
+            </>
+          ) : (
+            "Change Password"
+          )}
         </Button>
       </div>
     </div>
@@ -218,7 +218,6 @@ function AccountDeletionCard() {
 
   const startDeletion = () => {
     if (!password) {
-      alert("Enter admin password to confirm");
       return;
     }
     setCountdown(10);
@@ -228,7 +227,6 @@ function AccountDeletionCard() {
   const confirmDelete = () => {
     // perform local clear (dangerous) - this clears localStorage DB
     clearDB();
-    alert("Local data cleared. Reloading...");
     window.location.href = "/";
   };
 
@@ -339,6 +337,7 @@ export default function SettingsPage() {
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
     phone: user?.phone || "",
+    email: user?.email || "",
   });
 
   type LocalCompanyInfo = {
@@ -380,14 +379,15 @@ export default function SettingsPage() {
       firstName: user?.firstName || "",
       lastName: user?.lastName || "",
       phone: user?.phone || "",
+      email: user?.email || "",
     });
   }, [user]);
 
   useEffect(() => {
     if (settings?.companyInfo) {
       const companyAddress = settings.companyInfo.address ?? {
-        address: "",
-        estate: "",
+        street: "",
+        state: "",
         city: "",
         country: "",
       };
@@ -399,10 +399,10 @@ export default function SettingsPage() {
       setLocalCompanyInfo({
         name: settings.companyInfo.name || "",
         address: {
-          street: companyAddress.address || "",
-          state: companyAddress.estate || "",
-          city: companyAddress.city || "",
-          country: companyAddress.country || "",
+          street: companyAddress?.street || "",
+          state: companyAddress?.state || "",
+          city: companyAddress?.city || "",
+          country: companyAddress?.country || "",
         },
         phone: settings.companyInfo.phone || "",
         email: settings.companyInfo.email || "",
@@ -889,16 +889,17 @@ export default function SettingsPage() {
               Manage your account and preferences
             </p>
           </div>
-          <div className="text-right">
-            {apiError ? (
-              <div className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded border border-amber-200">
-                ⚠️ {apiError}
-              </div>
-            ) : settingsId ? (
-              <div className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded border border-green-200">
-                ✓ API Connected
-              </div>
-            ) : null}
+          <div className="text-right ">
+            {process.env.NEXT_PUBLIC_API_URL !== "developemnt" &&
+              (apiError ? (
+                <div className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded border border-amber-200">
+                  ⚠️ {apiError}
+                </div>
+              ) : settingsId ? (
+                <div className="text-xs text-green-600 bg-green-50 px-3 py-2 rounded border border-green-200">
+                  ✓ API Connected
+                </div>
+              ) : null)}
           </div>
         </div>
       </div>
@@ -937,7 +938,7 @@ export default function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger
               value="notifications"
-              className="border-b-2 border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
+              className="border-b-2 hidden border-transparent data-[state=active]:border-primary rounded-none px-6 py-3 text-foreground data-[state=active]:bg-transparent"
             >
               <Bell className="w-4 h-4 mr-2" />
               Notifications
@@ -976,6 +977,10 @@ export default function SettingsPage() {
                     </label>
                     <div className="flex items-center gap-2">
                       <Input
+                        disabled={
+                          fieldStatus.profile === "saving" ||
+                          fieldStatus.profile === "saved"
+                        }
                         value={localProfile.firstName}
                         onChange={(e) =>
                           setLocalProfile((p) => ({
@@ -995,6 +1000,10 @@ export default function SettingsPage() {
                     </label>
                     <div className="flex items-center gap-2">
                       <Input
+                        disabled={
+                          fieldStatus.profile === "saving" ||
+                          fieldStatus.profile === "saved"
+                        }
                         value={localProfile.lastName}
                         onChange={(e) =>
                           setLocalProfile((p) => ({
@@ -1017,6 +1026,10 @@ export default function SettingsPage() {
                   </label>
                   <div className="flex items-center gap-2">
                     <Input
+                      disabled={
+                        fieldStatus.profile === "saving" ||
+                        fieldStatus.profile === "saved"
+                      }
                       value={localProfile.phone}
                       onChange={(e) =>
                         setLocalProfile((p) => ({
@@ -1035,24 +1048,53 @@ export default function SettingsPage() {
                     Email
                   </label>
                   <div className="flex items-center gap-2">
-                    <Input type="email" value={user?.email || ""} readOnly />
+                    <Input
+                      disabled={
+                        fieldStatus.profile === "saving" ||
+                        fieldStatus.profile === "saved"
+                      }
+                      type="email"
+                      value={localProfile.email}
+                      onChange={(e) =>
+                        setLocalProfile((p) => ({
+                          ...p,
+                          email: e.target.value,
+                        }))
+                      }
+                    />
                     <Button
+                      className={`${fieldStatus.profile === "saved" ? "bg-green-500" : "bg-primary"} text-white`}
                       onClick={async () => {
                         try {
+                          setFieldStatus({ profile: "saving" });
                           await updateProfile({
                             firstName: localProfile.firstName,
                             lastName: localProfile.lastName,
                             phone: localProfile.phone,
+                            email: localProfile.email,
                           });
-                          alert("Profile updated successfully");
+                          setFieldStatus({ profile: "saved" });
+                          setTimeout(
+                            () => setFieldStatus({ profile: "idle" }),
+                            2000,
+                          );
                         } catch (err) {
                           console.error("Failed to update profile", err);
-                          alert("Failed to update profile");
                         }
                       }}
                       disabled={authLoading}
                     >
-                      {authLoading ? "Saving..." : "Save"}
+                      {fieldStatus.profile === "saving" ? (
+                        <>
+                          Saving... <Loader className="animate-spin" />
+                        </>
+                      ) : fieldStatus.profile === "saved" ? (
+                        <>
+                          Saved <CheckCircle2 className="w-4 h-4 " />{" "}
+                        </>
+                      ) : (
+                        "Save"
+                      )}
                     </Button>
                     {authError && (
                       <AlertCircle className="w-4 h-4 text-red-600" />
@@ -1070,6 +1112,10 @@ export default function SettingsPage() {
                     Company Name
                   </label>
                   <Input
+                    disabled={
+                      fieldStatus.companyInfo === "saving" ||
+                      fieldStatus.companyInfo === "saved"
+                    }
                     value={localCompanyInfo.name}
                     onChange={(e) =>
                       setLocalCompanyInfo((p) => ({
@@ -1085,6 +1131,10 @@ export default function SettingsPage() {
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       placeholder="Street / Address"
                       value={localCompanyInfo.address.street}
                       onChange={(e) =>
@@ -1098,6 +1148,10 @@ export default function SettingsPage() {
                       }
                     />
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       placeholder="State / Province"
                       value={localCompanyInfo.address.state}
                       onChange={(e) =>
@@ -1113,6 +1167,10 @@ export default function SettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-3">
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       placeholder="City"
                       value={localCompanyInfo.address.city}
                       onChange={(e) =>
@@ -1126,6 +1184,10 @@ export default function SettingsPage() {
                       }
                     />
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       placeholder="Country"
                       value={localCompanyInfo.address.country}
                       onChange={(e) =>
@@ -1146,6 +1208,10 @@ export default function SettingsPage() {
                       Phone
                     </label>
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       value={localCompanyInfo.phone}
                       onChange={(e) =>
                         setLocalCompanyInfo((p) => ({
@@ -1160,6 +1226,10 @@ export default function SettingsPage() {
                       Email
                     </label>
                     <Input
+                      disabled={
+                        fieldStatus.companyInfo === "saving" ||
+                        fieldStatus.companyInfo === "saved"
+                      }
                       type="email"
                       value={localCompanyInfo.email}
                       onChange={(e) =>
@@ -1176,6 +1246,10 @@ export default function SettingsPage() {
                     Company Logo URL
                   </label>
                   <Input
+                    disabled={
+                      fieldStatus.companyInfo === "saving" ||
+                      fieldStatus.companyInfo === "saved"
+                    }
                     placeholder="https://.../logo.png"
                     value={localCompanyInfo.logo.url}
                     onChange={(e) =>
@@ -1203,6 +1277,10 @@ export default function SettingsPage() {
                     License Number
                   </label>
                   <Input
+                    disabled={
+                      fieldStatus.companyInfo === "saving" ||
+                      fieldStatus.companyInfo === "saved"
+                    }
                     value={localCompanyInfo.licenseNumber}
                     onChange={(e) =>
                       setLocalCompanyInfo((p) => ({
@@ -1213,13 +1291,14 @@ export default function SettingsPage() {
                   />
                 </div>
                 <Button
+                  className={`${fieldStatus.companyInfo === "saved" ? "bg-green-500" : "bg-primary"} text-white`}
                   onClick={async () => {
-                    setCompanyInfoSaving(true);
+                    setFieldStatus({ companyInfo: "saving" });
                     setCompanyInfoError(null);
                     try {
                       if (!settingsId) {
-                        alert(
-                          "Settings not initialized. Please refresh and try again.",
+                        throw new Error(
+                          "Settings ID not found. Cannot save company info.",
                         );
                         return;
                       }
@@ -1242,20 +1321,36 @@ export default function SettingsPage() {
                             }
                           : null,
                       );
-                      alert("Company information saved successfully");
+                      setFieldStatus({ companyInfo: "saved" });
                     } catch (err) {
                       console.error("Failed to save company info", err);
                       setCompanyInfoError(
                         err instanceof Error ? err.message : "Save failed",
                       );
-                      alert("Failed to save company information");
+                      setFieldStatus({ companyInfo: "error" });
                     } finally {
-                      setCompanyInfoSaving(false);
+                      setTimeout(
+                        () => setFieldStatus({ companyInfo: "idle" }),
+                        2000,
+                      );
                     }
                   }}
-                  disabled={companyInfoSaving}
+                  disabled={
+                    fieldStatus.companyInfo === "saving" ||
+                    fieldStatus.companyInfo === "saved"
+                  }
                 >
-                  {companyInfoSaving ? "Saving..." : "Save Company Info"}
+                  {fieldStatus.companyInfo === "saving" ? (
+                    <>
+                      Saving... <Loader className="animate-spin" />
+                    </>
+                  ) : fieldStatus.companyInfo === "saved" ? (
+                    <>
+                      Saved <CheckCircle2 className="w-4 h-4 " />{" "}
+                    </>
+                  ) : (
+                    "Save Updates"
+                  )}
                 </Button>
                 {companyInfoError && (
                   <div className="text-sm text-red-600">{companyInfoError}</div>
@@ -1374,7 +1469,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
-
+              {/* payment methods section */}
               <div>
                 <label className="block text-sm font-medium text-foreground mb-4">
                   Payment Methods Configuration
@@ -1409,7 +1504,6 @@ export default function SettingsPage() {
                       )(updated);
                     } catch (e) {
                       console.error("Failed to delete payment method", e);
-                      alert("Failed to delete payment method");
                     } finally {
                       setPaymentMethodDeletingId(null);
                       setPaymentMethodsSaving(false);
@@ -1429,7 +1523,6 @@ export default function SettingsPage() {
                       )(updated);
                     } catch (e) {
                       console.error("Failed to toggle payment method", e);
-                      alert("Failed to update payment method");
                     } finally {
                       setPaymentMethodTogglingId(null);
                       setPaymentMethodsSaving(false);
@@ -1472,7 +1565,6 @@ export default function SettingsPage() {
                       setEditingPaymentMethod(undefined);
                     } catch (e) {
                       console.error("Failed to save payment method", e);
-                      alert("Failed to save payment method");
                     } finally {
                       setPaymentMethodsSaving(false);
                     }
@@ -1493,7 +1585,6 @@ export default function SettingsPage() {
                       setEditingPaymentMethod(undefined);
                     } catch (e) {
                       console.error("Failed to delete payment method", e);
-                      alert("Failed to delete payment method");
                     } finally {
                       setPaymentMethodDeletingId(null);
                       setPaymentMethodsSaving(false);

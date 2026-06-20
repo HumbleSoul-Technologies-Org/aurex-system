@@ -184,40 +184,6 @@ export default function MaintenancePage() {
     }
   };
 
-  const handleDelete = async (requestId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this maintenance request? This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
-    setDeletingId(requestId);
-    try {
-      await deleteMaintenanceRequestById(requestId);
-      await refetchAll();
-    } catch (error) {
-      console.error("Error deleting maintenance request:", error);
-      alert("Failed to delete maintenance request. Please try again.");
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <AlertCircle className="w-4 h-4 text-yellow-600" />;
-      case "assigned":
-        return <Wrench className="w-4 h-4 text-blue-600" />;
-      case "completed":
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      default:
-        return null;
-    }
-  };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
@@ -226,21 +192,6 @@ export default function MaintenancePage() {
         return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
       case "completed":
         return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
-      default:
-        return "";
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "critical":
-        return "bg-red-200 dark:bg-red-900/40 text-red-800 dark:text-red-300";
-      case "high":
-        return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
-      case "medium":
-        return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400";
-      case "low":
-        return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400";
       default:
         return "";
     }
@@ -511,11 +462,18 @@ export default function MaintenancePage() {
             </p>
           </Card>
         ) : filteredRequests.length === 0 ? (
-          <Card className="border  border-border p-8 text-center col-span-full">
-            <Wrench className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <p className="text-muted-foreground">
-              No maintenance requests found
-            </p>
+          <Card className="border flex flex-col justify-center items-center border-border p-8 text-center col-span-full">
+            <span className="flex items-center gap-2 text-green-600 mb-2">
+              <p className="text-muted-foreground">
+                No maintenance requests found
+              </p>
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4 opacity-50" />
+            </span>
+            <img
+              src="/no-maintenance3.png"
+              alt="No pending requests"
+              className="w-[250px] h-[250px] text-muted-foreground"
+            />
           </Card>
         ) : (
           filteredRequests.map((request) => (

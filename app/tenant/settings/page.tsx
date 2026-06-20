@@ -17,6 +17,10 @@ import {
   Phone,
   CalendarDays,
   ClipboardCheck,
+  Loader,
+  CheckCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useAppData } from "@/lib/data-context";
 import {
@@ -80,12 +84,6 @@ const moveOutReasons = [
   { value: "other", label: "Other" },
 ];
 
-const documentDeliveryOptions = [
-  { value: "email", label: "Email Only" },
-  { value: "in-app", label: "In-App Only" },
-  { value: "both", label: "Email & In-App" },
-];
-
 const autoPayScheduleOptions = [
   { value: "monthly_day", label: "Monthly on a specific day" },
   { value: "rent_due_date", label: "On rent due date" },
@@ -124,13 +122,14 @@ export default function TenantSettingsPage() {
   const { currentTenant: tenant } = useTenantContext();
   const { settings: apiSettings } = useSettings();
 
+  const [viewPassword, setViewPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("profile");
   const [saveStatus, setSaveStatus] = useState<Record<TabId, boolean>>({
     profile: false,
     finances: false,
     notifications: false,
-    emergency: false,
-    moveout: false,
+    // emergency: false,
+    // moveout: false,
     security: false,
     // documents: false,
   });
@@ -138,11 +137,13 @@ export default function TenantSettingsPage() {
     profile: null,
     finances: null,
     notifications: null,
-    emergency: null,
-    moveout: null,
+    // emergency: null,
+    // moveout: null,
     security: null,
     // documents: null,
   });
+
+  const [isLoading, setIsLoading] = useState(false);
 
   // Load tenant type configuration for defaults
   const tenantTypeConfig = useMemo(
@@ -226,10 +227,6 @@ export default function TenantSettingsPage() {
     error: "",
   });
 
-  const [documentDelivery, setDocumentDelivery] = useState<
-    TenantRecord["documentDelivery"]
-  >(tenant?.documentDelivery || "email");
-
   useEffect(() => {
     if (!tenant) return;
     setProfile({
@@ -281,24 +278,14 @@ export default function TenantSettingsPage() {
     });
   }, [tenant, tenantTypeConfig]);
 
-  const avatarInitials = useMemo(() => {
-    if (!profile.name) return "TN";
-    return profile.name
-      .split(" ")
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
-  }, [profile.name]);
-
-  const backFilledEmail = profile.email || tenant?.email || "";
-
   const handleSave = async (section: TabId, patch: Partial<TenantRecord>) => {
     if (!tenant) return;
     const fullPatch = {
       ...patch,
       preferredContactMethod: profile.preferredContactMethod,
     };
+
+    setIsLoading(true);
     try {
       setSaveError((prev) => ({ ...prev, [section]: null }));
       await updateTenantApi(tenant.id, fullPatch);
@@ -320,6 +307,8 @@ export default function TenantSettingsPage() {
         error instanceof Error ? error.message : "Failed to save settings";
       setSaveError((prev) => ({ ...prev, [section]: errorMessage }));
       console.error("Failed to save tenant settings", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -359,6 +348,7 @@ export default function TenantSettingsPage() {
   };
 
   const handlePasswordSave = async () => {
+    setIsLoading(true);
     // Clear previous errors
     setPasswordState((prev) => ({ ...prev, error: "" }));
 
@@ -426,16 +416,10 @@ export default function TenantSettingsPage() {
         ...prev,
         error: errorMessage,
       }));
+    } finally {
+      setIsLoading(false);
     }
   };
-
-  // if (!tenant) {
-  //   return (
-  //     <div className="p-6 text-center text-muted-foreground">
-  //       Tenant profile not available. Please log in again.
-  //     </div>
-  //   );
-  // }
 
   return (
     <div className="space-y-6 md:space-y-8 max-w-6xl">
@@ -495,10 +479,10 @@ export default function TenantSettingsPage() {
                   avatar: profile?.image,
                 });
               }}
-              isSaving={saveStatus.profile}
+              isSaving={isLoading && saveStatus.profile === false}
             />
           )}
-
+          {/* Finances Tab Content */}
           {activeTab === "finances" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
@@ -512,6 +496,10 @@ export default function TenantSettingsPage() {
                   <p className="text-sm text-muted-foreground">
                     Choose a payment method and configure automatic rent
                     payments.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    (NOTE: Payment features are not functional, contact the
+                    administrator for assistance with rent payments)
                   </p>
                 </div>
               </div>
@@ -612,6 +600,7 @@ export default function TenantSettingsPage() {
                     <div className="flex items-center gap-3">
                       <label className="inline-flex items-center gap-2">
                         <input
+                          disabled={true} // Disable auto-pay toggle for now since feature is not fully implemented
                           type="checkbox"
                           checked={autoPay.enabled}
                           onChange={(e) =>
@@ -728,6 +717,7 @@ export default function TenantSettingsPage() {
 
               <div className="pt-6 border-t border-border mt-6">
                 <Button
+                  disabled={availablePaymentMethods.length === 0} // Disable save if no payment methods are available
                   onClick={() =>
                     handleSave("finances", {
                       paymentMethod,
@@ -756,7 +746,7 @@ export default function TenantSettingsPage() {
               </div>
             </Card>
           )}
-
+          {/* Notification settings and other tabs would go here... */}
           {activeTab === "notifications" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
@@ -882,7 +872,7 @@ export default function TenantSettingsPage() {
             </Card>
           )}
 
-          {activeTab === "emergency" && (
+          {/* {activeTab === "emergency" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
                 <div className="rounded-lg bg-primary/10 p-3 text-primary">
@@ -976,9 +966,9 @@ export default function TenantSettingsPage() {
                 </Button>
               </div>
             </Card>
-          )}
+          )} */}
 
-          {activeTab === "moveout" && (
+          {/* {activeTab === "moveout" && (
             <Card className="border border-border p-4 md:p-6">
               <div className="flex items-start gap-4 mb-6 pb-6 border-b border-border">
                 <div className="rounded-lg bg-primary/10 p-3 text-primary">
@@ -1155,7 +1145,7 @@ export default function TenantSettingsPage() {
                 </div>
               )}
             </Card>
-          )}
+          )} */}
 
           {activeTab === "security" && (
             <Card className="border border-border p-4 md:p-6">
@@ -1174,12 +1164,12 @@ export default function TenantSettingsPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                <div>
+                <div className="relative">
                   <label className="text-sm font-medium text-foreground mb-2 block">
                     Current Password
                   </label>
                   <input
-                    type="password"
+                    type={viewPassword ? "text" : "password"}
                     value={passwordState.currentPassword}
                     onChange={(e) =>
                       setPasswordState({
@@ -1188,15 +1178,28 @@ export default function TenantSettingsPage() {
                         error: "",
                       })
                     }
+                    placeholder="********"
                     className="w-full px-4 py-3 border border-border rounded-lg bg-background text-foreground text-sm"
                   />
+                  {viewPassword ? (
+                    <Eye
+                      onClick={() => setViewPassword(false)}
+                      className="w-4 h-4 z-10 absolute right-3 top-12 cursor-pointer"
+                    />
+                  ) : (
+                    <EyeOff
+                      onClick={() => setViewPassword(true)}
+                      className="w-4 h-4 z-10 absolute right-3 top-12 cursor-pointer"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 block">
                     New Password
                   </label>
                   <input
-                    type="password"
+                    type={viewPassword ? "text" : "password"}
+                    placeholder="********"
                     value={passwordState.newPassword}
                     onChange={(e) =>
                       setPasswordState({
@@ -1213,7 +1216,8 @@ export default function TenantSettingsPage() {
                     Confirm Password
                   </label>
                   <input
-                    type="password"
+                    type={viewPassword ? "text" : "password"}
+                    placeholder="********"
                     value={passwordState.confirmPassword}
                     onChange={(e) =>
                       setPasswordState({
@@ -1235,12 +1239,18 @@ export default function TenantSettingsPage() {
 
               <div className="pt-6 border-t border-border mt-6">
                 <Button
+                  disabled={isLoading || saveStatus.security} // Disable button while loading or if already saved
                   onClick={handlePasswordSave}
-                  className="bg-primary hover:bg-primary/90 text-white gap-2"
+                  className={`w-full bg-primary hover:bg-primary/90 text-white font-medium h-10 ${saveStatus.security ? "cursor-default bg-green-500 hover:bg-green-500/90" : ""}`}
                 >
-                  {saveStatus.security ? (
+                  {isLoading ? (
                     <>
-                      <Check className="w-4 h-4" />
+                      Updating...
+                      <Loader className="w-4 h-4 animate-spin" />
+                    </>
+                  ) : saveStatus.security ? (
+                    <>
+                      <CheckCircle className="w-4 h-4" />
                       Password Updated
                     </>
                   ) : (

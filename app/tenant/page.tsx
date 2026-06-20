@@ -12,6 +12,9 @@ import {
   CheckCircle,
   Clock,
   ArrowRight,
+  House,
+  HourglassIcon,
+  LucideHourglass,
 } from "lucide-react";
 import { useTenantContext } from "@/lib/tenant-context";
 import { formatCurrency, getCurrencySymbol } from "@/lib/currency";
@@ -143,7 +146,7 @@ export default function TenantDashboard() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {/* Current Rent */}
-        <Card className="border border-border p-4 md:p-6">
+        <Card className="border relative border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
@@ -156,13 +159,13 @@ export default function TenantDashboard() {
                 return (
                   <div>
                     <p
-                      className={`${String(formatCurrency(total, activeCurrency)).length > 6 ? "md:text-lg text-lg" : "text-lg md:text-sm"} font-bold text-foreground`}
+                      className={`${String(formatCurrency(total, activeCurrency)).length > 6 ? "md:text-lg text-sm" : "text-lg md:text-sm"} font-bold text-foreground`}
                     >
                       {formatCurrency(total, activeCurrency)}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {formatCurrency(rent, activeCurrency)} rent ·{" "}
-                      {formatCurrency(serviceFee, activeCurrency)} service
+                      rent. {formatCurrency(rent, activeCurrency)} <br />
+                      service · {formatCurrency(serviceFee, activeCurrency)}
                     </p>
                   </div>
                 );
@@ -174,36 +177,47 @@ export default function TenantDashboard() {
                   : "N/A"}
               </p>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-              <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
+            <div className="w-10 absolute top-1 right-1 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <House className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
             </div>
           </div>
         </Card>
 
         {/* Last Payment Method */}
-        <Card className="border border-border p-4 md:p-6">
+        <Card className="border relative border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
-                Last Payment Method
+                Outstanding Balance
               </p>
-              <p className="text-2xl md:text-3xl font-bold text-foreground">
-                {latestPaymentMethodLabel}
+              <p className="text-2xl md:text-3xl font-bold text-red-600">
+                {latestPayment?.balance
+                  ? `${getCurrencySymbol(activeCurrency)} ${latestPayment.balance.toLocaleString()}`
+                  : `${getCurrencySymbol(activeCurrency)} 0`}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 {latestPayment?.status === "completed"
                   ? `Paid on: ${latestPayment?.paidOn ? new Date(latestPayment.paidOn).toLocaleDateString() : "N/A"}`
-                  : `Due: ${tenant?.leaseStartDate ? new Date(new Date(tenant?.leaseStartDate).getFullYear(), new Date(tenant?.leaseStartDate).getMonth() + 1, new Date(tenant?.leaseStartDate).getDate()).toLocaleDateString() : "N/A"}`}
+                  : `Last Payed On: ${latestPayment?.createdAt ? new Date(new Date(latestPayment?.createdAt).getFullYear(), new Date(latestPayment?.createdAt).getMonth() + 1, new Date(latestPayment?.createdAt).getDate()).toLocaleDateString() : "N/A"}`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Last payment amount:{" "}
+                {latestPayment?.amount
+                  ? `${getCurrencySymbol(activeCurrency)} ${latestPayment.amount.toLocaleString()}`
+                  : `${getCurrencySymbol(activeCurrency)} 0`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Last payment method: {latestPaymentMethodLabel}
               </p>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+            <div className="w-10 h-10 absolute top-1 right-1 md:w-12 md:h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
               <CreditCard className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
             </div>
           </div>
         </Card>
 
         {/* Lease Status */}
-        <Card className="border border-border p-4 md:p-6">
+        <Card className="border relative border-border p-4 md:p-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <p className="text-xs md:text-sm text-muted-foreground mb-1">
@@ -213,18 +227,18 @@ export default function TenantDashboard() {
                 {leaseExpiration ? leaseExpiration.toLocaleDateString() : "N/A"}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                {tenant?.leaseType || "Month-to-month"}
+                Lease type: {tenant?.leaseType || "Month-to-month"}
               </p>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Clock className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
+            <div className="w-10 h-10 absolute top-1 right-1 md:w-12 md:h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <LucideHourglass className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
             </div>
           </div>
         </Card>
 
         {/* Open Maintenance */}
         {showPaymentAndMaintenance && (
-          <Card className="border border-border p-4 md:p-6">
+          <Card className="border relative border-border p-4 md:p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex-1">
                 <p className="text-xs md:text-sm text-muted-foreground mb-1">
@@ -241,7 +255,7 @@ export default function TenantDashboard() {
                   urgent
                 </p>
               </div>
-              <div className="w-10 h-10 md:w-12 md:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 absolute top-1 right-1 md:w-12 md:h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Wrench className="w-5 h-5 md:w-6 md:h-6 text-yellow-600" />
               </div>
             </div>
@@ -327,8 +341,8 @@ export default function TenantDashboard() {
                     </div>
                     <div className="flex items-center gap-3">
                       <p className="text-sm font-bold text-foreground">
-                        {getCurrencySymbol(activeCurrency)}
-                        {payment.amount}
+                        {getCurrencySymbol(activeCurrency)}{" "}
+                        {payment.amount.toLocaleString()}
                       </p>
                       <Badge
                         className={`${
@@ -361,40 +375,54 @@ export default function TenantDashboard() {
             </div>
 
             <div className="space-y-3">
-              {pendingMaintenance.slice(0, 3).map((request) => (
-                <div
-                  key={request.id}
-                  className="p-3 bg-secondary rounded-lg border border-border"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        request.priority === "high"
-                          ? "bg-red-100 dark:bg-red-900/30"
-                          : "bg-yellow-100 dark:bg-yellow-900/30"
-                      }`}
-                    >
-                      {request.status === "assigned" ? (
-                        <Clock className="w-4 h-4 text-yellow-600" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 text-red-600" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {request.description}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {request.status.charAt(0).toUpperCase() +
-                          request.status.slice(1)}
-                      </p>
-                    </div>
-                    <Badge className="text-xs whitespace-nowrap">
-                      {request.priority}
-                    </Badge>
-                  </div>
+              {pendingMaintenance.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 text-green-600">
+                  <CheckCircle className="w-5 h-5" />
+                  <p className="text-sm text-muted-foreground">
+                    No pending maintenance requests.
+                  </p>
+                  <img
+                    src="/no-maintenance2.png"
+                    alt="No pending requests"
+                    className="w-[200px] h-[250px] text-muted-foreground"
+                  />
                 </div>
-              ))}
+              ) : (
+                pendingMaintenance.slice(0, 3).map((request) => (
+                  <div
+                    key={request.id}
+                    className="p-3 bg-secondary rounded-lg border border-border"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          request.priority === "high"
+                            ? "bg-red-100 dark:bg-red-900/30"
+                            : "bg-yellow-100 dark:bg-yellow-900/30"
+                        }`}
+                      >
+                        {request.status === "assigned" ? (
+                          <Clock className="w-4 h-4 text-yellow-600" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-red-600" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {request.description}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {request.status.charAt(0).toUpperCase() +
+                            request.status.slice(1)}
+                        </p>
+                      </div>
+                      <Badge className="text-xs whitespace-nowrap">
+                        {request.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </Card>
         </div>

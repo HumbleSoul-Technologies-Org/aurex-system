@@ -80,13 +80,13 @@ const createDefaultPortalFeatures = () => [
     description: "Submit and track maintenance issues",
     enabled: true,
   },
-  {
-    id: "documents",
-    icon: FileText,
-    title: "Documents",
-    description: "Access lease and important documents",
-    enabled: true,
-  },
+  // {
+  //   id: "documents",
+  //   icon: FileText,
+  //   title: "Documents",
+  //   description: "Access lease and important documents",
+  //   enabled: true,
+  // },
 ];
 
 export default function TenantPortalPage() {
@@ -453,14 +453,6 @@ export default function TenantPortalPage() {
             <h2 className="text-2xl font-bold text-foreground">
               Available Features
             </h2>
-            <Button
-              onClick={handleSaveSettings}
-              disabled={isSaving}
-              className="bg-primary hover:bg-primary/90 text-white"
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              {isSaving ? "Saving..." : "Save Settings"}
-            </Button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {portalFeatures.map((feature) => {

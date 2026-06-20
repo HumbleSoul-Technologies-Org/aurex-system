@@ -264,6 +264,7 @@ export async function updateProfile(
     firstName?: string;
     lastName?: string;
     phone?: string;
+    email?: string;
     profile?: {
       company?: string;
       department?: string;

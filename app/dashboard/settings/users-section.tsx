@@ -29,6 +29,7 @@ import {
 import { listProperties, PropertyRecord } from "@/lib/services/properties";
 import {
   AlertCircle,
+  Ban,
   Edit,
   Loader2,
   Lock,
@@ -332,7 +333,8 @@ function UserFormDialog({
             >
               {saving ? (
                 <span className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Saving...
+                  Saving...
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 </span>
               ) : (
                 "Save Guard"
@@ -631,7 +633,7 @@ export default function UsersSection() {
                             onClick={() => handleToggleLock(user)}
                             disabled={actionInProgress === resolveUserId(user)}
                           >
-                            <Lock className="h-4 w-4" />
+                            <Ban className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"

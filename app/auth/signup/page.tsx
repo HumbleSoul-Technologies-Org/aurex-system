@@ -15,7 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, User, ArrowRight, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  Mail,
+  User,
+  ArrowRight,
+  CheckCircle,
+  AlertCircle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { signupSendCode, verifySignupCode } from "@/lib/services/authApi";
 
 export default function SignupPage() {
@@ -30,6 +38,7 @@ export default function SignupPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [viewPassword, setViewPassword] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [step, setStep] = useState<
@@ -154,28 +163,27 @@ export default function SignupPage() {
           <div className="p-8">
             {/* Logo/Header */}
             <div className="mb-8">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">PM</span>
+              <div className="flex justify-center items-center gap-2 mb-2">
+                <div className=" rounded-lg flex items-center justify-center">
+                  <img
+                    src="/logo-light.png"
+                    alt="PropManager Logo"
+                    className="w-[200px] h-23"
+                  />
                 </div>
-                <span className="text-xl font-bold text-foreground">
-                  PropManager
-                </span>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Professional property management simplified
-              </p>
             </div>
 
             {/* STEP 1: Initial Registration Form */}
             {step === "form" && (
               <>
-                <div className="mb-6">
+                <div className="mb-6 text-center">
                   <h1 className="text-2xl font-bold text-foreground mb-2">
                     Join Our Team
                   </h1>
-                  <p className="text-sm text-muted-foreground">
-                    Register as an administrator or property manager
+                  <p className="text-sm   text-muted-foreground">
+                    Register and be part of hundreds of property owners winning
+                    today 😊.
                   </p>
                 </div>
 
@@ -270,29 +278,51 @@ export default function SignupPage() {
 
                   {/* Password Fields */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
+                    <div className="relative">
                       <label className="block text-sm font-medium text-foreground mb-2">
                         Password
                       </label>
                       <Input
-                        type="password"
+                        type={viewPassword ? "text" : "password"}
                         placeholder="Create password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
                       />
+                      {viewPassword ? (
+                        <Eye
+                          onClick={() => setViewPassword(false)}
+                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                        />
+                      ) : (
+                        <EyeOff
+                          onClick={() => setViewPassword(true)}
+                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                        />
+                      )}
                     </div>
-                    <div>
+                    <div className="relative">
                       <label className="block text-sm font-medium text-foreground mb-2">
                         Confirm Password
                       </label>
                       <Input
-                        type="password"
+                        type={viewPassword ? "text" : "password"}
                         placeholder="Confirm password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                       />
+                      {viewPassword ? (
+                        <Eye
+                          onClick={() => setViewPassword(false)}
+                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                        />
+                      ) : (
+                        <EyeOff
+                          onClick={() => setViewPassword(true)}
+                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                        />
+                      )}
                     </div>
                   </div>
 
