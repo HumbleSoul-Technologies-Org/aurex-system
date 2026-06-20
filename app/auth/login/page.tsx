@@ -237,7 +237,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-muted-foreground space-y-2">
-          <p>© 2024 PropManager. All rights reserved.</p>
+          <p>© 2026 Aurex Property Manager. All rights reserved.</p>
           <div className="flex items-center justify-center gap-4">
             <Link href="#" className="hover:text-foreground">
               Privacy

@@ -339,7 +339,7 @@ export default function SignupPage() {
                       className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
                     />
                     <span>
-                      I accept the{" "}
+                      By registering, you agree to our{" "}
                       <Link
                         href="/terms"
                         className="text-primary hover:text-primary/80 font-medium"
@@ -620,7 +620,7 @@ export default function SignupPage() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-muted-foreground space-y-2">
-          <p>© 2024 PropManager. All rights reserved.</p>
+          <p>© 2026 Aurex Property Manager. All rights reserved.</p>
         </div>
       </div>
     </div>
