@@ -1,10 +1,6 @@
 import { getAuthToken } from "@/lib/token-manager";
-
+import { apiRequest } from "../query-client";
 const API_HOST = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5454";
-const API_BASE_URL = API_HOST.replace(/\/+$/, "");
-const API_PREFIX = API_BASE_URL.endsWith("/api")
-  ? API_BASE_URL
-  : `${API_BASE_URL}/api`;
 
 export type VisitStatus =
   | "scheduled"
@@ -15,6 +11,7 @@ export type VisitStatus =
 
 export interface VisitRecord {
   id: string;
+  _id?: string;
   securityGuardId: string;
   securityGuardName: string;
   visitorName: string;
@@ -62,6 +59,7 @@ export interface ListVisitsOptions {
   search?: string;
   status?: string;
   isArchived?: boolean;
+  visitDate?: string;
   page?: number;
   limit?: number;
 }
@@ -84,14 +82,12 @@ export async function createVisit(
 ): Promise<{ success: boolean; data?: VisitRecord; error?: string }> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_PREFIX}/visits`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    const response = await apiRequest(
+      "POST",
+      "/visits/create",
+      payload,
+      token ? token : undefined,
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -116,19 +112,21 @@ export async function listVisits(
     if (typeof options?.isArchived !== "undefined") {
       params.append("isArchived", String(options.isArchived));
     }
+    if (options?.visitDate) params.append("visitDate", options.visitDate);
     if (options?.page) params.append("page", String(options.page));
     if (options?.limit) params.append("limit", String(options.limit));
 
     const token = getAuthToken();
-    const endpoint = `${API_PREFIX}/visits?${params.toString()}`;
+    // If a guardId is provided we call the public visits route, otherwise use the admin listing
 
-    const response = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    const response = await apiRequest(
+      "GET",
+      `/visits/admin/all?${params.toString()}`,
+      null,
+      token ? token : undefined,
+    );
+
+    console.log("List Visits Response:", response);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -148,14 +146,12 @@ export async function updateVisit(
 ): Promise<{ success: boolean; data?: VisitRecord; error?: string }> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_PREFIX}/visits/${id}/update`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    const response = await apiRequest(
+      "PUT",
+      `/visits/${id}/update`,
+      payload,
+      token ? token : undefined,
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -174,13 +170,12 @@ export async function deleteVisit(
 ): Promise<{ success: boolean; message?: string; error?: string }> {
   try {
     const token = getAuthToken();
-    const response = await fetch(`${API_PREFIX}/admin/visits/${id}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    const response = await apiRequest(
+      `/visits/${id}/delete`,
+      "DELETE",
+      null,
+      token ? token : undefined,
+    );
 
     if (!response.ok) {
       const errorData = await response.json();

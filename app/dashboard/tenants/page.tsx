@@ -10,6 +10,7 @@ import AddTenantForm from "@/components/forms/add-tenant-form";
 import {
   createTenantApi,
   listTenantsApi,
+  setTenantActiveStatusApi,
   TENANT_LIST_FIELDS,
   TenantRecord,
 } from "@/lib/services/tenants";
@@ -272,6 +273,37 @@ export default function TenantsPage() {
     return "Paid";
   };
 
+  const getPortalStatusColor = (tenant: (typeof enrichedTenants)[number]) => {
+    const isActive = tenant.isActive?.status ?? true; // default to true if not set
+    return isActive
+      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+      : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+  };
+
+  const getPortalStatusLabel = (tenant: (typeof enrichedTenants)[number]) => {
+    const isActive = tenant.isActive?.status ?? true; // default to true if not set
+    return isActive ? "Active" : "Inactive";
+  };
+
+  const [togglingStatus, setTogglingStatus] = useState<string | null>(null);
+
+  const handleToggleTenantActive = async (tenant: any) => {
+    try {
+      setTogglingStatus(tenant.id || tenant._id);
+      const currentStatus = tenant.isActive?.status ?? true;
+      await setTenantActiveStatusApi(
+        tenant.id || tenant._id,
+        !currentStatus,
+        token ?? undefined,
+      );
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+    } catch (error) {
+      console.error("Failed to toggle tenant status:", error);
+    } finally {
+      setTogglingStatus(null);
+    }
+  };
+
   const calculateLeaseEnd = (leaseStart: string, leaseType: string) => {
     const startDate = new Date(leaseStart);
     let months = 1;
@@ -457,6 +489,9 @@ export default function TenantsPage() {
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
+                  Portal Status
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
                   Lease Start
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">
@@ -537,6 +572,13 @@ export default function TenantsPage() {
                       {getStatusLabel(tenant)}
                     </span>
                   </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-3 py-1 text-xs font-semibold rounded-full ${getPortalStatusColor(tenant)}`}
+                    >
+                      {getPortalStatusLabel(tenant)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
                     {tenant.leaseStartDate
                       ? new Date(tenant.leaseStartDate).toLocaleDateString()
@@ -581,6 +623,18 @@ export default function TenantsPage() {
                         >
                           <DollarSign className="mr-2 h-4 w-4" />
                           Record Payment
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleToggleTenantActive(tenant)}
+                          disabled={
+                            togglingStatus === (tenant.id || tenant._id)
+                          }
+                        >
+                          {togglingStatus === (tenant.id || tenant._id)
+                            ? "Updating..."
+                            : (tenant.isActive?.status ?? true)
+                              ? "Deactivate Portal"
+                              : "Activate Portal"}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

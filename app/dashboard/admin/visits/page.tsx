@@ -28,6 +28,7 @@ import {
   Clock,
   User,
   FileText,
+  Calendar,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -71,6 +72,8 @@ export default function AdminVisitHistoryPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [archiveFilter, setArchiveFilter] = useState("active");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [filterDate, setFilterDate] = useState<string | undefined>(undefined);
   const { toast } = useToast();
   const [confirmDeleteVisitId, setConfirmDeleteVisitId] = useState<
     string | null
@@ -97,6 +100,7 @@ export default function AdminVisitHistoryPage() {
             : archiveFilter === "archived"
               ? true
               : undefined,
+        visitDate: filterDate || undefined,
         limit: 200,
       };
       const response: ListVisitsResponse = await listVisits(options);
@@ -134,6 +138,7 @@ export default function AdminVisitHistoryPage() {
             : archiveFilter === "archived"
               ? true
               : undefined,
+        visitDate: filterDate || undefined,
         limit: 200,
       };
       const response: ListVisitsResponse = await listVisits(options);
@@ -175,6 +180,7 @@ export default function AdminVisitHistoryPage() {
               : archiveFilter === "archived"
                 ? true
                 : undefined,
+          visitDate: filterDate || undefined,
           limit: 200,
         };
         const response: ListVisitsResponse = await listVisits(options);
@@ -187,7 +193,7 @@ export default function AdminVisitHistoryPage() {
     };
 
     fetchVisits();
-  }, [search, statusFilter, archiveFilter]);
+  }, [search, statusFilter, archiveFilter, filterDate]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -237,12 +243,31 @@ export default function AdminVisitHistoryPage() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowDatePicker((s) => !s)}
+                className="gap-2"
+              >
+                <Calendar className="h-4 w-4" />
+                {filterDate ? filterDate : "Date"}
+              </Button>
+              {showDatePicker && (
+                <Input
+                  type="date"
+                  value={filterDate || ""}
+                  onChange={(e) => setFilterDate(e.target.value || undefined)}
+                />
+              )}
+            </div>
             <Button
               variant="outline"
               onClick={() => {
                 setSearch("");
                 setStatusFilter("all");
                 setArchiveFilter("active");
+                setFilterDate(undefined);
+                setShowDatePicker(false);
               }}
             >
               Clear
@@ -250,7 +275,7 @@ export default function AdminVisitHistoryPage() {
           </div>
         </div>
 
-        <Card className="p-4">
+        <Card className="p-4 w-full">
           {loading ? (
             <div className="flex min-h-[220px] items-center justify-center text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -265,21 +290,19 @@ export default function AdminVisitHistoryPage() {
               No visit records found.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-border text-left text-sm">
-                <thead>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Visitor</TableHead>
-                      <TableHead>Guard</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Date / Time</TableHead>
-                      <TableHead>Purpose</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                </thead>
+            <div className="overflow-x-auto w-full">
+              <Table className="min-w-full divide-y divide-border text-left text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Visitor</TableHead>
+                    <TableHead>Guard</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Date &amp; Time</TableHead>
+                    <TableHead>Purpose</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   {visits.map((visit) => (
                     <TableRow key={visit.id}>
@@ -303,8 +326,8 @@ export default function AdminVisitHistoryPage() {
                         {visit.status.replace(/_/g, " ")}
                         {visit.isArchived ? " (Archived)" : ""}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
+                      <TableCell className="text-right">
+                        <div className="inline-flex gap-2">
                           <Button
                             size="sm"
                             variant={visit.isArchived ? "secondary" : "outline"}
@@ -344,7 +367,7 @@ export default function AdminVisitHistoryPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </table>
+              </Table>
             </div>
           )}
         </Card>

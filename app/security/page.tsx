@@ -68,6 +68,10 @@ export default function SecurityPage() {
   const [error, setError] = useState<string | null>(null);
   const [recentVisits, setRecentVisits] = useState<VisitRecord[]>([]);
   const [visitsLoading, setVisitsLoading] = useState(false);
+  const [showRecentDatePicker, setShowRecentDatePicker] = useState(false);
+  const [recentFilterDate, setRecentFilterDate] = useState<string | undefined>(
+    undefined,
+  );
   const [loggingOut, setLoggingOut] = useState(false);
 
   const { properties, tenants } = useAppData();
@@ -198,7 +202,11 @@ export default function SecurityPage() {
       if (!user) return;
       setVisitsLoading(true);
       try {
-        const response = await listVisits({ guardId: user.id, limit: 10 });
+        const response = await listVisits({
+          guardId: user.id,
+          limit: 10,
+          visitDate: recentFilterDate || undefined,
+        });
         setRecentVisits(response.data.visits || []);
       } catch (err) {
         console.error("Failed to load recent visits", err);
@@ -208,7 +216,7 @@ export default function SecurityPage() {
     };
 
     loadVisits();
-  }, [user]);
+  }, [user, recentFilterDate]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -263,7 +271,11 @@ export default function SecurityPage() {
       setNotes("");
       setStatus("scheduled");
 
-      const response = await listVisits({ guardId: user.id, limit: 10 });
+      const response = await listVisits({
+        guardId: user.id,
+        limit: 10,
+        visitDate: recentFilterDate || undefined,
+      });
       setRecentVisits(response.data.visits || []);
       toast({
         title: "Visitor saved",
@@ -291,7 +303,11 @@ export default function SecurityPage() {
     try {
       setActionLoading(visitId);
       await updateVisit(visitId, { status: nextStatus });
-      const response = await listVisits({ guardId: user?.id || "", limit: 10 });
+      const response = await listVisits({
+        guardId: user?.id || "",
+        limit: 10,
+        visitDate: recentFilterDate || undefined,
+      });
       setRecentVisits(response.data.visits || []);
       setSuccess(true);
       toast({
@@ -422,7 +438,7 @@ export default function SecurityPage() {
                   <Label htmlFor="hostTenant">Host Tenant</Label>
                   <div className="mt-2">
                     <SearchableSelect
-                      options={propertyTenants.map((tenant) => ({
+                      options={propertyTenants.map((tenant: any) => ({
                         value: tenant.id,
                         label: tenant.name || "Unnamed tenant",
                         description: [
@@ -438,7 +454,7 @@ export default function SecurityPage() {
                       onValueChange={(value) => {
                         setHostTenantId(value || "");
                         const tenant = propertyTenants.find(
-                          (item) => item.id === value,
+                          (item: any) => item.id === value,
                         );
                         setHostTenantName(tenant?.name || "");
                       }}
@@ -546,6 +562,25 @@ export default function SecurityPage() {
                   Latest visit records created by you.
                 </p>
               </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRecentDatePicker((s) => !s)}
+                  className="gap-2"
+                >
+                  <Calendar className="h-4 w-4" />
+                  {recentFilterDate ? recentFilterDate : "Date"}
+                </Button>
+                {showRecentDatePicker && (
+                  <Input
+                    type="date"
+                    value={recentFilterDate || ""}
+                    onChange={(e) =>
+                      setRecentFilterDate(e.target.value || undefined)
+                    }
+                  />
+                )}
+              </div>
             </div>
 
             {visitsLoading ? (
@@ -558,7 +593,7 @@ export default function SecurityPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentVisits.map((visit) => {
+                {recentVisits.map((visit, index) => {
                   const nextStatus =
                     visit.status === "scheduled"
                       ? "checked_in"
@@ -568,7 +603,7 @@ export default function SecurityPage() {
 
                   return (
                     <div
-                      key={visit.id}
+                      key={index}
                       className="rounded-lg border border-border p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -616,12 +651,21 @@ export default function SecurityPage() {
                         <div className="mt-4 flex flex-wrap gap-2">
                           <Button
                             type="button"
-                            disabled={actionLoading === visit.id}
-                            onClick={() =>
-                              handleVisitStateChange(visit.id, nextStatus)
-                            }
+                            disabled={actionLoading === visit._id}
+                            onClick={() => {
+                              console.log(
+                                "visit._id:",
+                                visit._id,
+                                "nextStatus:",
+                                nextStatus,
+                              );
+                              handleVisitStateChange(
+                                visit._id as string,
+                                nextStatus,
+                              );
+                            }}
                           >
-                            {actionLoading === visit.id ? (
+                            {actionLoading === visit._id ? (
                               <span className="inline-flex items-center gap-2">
                                 <Loader2 className="h-4 w-4 animate-spin" />
                                 Updating...

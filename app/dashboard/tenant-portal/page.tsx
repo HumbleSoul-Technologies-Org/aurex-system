@@ -161,7 +161,9 @@ export default function TenantPortalPage() {
   // Calculate statistics from real tenant and payment data
   const tenantStats = useMemo(() => {
     const totalTenants = tenants.length;
-    const activePortals = tenants.filter((t) => t.status === "active").length;
+    const activePortals = tenants.filter(
+      (t) => t.isActive?.status ?? true,
+    ).length;
     const pendingAccess = totalTenants - activePortals;
 
     // Calculate payment success rate from actual payment data
@@ -207,11 +209,12 @@ export default function TenantPortalPage() {
   const enrichedTenants = useMemo(() => {
     return tenants.map((tenant) => {
       const property = properties.find((p) => p.id === tenant.propertyId);
+      const isActive = tenant.isActive?.status ?? true;
       return {
         ...tenant,
         propertyName: property?.name || "Unknown Property",
         lastActive: "Never",
-        portalStatus: tenant.status === "active" ? "Active" : "Inactive",
+        portalStatus: isActive ? "Active" : "Inactive",
       };
     });
   }, [tenants, properties]);

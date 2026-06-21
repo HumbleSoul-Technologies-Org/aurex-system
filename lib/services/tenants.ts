@@ -119,6 +119,10 @@ export interface TenantRecord {
   financialInfo?: string;
   securityDeposit?: string;
   status?: string;
+  isActive?: {
+    status?: boolean;
+    lastActive?: string;
+  };
   image?: string;
   address?: string;
   city?: string;
@@ -608,5 +612,92 @@ export async function markTenantsAsDueApi(
   } catch (err) {
     console.error("[Tenant Due Update] Error marking tenants as due:", err);
     throw err;
+  }
+}
+
+/**
+ * Set tenant active/inactive status
+ * Admin-only: PATCH /api/tenants/:id/active-status
+ *
+ * @param id Tenant ID
+ * @param isActive Whether to activate (true) or deactivate (false)
+ * @param token Optional auth token
+ * @returns Updated tenant record
+ */
+export async function setTenantActiveStatusApi(
+  id: string,
+  isActive: boolean,
+  token?: string,
+): Promise<TenantRecord | null> {
+  try {
+    const res = await apiRequest(
+      "PATCH",
+      `/tenants/${id}/active-status`,
+      { isActive },
+      token,
+    );
+    const data = await res.json();
+    const tenantData = data.tenant || data.data.tenant || data.data;
+    const tenant: TenantRecord = {
+      ...tenantData,
+      id: tenantData.id || tenantData._id,
+    } as TenantRecord;
+
+    if (tenant?._id) {
+      const existing = findInCollection<TenantRecord>(
+        "tenants",
+        (t) => t._id === tenant._id,
+      );
+      if (existing) {
+        updateInCollection<TenantRecord>("tenants", tenant._id, tenant);
+      } else {
+        insertIntoCollection<TenantRecord>("tenants", tenant);
+      }
+
+      // Update cache
+      queryClient.setQueryData<TenantRecord[]>(["tenants"], (current) =>
+        current
+          ? current.map((item) => (item._id === tenant._id ? tenant : item))
+          : listTenants(),
+      );
+
+      // Update properties cache
+      try {
+        const storedUser = getStoredUser();
+        const adminId = storedUser?.id || storedUser?._id || null;
+        if (tenant?.propertyId && adminId) {
+          queryClient.setQueryData<any>(
+            ["properties", adminId],
+            (current: any) => {
+              if (!current) return current;
+              return current.map((prop: any) => {
+                if (prop.id === tenant.propertyId) {
+                  const tenantsArr = Array.isArray(prop.tenants)
+                    ? [...prop.tenants]
+                    : [];
+                  const idx = tenantsArr.findIndex(
+                    (t: any) => (t?.id || t) === tenant._id,
+                  );
+                  if (idx !== -1) {
+                    tenantsArr[idx] = tenant;
+                  } else {
+                    tenantsArr.push(tenant);
+                  }
+                  return { ...prop, tenants: tenantsArr };
+                }
+                return prop;
+              });
+            },
+          );
+        }
+      } catch (e) {
+        console.error("Failed to update cache after setting active status", e);
+      }
+    }
+
+    return tenant;
+  } catch (e) {
+    console.error("setTenantActiveStatusApi failed", e);
+    throw e;
   }
 }

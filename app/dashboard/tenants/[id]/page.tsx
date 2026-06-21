@@ -12,6 +12,7 @@ import {
   getTenant,
   deleteTenantApi,
   updateTenantApi,
+  setTenantActiveStatusApi,
 } from "@/lib/services/tenants";
 import { notifyTenantProfileUpdateToAdmin } from "@/lib/services/notifications";
 import { useAppData } from "@/lib/data-context";
@@ -93,6 +94,7 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isEditingTenant, setIsEditingTenant] = useState(false);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [isTogglingPortalStatus, setIsTogglingPortalStatus] = useState(false);
 
   const getLatestRentPaymentDate = (tenantPayments: any[]) => {
     const completedRentPayments = tenantPayments
@@ -274,6 +276,35 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
     return "Rent Paid";
   };
 
+  const getPortalStatusColor = (isActive: boolean) => {
+    return isActive
+      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+      : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400";
+  };
+
+  const getPortalStatusLabel = (isActive: boolean) => {
+    return isActive ? "Active" : "Inactive";
+  };
+
+  const handleTogglePortalStatus = async () => {
+    if (!tenant) return;
+    try {
+      setIsTogglingPortalStatus(true);
+      const currentStatus = tenant.isActive?.status ?? true;
+      const updated = await setTenantActiveStatusApi(
+        tenant.id || tenant._id,
+        !currentStatus,
+      );
+      if (updated) {
+        setTenant(updated);
+      }
+    } catch (error) {
+      console.error("Failed to toggle portal status:", error);
+    } finally {
+      setIsTogglingPortalStatus(false);
+    }
+  };
+
   if (!tenant) {
     return (
       <div className="space-y-6">
@@ -432,6 +463,37 @@ export default function TenantDetailPage({ params }: TenantDetailPageProps) {
                 {getStatusLabel(tenant.status ?? "")}
               </span>
             </div>
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">
+                Portal Status
+              </p>
+              <div className="flex items-center gap-3">
+                <span
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold inline-block ${getPortalStatusColor(
+                    tenant.isActive?.status ?? true,
+                  )}`}
+                >
+                  {getPortalStatusLabel(tenant.isActive?.status ?? true)}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleTogglePortalStatus}
+                  disabled={isTogglingPortalStatus}
+                  className="border-border bg-transparent"
+                >
+                  {isTogglingPortalStatus
+                    ? "Updating..."
+                    : (tenant.isActive?.status ?? true)
+                      ? "Deactivate"
+                      : "Activate"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Status & Property */}
+          <div className="grid grid-cols-1 gap-6">
             <div>
               <p className="text-sm text-muted-foreground mb-1">Property</p>
               <Link
