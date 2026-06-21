@@ -29,9 +29,20 @@ import {
   User,
   FileText,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  deleteVisit,
   listVisits,
   ListVisitsResponse,
+  updateVisit,
   VisitRecord,
 } from "@/lib/services/visits";
 
@@ -44,20 +55,111 @@ const visitStatusOptions = [
   "completed",
 ];
 
+const archiveOptions = [
+  { value: "all", label: "All Records" },
+  { value: "active", label: "Active" },
+  { value: "archived", label: "Archived" },
+];
+
 export default function AdminVisitHistoryPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
   const [visits, setVisits] = useState<VisitRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [archiveFilter, setArchiveFilter] = useState("active");
+  const { toast } = useToast();
+  const [confirmDeleteVisitId, setConfirmDeleteVisitId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "admin")) {
       router.push("/dashboard");
     }
   }, [router, user, isLoading]);
+
+  const handleArchiveChange = async (visitId: string, isArchived: boolean) => {
+    setError(null);
+    setActionLoading(visitId);
+
+    try {
+      await updateVisit(visitId, { isArchived });
+      const options: any = {
+        search: search || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        isArchived:
+          archiveFilter === "active"
+            ? false
+            : archiveFilter === "archived"
+              ? true
+              : undefined,
+        limit: 200,
+      };
+      const response: ListVisitsResponse = await listVisits(options);
+      setVisits(response.data.visits || []);
+      toast({
+        title: isArchived ? "Visit archived" : "Visit restored",
+        description: isArchived
+          ? "The visit history record was archived successfully."
+          : "The visit history record was restored successfully.",
+      });
+    } catch (err: any) {
+      setError(err?.message || "Failed to update archive status.");
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to update archive status.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteVisit = async (visitId: string) => {
+    setError(null);
+    setActionLoading(visitId);
+
+    try {
+      await deleteVisit(visitId);
+      const options: any = {
+        search: search || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        isArchived:
+          archiveFilter === "active"
+            ? false
+            : archiveFilter === "archived"
+              ? true
+              : undefined,
+        limit: 200,
+      };
+      const response: ListVisitsResponse = await listVisits(options);
+      setVisits(response.data.visits || []);
+      toast({
+        title: "Visit deleted",
+        description: "The visit record was deleted successfully.",
+      });
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete visit record.");
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to delete visit record.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDeleteVisitId) return;
+
+    await handleDeleteVisit(confirmDeleteVisitId);
+    setConfirmDeleteVisitId(null);
+  };
 
   useEffect(() => {
     const fetchVisits = async () => {
@@ -67,6 +169,12 @@ export default function AdminVisitHistoryPage() {
         const options: any = {
           search: search || undefined,
           status: statusFilter === "all" ? undefined : statusFilter,
+          isArchived:
+            archiveFilter === "active"
+              ? false
+              : archiveFilter === "archived"
+                ? true
+                : undefined,
           limit: 200,
         };
         const response: ListVisitsResponse = await listVisits(options);
@@ -79,7 +187,7 @@ export default function AdminVisitHistoryPage() {
     };
 
     fetchVisits();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, archiveFilter]);
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -93,7 +201,7 @@ export default function AdminVisitHistoryPage() {
               View all visitor records created by security guards.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -117,11 +225,24 @@ export default function AdminVisitHistoryPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={archiveFilter} onValueChange={setArchiveFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Archive filter" />
+              </SelectTrigger>
+              <SelectContent>
+                {archiveOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant="outline"
               onClick={() => {
                 setSearch("");
                 setStatusFilter("all");
+                setArchiveFilter("active");
               }}
             >
               Clear
@@ -155,6 +276,7 @@ export default function AdminVisitHistoryPage() {
                       <TableHead>Date / Time</TableHead>
                       <TableHead>Purpose</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                 </thead>
@@ -174,9 +296,50 @@ export default function AdminVisitHistoryPage() {
                         {visit.propertyName || visit.hostTenantName || "—"}
                       </TableCell>
                       <TableCell>{`${visit.visitDate} ${visit.visitTime}`}</TableCell>
-                      <TableCell>{visit.purpose || "—"}</TableCell>
+                      <TableCell className="max-w-[220px] truncate">
+                        {visit.purpose || "—"}
+                      </TableCell>
                       <TableCell className="capitalize">
                         {visit.status.replace(/_/g, " ")}
+                        {visit.isArchived ? " (Archived)" : ""}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant={visit.isArchived ? "secondary" : "outline"}
+                            disabled={actionLoading === visit.id}
+                            onClick={() =>
+                              handleArchiveChange(visit.id, !visit.isArchived)
+                            }
+                          >
+                            {actionLoading === visit.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Saving...
+                              </span>
+                            ) : visit.isArchived ? (
+                              "Unarchive"
+                            ) : (
+                              "Archive"
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={actionLoading === visit.id}
+                            onClick={() => setConfirmDeleteVisitId(visit.id)}
+                          >
+                            {actionLoading === visit.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Deleting...
+                              </span>
+                            ) : (
+                              "Delete"
+                            )}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -186,6 +349,35 @@ export default function AdminVisitHistoryPage() {
           )}
         </Card>
       </div>
+      <AlertDialog
+        open={Boolean(confirmDeleteVisitId)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmDeleteVisitId(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle>Delete Visit Record</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this visit history record? This
+            action cannot be undone.
+          </AlertDialogDescription>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={actionLoading === confirmDeleteVisitId}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {actionLoading === confirmDeleteVisitId
+                ? "Deleting..."
+                : "Delete"}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

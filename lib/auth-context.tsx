@@ -10,7 +10,7 @@ import React, {
 import * as authApi from "@/lib/services/authApi";
 import * as tokenManager from "@/lib/token-manager";
 
-interface User {
+export interface User {
   id: string;
   firstName: string;
   lastName: string;
@@ -20,6 +20,10 @@ interface User {
   status: string;
   emailVerified: boolean;
   isActivated?: boolean;
+  trialStartAt?: string;
+  trialExpiryAt?: string;
+  trialDaysRemaining?: number | null;
+  trialExpired?: boolean;
   createdAt: string;
   settingsId?: string;
   propertyId?: string;

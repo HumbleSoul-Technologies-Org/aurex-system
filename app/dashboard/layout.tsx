@@ -8,7 +8,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth, type User as AuthUser } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { useAdminInactivity } from "@/lib/hooks/use-admin-inactivity";
 import { useAppData } from "@/lib/data-context";
@@ -53,6 +53,15 @@ import {
 } from "@/app/lib/notifications-client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 interface NavItem {
   label: string;
@@ -102,6 +111,7 @@ export default function DashboardLayout({
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [pendingExpensesCount, setPendingExpensesCount] = useState(0);
+  const [trialDialogOpen, setTrialDialogOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const user = { name: "Alex Johnson", email: "alex@example.com" };
@@ -113,6 +123,8 @@ export default function DashboardLayout({
     logout,
     token,
   } = useAuth();
+
+  const typedAuthUser = authUser as AuthUser | null;
   const { settings } = useSettings();
   const { tenants: allTenants, expenses, maintenanceRequests } = useAppData();
 
@@ -245,6 +257,20 @@ export default function DashboardLayout({
       router.push("/auth/login");
     }
   }, [isAuthenticated, isLoading, authUser, router]);
+
+  const trialDaysRemaining = (typedAuthUser as any)?.trialDaysRemaining ?? null;
+  const trialExpired = (typedAuthUser as any)?.trialExpired ?? false;
+  const showTrialNotice =
+    typedAuthUser &&
+    !typedAuthUser.isActivated &&
+    ["admin", "property_manager"].includes(typedAuthUser.role);
+  const trialNoticeLabel = trialExpired
+    ? "Trial expired"
+    : trialDaysRemaining === 1
+      ? "1 day left"
+      : trialDaysRemaining != null
+        ? `${trialDaysRemaining} days left`
+        : null;
 
   const unreadNotifications = notifications.filter((n) => !n.read).length;
 
@@ -502,6 +528,21 @@ export default function DashboardLayout({
 
               {/* Right Actions */}
               <div className="flex items-center gap-4 ml-auto">
+                {/* Trial notice */}
+                {showTrialNotice && trialNoticeLabel && (
+                  <button
+                    type="button"
+                    onClick={() => setTrialDialogOpen(true)}
+                    className={`hidden md:inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                      trialExpired
+                        ? "bg-destructive text-destructive-foreground"
+                        : "bg-amber-500/10 text-amber-600"
+                    }`}
+                  >
+                    {trialNoticeLabel}
+                  </button>
+                )}
+
                 {/* Notifications */}
                 <button
                   onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -534,6 +575,48 @@ export default function DashboardLayout({
               <div className="p-4 md:p-6">{children}</div>
             </main>
           </div>
+
+          <Dialog open={trialDialogOpen} onOpenChange={setTrialDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {trialExpired ? "Trial Expired" : "Trial Ending Soon"}
+                </DialogTitle>
+                <DialogDescription>
+                  {trialExpired
+                    ? "Your trial period has ended. Enter a product key to continue using the dashboard."
+                    : `Your trial expires in ${trialDaysRemaining} day${
+                        trialDaysRemaining === 1 ? "" : "s"
+                      }. Enter a product key to keep your account active.`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4 space-y-4 text-sm text-muted-foreground">
+                <p>
+                  Product key activation unlocks your account and keeps the
+                  service available.
+                </p>
+                <p>If you already have a product key, you can apply it now.</p>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setTrialDialogOpen(false);
+                    router.push(
+                      `/auth/product-key?email=${encodeURIComponent(
+                        authUser?.email || "",
+                      )}`,
+                    );
+                  }}
+                >
+                  Enter product key
+                </Button>
+                <DialogClose asChild>
+                  <Button variant="outline">Close</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Notifications Sidebar - Right */}
           {notificationsOpen && (

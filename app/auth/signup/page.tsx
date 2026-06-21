@@ -5,6 +5,9 @@ import React from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm, type SubmitHandler } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -24,19 +27,42 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { getErrorMessage } from "@/lib/utils";
 import { signupSendCode, verifySignupCode } from "@/lib/services/authApi";
 
+const signupSchema = z
+  .object({
+    role: z.enum(["admin", "property_manager"]),
+    firstName: z.string().trim().min(1, "First name is required"),
+    lastName: z.string().trim().min(1, "Last name is required"),
+    email: z.string().trim().email("Enter a valid email address"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/(?=.*[a-z])/, "Password must include a lowercase letter")
+      .regex(/(?=.*[A-Z])/, "Password must include an uppercase letter")
+      .regex(/(?=.*\d)/, "Password must include a number"),
+    confirmPassword: z.string().min(1, "Confirm your password"),
+    acceptedTermsAndConditions: z.boolean().refine((value) => value === true, {
+      message: "You must accept the Terms & Conditions to continue",
+    }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  });
+
+type SignupFormValues = z.infer<typeof signupSchema>;
+
 export default function SignupPage() {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"admin" | "property_manager">(
-    "property_manager",
-  );
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
+  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [submittedRole, setSubmittedRole] = useState<
+    "admin" | "property_manager"
+  >("property_manager");
+  const [signupValues, setSignupValues] = useState<SignupFormValues | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [viewPassword, setViewPassword] = useState(false);
   const [error, setError] = useState("");
@@ -45,70 +71,62 @@ export default function SignupPage() {
     "form" | "verification" | "pending" | "success"
   >("form");
   const router = useRouter();
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    getValues,
+    watch,
+    formState: { errors },
+  } = useForm<SignupFormValues>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      role: "property_manager",
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      acceptedTermsAndConditions: false,
+    },
+  });
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const currentEmail = submittedEmail || watch("email");
+  const currentRole = submittedRole || watch("role");
+
+  const onSubmit: SubmitHandler<SignupFormValues> = async (values) => {
     setError("");
-
-    if (!firstName || !lastName || !email || !role) {
-      setError("Please fill in all required fields");
-      return;
-    }
-
-    if (!email.includes("@")) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
-    if (!acceptedTerms) {
-      setError("You must accept the Terms & Conditions to continue");
-      return;
-    }
-
-    if (!password || !confirmPassword) {
-      setError("Please enter and confirm your password");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
-
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(password)) {
-      setError(
-        "Password must be at least 8 characters and include uppercase, lowercase, and number",
-      );
-      return;
-    }
-
     setIsLoading(true);
-    setError("");
     setInfo("");
 
     try {
       await signupSendCode({
-        firstName,
-        lastName,
-        email,
-        role,
-        password,
-        acceptedTermsAndConditions: acceptedTerms,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim(),
+        role: values.role,
+        password: values.password.trim(),
+        acceptedTermsAndConditions: values.acceptedTermsAndConditions,
       });
 
+      setSubmittedEmail(values.email.trim());
+      setSubmittedRole(values.role);
+      setSignupValues(values);
       setStep("verification");
       setInfo(
-        `A verification code has been sent to ${email}. Enter it below to continue.`,
+        `A verification code has been sent to ${values.email.trim()}. Enter it below to continue.`,
       );
-    } catch (err: any) {
-      const msg = err?.message || "Failed to send verification code";
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Failed to send verification code");
       if (
         msg.toLowerCase().includes("already") ||
         msg.toLowerCase().includes("exists") ||
         msg.includes("USER_EXISTS") ||
         msg.includes("requiresProductKey")
       ) {
-        router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
+        router.push(
+          `/auth/product-key?email=${encodeURIComponent(values.email)}`,
+        );
         return;
       }
       setError(msg);
@@ -132,25 +150,53 @@ export default function SignupPage() {
 
     try {
       await verifySignupCode({
-        email,
+        email: currentEmail,
         code: verificationCode,
       });
 
       // After successful signup verification, require product key entry
-      router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
-    } catch (err: any) {
-      const msg = err?.message || "Failed to verify code";
-      // If account already exists / requires product key, redirect to product-key page
+      router.push(
+        `/auth/product-key?email=${encodeURIComponent(currentEmail)}`,
+      );
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err, "Failed to verify code");
       if (
         msg.toLowerCase().includes("already") ||
         msg.toLowerCase().includes("exists") ||
         msg.includes("USER_EXISTS") ||
         msg.includes("requiresProductKey")
       ) {
-        router.push(`/auth/product-key?email=${encodeURIComponent(email)}`);
+        router.push(
+          `/auth/product-key?email=${encodeURIComponent(currentEmail)}`,
+        );
         return;
       }
       setError(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError("");
+    setInfo("");
+    setIsLoading(true);
+
+    const values = signupValues || getValues();
+
+    try {
+      await signupSendCode({
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim(),
+        role: values.role,
+        password: values.password.trim(),
+        acceptedTermsAndConditions: values.acceptedTermsAndConditions,
+      });
+
+      setInfo(`A new code has been sent to ${values.email.trim()}.`);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Unable to resend code"));
     } finally {
       setIsLoading(false);
     }
@@ -194,16 +240,16 @@ export default function SignupPage() {
                   </div>
                 )}
 
-                <form onSubmit={handleFormSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   {/* Role Selection */}
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
                       Role
                     </label>
                     <Select
-                      value={role}
+                      value={watch("role")}
                       onValueChange={(value) =>
-                        setRole(value as "admin" | "property_manager")
+                        setValue("role", value as "admin" | "property_manager")
                       }
                     >
                       <SelectTrigger className="w-full">
@@ -216,6 +262,11 @@ export default function SignupPage() {
                         <SelectItem value="admin">Administrator</SelectItem>
                       </SelectContent>
                     </Select>
+                    {errors.role && (
+                      <p className="mt-1 text-sm text-destructive">
+                        {errors.role.message}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">
                       Your account will be reviewed and approved by a super
                       administrator
@@ -233,12 +284,15 @@ export default function SignupPage() {
                         <Input
                           type="text"
                           placeholder="John"
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                          required
                           className="pl-10"
+                          {...register("firstName")}
                         />
                       </div>
+                      {errors.firstName && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {errors.firstName.message}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-2">
@@ -249,12 +303,15 @@ export default function SignupPage() {
                         <Input
                           type="text"
                           placeholder="Doe"
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                          required
                           className="pl-10"
+                          {...register("lastName")}
                         />
                       </div>
+                      {errors.lastName && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {errors.lastName.message}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -268,12 +325,15 @@ export default function SignupPage() {
                       <Input
                         type="email"
                         placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
                         className="pl-10"
+                        {...register("email")}
                       />
                     </div>
+                    {errors.email && (
+                      <p className="mt-1 text-sm text-destructive">
+                        {errors.email.message}
+                      </p>
+                    )}
                   </div>
 
                   {/* Password Fields */}
@@ -285,20 +345,23 @@ export default function SignupPage() {
                       <Input
                         type={viewPassword ? "text" : "password"}
                         placeholder="Create password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
+                        {...register("password")}
                       />
                       {viewPassword ? (
                         <Eye
                           onClick={() => setViewPassword(false)}
-                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                          className="w-4 h-4 z-10 absolute right-3 top-10 cursor-pointer"
                         />
                       ) : (
                         <EyeOff
                           onClick={() => setViewPassword(true)}
-                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                          className="w-4 h-4 z-10 absolute right-3 top-10 cursor-pointer"
                         />
+                      )}
+                      {errors.password && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {errors.password.message}
+                        </p>
                       )}
                     </div>
                     <div className="relative">
@@ -308,20 +371,23 @@ export default function SignupPage() {
                       <Input
                         type={viewPassword ? "text" : "password"}
                         placeholder="Confirm password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
+                        {...register("confirmPassword")}
                       />
                       {viewPassword ? (
                         <Eye
                           onClick={() => setViewPassword(false)}
-                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                          className="w-4 h-4 z-10 absolute right-3 top-10 cursor-pointer"
                         />
                       ) : (
                         <EyeOff
                           onClick={() => setViewPassword(true)}
-                          className="w-4 h-4 z-10 absolute right-3 top-10  cursor-pointer"
+                          className="w-4 h-4 z-10 absolute right-3 top-10 cursor-pointer"
                         />
+                      )}
+                      {errors.confirmPassword && (
+                        <p className="mt-1 text-sm text-destructive">
+                          {errors.confirmPassword.message}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -334,9 +400,8 @@ export default function SignupPage() {
                   <label className="flex items-start gap-3 text-sm text-foreground">
                     <input
                       type="checkbox"
-                      checked={acceptedTerms}
-                      onChange={(e) => setAcceptedTerms(e.target.checked)}
                       className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                      {...register("acceptedTermsAndConditions")}
                     />
                     <span>
                       By registering, you agree to our{" "}
@@ -349,6 +414,11 @@ export default function SignupPage() {
                       </Link>
                     </span>
                   </label>
+                  {errors.acceptedTermsAndConditions && (
+                    <p className="mt-1 text-sm text-destructive">
+                      {errors.acceptedTermsAndConditions.message}
+                    </p>
+                  )}
 
                   <Button
                     type="submit"
@@ -380,7 +450,9 @@ export default function SignupPage() {
                   </h1>
                   <p className="text-sm text-muted-foreground">
                     We sent a verification code to{" "}
-                    <span className="font-medium text-foreground">{email}</span>
+                    <span className="font-medium text-foreground">
+                      {currentEmail}
+                    </span>
                   </p>
                 </div>
 
@@ -438,26 +510,7 @@ export default function SignupPage() {
                       type="button"
                       variant="secondary"
                       disabled={isLoading}
-                      onClick={async () => {
-                        setError("");
-                        setInfo("");
-                        setIsLoading(true);
-                        try {
-                          await signupSendCode({
-                            firstName,
-                            lastName,
-                            email,
-                            role,
-                            password,
-                            acceptedTermsAndConditions: acceptedTerms,
-                          });
-                          setInfo(`A new code has been sent to ${email}.`);
-                        } catch (err: any) {
-                          setError(err?.message || "Unable to resend code");
-                        } finally {
-                          setIsLoading(false);
-                        }
-                      }}
+                      onClick={handleResendCode}
                       className="w-full"
                     >
                       Resend Code
@@ -493,7 +546,7 @@ export default function SignupPage() {
                     <p className="text-sm text-muted-foreground">
                       Your registration as a{" "}
                       <span className="font-medium capitalize text-foreground">
-                        {role.replace("_", " ")}
+                        {currentRole.replace("_", " ")}
                       </span>{" "}
                       has been submitted for approval.
                     </p>
@@ -555,7 +608,7 @@ export default function SignupPage() {
                     <p className="text-sm text-muted-foreground">
                       We've sent a verification email to{" "}
                       <span className="font-medium text-foreground">
-                        {email}
+                        {currentEmail}
                       </span>
                     </p>
                     <p className="text-sm text-muted-foreground mt-2">

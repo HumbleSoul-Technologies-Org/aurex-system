@@ -3,8 +3,14 @@
  * Handles all API calls to the backend auth endpoints
  */
 
+import { getErrorMessage } from "@/lib/utils";
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5454/api";
+
+function createApiError(data: unknown, fallback: string): Error {
+  return new Error(getErrorMessage(data, fallback));
+}
 
 export interface LoginRequest {
   email: string;
@@ -65,6 +71,10 @@ export interface AuthResponse {
       status: string;
       emailVerified: boolean;
       isActivated?: boolean;
+      trialStartAt?: string;
+      trialExpiryAt?: string;
+      trialDaysRemaining?: number | null;
+      trialExpired?: boolean;
       createdAt: string;
       settingsId?: string;
       propertyId?: string;
@@ -84,6 +94,10 @@ export interface User {
   status: string;
   emailVerified: boolean;
   isActivated?: boolean;
+  trialStartAt?: string;
+  trialExpiryAt?: string;
+  trialDaysRemaining?: number | null;
+  trialExpired?: boolean;
   createdAt: string;
   settingsId?: string;
   propertyId?: string;
@@ -116,7 +130,7 @@ export async function register(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Registration failed");
+    throw createApiError(data?.error || data, "Registration failed");
   }
 
   return data;
@@ -137,7 +151,7 @@ export async function login(payload: LoginRequest): Promise<AuthResponse> {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Login failed");
+    throw createApiError(data?.error || data, "Login failed");
   }
 
   return data;
@@ -157,8 +171,9 @@ export async function signupSendCode(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(
-      data.error?.message || "Failed to send signup verification code",
+    throw createApiError(
+      data?.error || data,
+      "Failed to send signup verification code",
     );
   }
 
@@ -179,7 +194,7 @@ export async function verifySignupCode(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to verify signup code");
+    throw createApiError(data?.error || data, "Failed to verify signup code");
   }
 
   return data;
@@ -202,7 +217,7 @@ export async function verifyEmail(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Email verification failed");
+    throw createApiError(data?.error || data, "Email verification failed");
   }
 
   return data;
@@ -226,7 +241,10 @@ export async function verifyProductKey(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Product key verification failed");
+    throw createApiError(
+      data?.error || data,
+      "Product key verification failed",
+    );
   }
 
   return data;
@@ -249,7 +267,7 @@ export async function getCurrentUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to fetch user");
+    throw createApiError(data?.error || data, "Failed to fetch user");
   }
 
   return data;
@@ -285,7 +303,7 @@ export async function updateProfile(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to update profile");
+    throw createApiError(data?.error || data, "Failed to update profile");
   }
 
   return data;
@@ -311,7 +329,7 @@ export async function changePassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to change password");
+    throw createApiError(data?.error || data, "Failed to change password");
   }
 
   return data;
@@ -334,7 +352,10 @@ export async function forgotPassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to request password reset");
+    throw createApiError(
+      data?.error || data,
+      "Failed to request password reset",
+    );
   }
 
   return data;
@@ -358,7 +379,7 @@ export async function resetPassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to reset password");
+    throw createApiError(data?.error || data, "Failed to reset password");
   }
 
   return data;
@@ -382,7 +403,7 @@ export async function verifyResetCode(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to verify code");
+    throw createApiError(data?.error || data, "Failed to verify code");
   }
 
   return data;
@@ -407,7 +428,7 @@ export async function setNewPassword(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to set new password");
+    throw createApiError(data?.error || data, "Failed to set new password");
   }
 
   return data;
@@ -444,7 +465,7 @@ export async function createAdminUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to create user");
+    throw createApiError(data?.error || data, "Failed to create user");
   }
 
   return data;
@@ -488,7 +509,7 @@ export async function listUsers(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to fetch users");
+    throw createApiError(data?.error || data, "Failed to fetch users");
   }
 
   return data;
@@ -521,7 +542,7 @@ export async function updateUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to update user");
+    throw createApiError(data?.error || data, "Failed to update user");
   }
 
   return data;
@@ -545,7 +566,7 @@ export async function deleteUser(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error?.message || "Failed to delete user");
+    throw createApiError(data?.error || data, "Failed to delete user");
   }
 
   return data;

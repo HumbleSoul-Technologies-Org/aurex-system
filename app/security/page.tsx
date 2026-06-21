@@ -17,9 +17,11 @@ import {
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useAuth } from "@/lib/auth-context";
 import { useAppData } from "@/lib/data-context";
+import { useToast } from "@/hooks/use-toast";
 import {
   createVisit,
   listVisits,
+  updateVisit,
   VisitRecord,
   VisitStatus,
 } from "@/lib/services/visits";
@@ -45,6 +47,7 @@ const visitStatuses: VisitStatus[] = [
 
 export default function SecurityPage() {
   const { user, isLoading, logout } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   const [visitorName, setVisitorName] = useState("");
   const [visitorPhone, setVisitorPhone] = useState("");
@@ -60,6 +63,7 @@ export default function SecurityPage() {
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<VisitStatus>("scheduled");
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentVisits, setRecentVisits] = useState<VisitRecord[]>([]);
@@ -261,10 +265,48 @@ export default function SecurityPage() {
 
       const response = await listVisits({ guardId: user.id, limit: 10 });
       setRecentVisits(response.data.visits || []);
+      toast({
+        title: "Visitor saved",
+        description: "The visit record was created successfully.",
+      });
     } catch (err: any) {
       setError(err?.message || "Failed to create visit record.");
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to create visit record.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVisitStateChange = async (
+    visitId: string,
+    nextStatus: VisitStatus,
+  ) => {
+    setError(null);
+    setSuccess(false);
+
+    try {
+      setActionLoading(visitId);
+      await updateVisit(visitId, { status: nextStatus });
+      const response = await listVisits({ guardId: user?.id || "", limit: 10 });
+      setRecentVisits(response.data.visits || []);
+      setSuccess(true);
+      toast({
+        title: "Status updated",
+        description: "The visit status was updated successfully.",
+      });
+    } catch (err: any) {
+      setError(err?.message || "Failed to update visit status.");
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to update visit status.",
+        variant: "destructive",
+      });
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -516,33 +558,89 @@ export default function SecurityPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {recentVisits.map((visit) => (
-                  <div
-                    key={visit.id}
-                    className="rounded-lg border border-border p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="font-medium text-foreground">
-                          {visit.visitorName}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {visit.propertyName ||
-                            visit.hostTenantName ||
-                            "Unknown location"}
-                        </p>
+                {recentVisits.map((visit) => {
+                  const nextStatus =
+                    visit.status === "scheduled"
+                      ? "checked_in"
+                      : visit.status === "checked_in"
+                        ? "checked_out"
+                        : undefined;
+
+                  return (
+                    <div
+                      key={visit.id}
+                      className="rounded-lg border border-border p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">
+                            {visit.visitorName}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {visit.propertyName ||
+                              visit.hostTenantName ||
+                              "Unknown location"}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {visit.purpose || "No purpose provided"}
+                          </p>
+                        </div>
+
+                        <div className="text-right text-sm text-muted-foreground">
+                          <p>
+                            {visit.visitDate} {visit.visitTime}
+                          </p>
+                          <p className="capitalize">
+                            {visit.status.replace(/_/g, " ")}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right text-sm text-muted-foreground">
-                        <p>
-                          {visit.visitDate} {visit.visitTime}
-                        </p>
-                        <p className="capitalize">
-                          {visit.status.replace(/_/g, " ")}
-                        </p>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <div className="rounded-full bg-muted px-3 py-1 text-xs uppercase text-muted-foreground">
+                          Guard: {visit.securityGuardName}
+                        </div>
+                        {visit.visitorPhone && (
+                          <div className="rounded-full bg-muted px-3 py-1 text-xs uppercase text-muted-foreground">
+                            Phone: {visit.visitorPhone}
+                          </div>
+                        )}
+                        <div className="rounded-full bg-muted px-3 py-1 text-xs uppercase text-muted-foreground">
+                          {visit.createdAt
+                            ? `Created ${new Date(visit.createdAt).toLocaleString()}`
+                            : ""}
+                        </div>
                       </div>
+
+                      {nextStatus ? (
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            disabled={actionLoading === visit.id}
+                            onClick={() =>
+                              handleVisitStateChange(visit.id, nextStatus)
+                            }
+                          >
+                            {actionLoading === visit.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Updating...
+                              </span>
+                            ) : visit.status === "scheduled" ? (
+                              "Check In"
+                            ) : (
+                              "Check Out"
+                            )}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-4 text-xs text-muted-foreground">
+                          No further status action available.
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>

@@ -51,6 +51,7 @@ import {
   User,
   Trash2,
   MessageCirclePlus,
+  X,
 } from "lucide-react";
 
 interface AnnouncementTemplate {
@@ -75,6 +76,7 @@ export default function CommunicationsPage() {
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
     null,
   );
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [isSendingAnnouncement, setIsSendingAnnouncement] = useState(false);
   const [announcementTemplate, setAnnouncementTemplate] =
@@ -238,7 +240,9 @@ export default function CommunicationsPage() {
   }, [selectedPropertyId]);
 
   const getProperty = (propertyId?: string | PropertyReference) => {
-    return propertyId?.tenants?.length || 0;
+    if (!propertyId) return 0;
+    if (typeof propertyId === "string") return 0;
+    return propertyId.tenants?.length || 0;
   };
 
   const formatDateTime = (timestamp: string) => {
@@ -559,6 +563,85 @@ export default function CommunicationsPage() {
     );
   }, [allMessages, selectedMessageId]);
 
+  const messageDetailsPanel = selectedMessage ? (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-muted/50 p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          From
+        </p>
+        <p className="font-semibold text-sm">
+          {getUserRefId(selectedMessage.fromUserId) === user?.id
+            ? "You"
+            : getFromUserName(selectedMessage.fromUserId)}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {formatDateTime(selectedMessage.sentAt)}
+        </p>
+      </div>
+      <div className="rounded-xl border border-border p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          Recipients
+        </p>
+        <p className="text-sm">
+          {selectedMessage.toUserId
+            ? getUserRefId(selectedMessage.toUserId) === user?.id
+              ? "You"
+              : getToUserName(selectedMessage.toUserId)
+            : "No recipient"}
+        </p>
+      </div>
+      <div className="rounded-xl border border-border p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          Message
+        </p>
+        <p className="text-sm whitespace-pre-wrap">{selectedMessage.message}</p>
+      </div>
+      <div className="rounded-xl border border-border p-4">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+          Seen by
+        </p>
+        <p className="text-sm">
+          {selectedMessage.seenBy.length > 0
+            ? selectedMessage.seenBy
+                .map((seenRef) =>
+                  getUserRefId(seenRef) === user?.id
+                    ? "You"
+                    : getToUserName(seenRef),
+                )
+                .join(", ")
+            : "No one yet"}
+        </p>
+      </div>
+      {selectedMessage.replies && selectedMessage.replies.length > 0 && (
+        <div className="rounded-xl border border-border p-4">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
+            Replies
+          </p>
+          <div className="space-y-3">
+            {selectedMessage.replies.map((reply) => (
+              <div key={reply._id || reply.id} className="space-y-1">
+                <div className="font-semibold text-sm">
+                  {getFromUserName(reply.fromUserId)}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(reply.sentAt)}
+                </p>
+                <p className="text-sm whitespace-pre-wrap">{reply.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div className="rounded-xl border border-dashed border-border h-full p-6 flex flex-col items-center justify-center text-center text-muted-foreground">
+      <p className="font-semibold mb-2">Select a message</p>
+      <p className="text-sm">
+        Details about the selected message will appear here.
+      </p>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <SendAnnouncementForm
@@ -738,11 +821,11 @@ export default function CommunicationsPage() {
 
             {/* Conversations Tab */}
             <TabsContent value="conversations" className="p-0">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_520px_360px] h-full">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(520px,1fr)_320px] h-full">
                 {/* Property List */}
-                <div className="md:border-r border-border h-full">
-                  <div className="p-4 border-b border-border flex items-center justify-between gap-2">
-                    <div className="relative flex-1">
+                <div className="border border-border rounded-xl overflow-hidden bg-background h-full">
+                  <div className="p-4 border-b border-border">
+                    <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
                         placeholder="Search properties..."
@@ -751,7 +834,7 @@ export default function CommunicationsPage() {
                     </div>
                   </div>
 
-                  <div className="overflow-y-auto space-y-2 p-2 h-full">
+                  <div className="overflow-y-auto space-y-2 p-2 h-[420px] xl:h-[calc(100%-72px)]">
                     {loading ? (
                       <p className="text-xs text-muted-foreground text-center p-4">
                         Loading...
@@ -801,10 +884,8 @@ export default function CommunicationsPage() {
                           )}
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                          Centralize tenant communication and property-specific
-                          workflows with a unified messaging hub that improves
-                          response times, tracks issues, and keeps every
-                          conversation aligned to the right property.
+                          All messages of the conversation for this property.
+                          Select a message to view details and replies.
                         </p>
                       </div>
                       <div>
@@ -872,9 +953,10 @@ export default function CommunicationsPage() {
                                   ? "bg-primary/10 text-white"
                                   : "hover:bg-muted/20"
                               }`}
-                              onClick={() =>
-                                setSelectedMessageId(msg._id || msg.id || null)
-                              }
+                              onClick={() => {
+                                setSelectedMessageId(msg._id || msg.id || null);
+                                setIsDetailsDialogOpen(true);
+                              }}
                             >
                               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                 from:{" "}
@@ -908,106 +990,33 @@ export default function CommunicationsPage() {
                     <MessageSquare className="w-12 h-12 opacity-50" />
                   </div>
                 )}
-                <div className="md:col-span-2 xl:col-span-1 border border-border rounded-xl bg-background p-4 min-h-[420px]">
-                  <div className="mb-4">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      Message details
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Select a message to inspect its full details, recipients,
-                      and reply history.
-                    </p>
-                  </div>
-                  {selectedMessage ? (
-                    <div className="space-y-4">
-                      <div className="rounded-xl border border-border bg-muted/50 p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                          From
-                        </p>
-                        <p className="font-semibold text-sm">
-                          {getUserRefId(selectedMessage.fromUserId) === user?.id
-                            ? "You"
-                            : getFromUserName(selectedMessage.fromUserId)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatDateTime(selectedMessage.sentAt)}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-border p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                          Recipients
-                        </p>
-                        <p className="text-sm">
-                          {selectedMessage.toUserId
-                            ? getUserRefId(selectedMessage.toUserId) ===
-                              user?.id
-                              ? "You"
-                              : getToUserName(selectedMessage.toUserId)
-                            : "No recipient"}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-border p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                          Message
-                        </p>
-                        <p className="text-sm whitespace-pre-wrap">
-                          {selectedMessage.message}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-border p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                          Seen by
-                        </p>
-                        <p className="text-sm">
-                          {selectedMessage.seenBy.length > 0
-                            ? selectedMessage.seenBy
-                                .map((seenRef) =>
-                                  getUserRefId(seenRef) === user?.id
-                                    ? "You"
-                                    : getToUserName(seenRef),
-                                )
-                                .join(", ")
-                            : "No one yet"}
-                        </p>
-                      </div>
-                      {selectedMessage.replies &&
-                        selectedMessage.replies.length > 0 && (
-                          <div className="rounded-xl border border-border p-4">
-                            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                              Replies
-                            </p>
-                            <div className="space-y-3">
-                              {selectedMessage.replies.map((reply) => (
-                                <div
-                                  key={reply._id || reply.id}
-                                  className="space-y-1"
-                                >
-                                  <div className="font-semibold text-sm">
-                                    {getFromUserName(reply.fromUserId)}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {formatDateTime(reply.sentAt)}
-                                  </p>
-                                  <p className="text-sm whitespace-pre-wrap">
-                                    {reply.message}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border h-full p-6 flex flex-col items-center justify-center text-center text-muted-foreground">
-                      <p className="font-semibold mb-2">Select a message</p>
-                      <p className="text-sm">
-                        Details about the selected message will appear here.
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
             </TabsContent>
+
+            <Dialog
+              open={isDetailsDialogOpen && !!selectedMessage}
+              onOpenChange={setIsDetailsDialogOpen}
+            >
+              <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Message details</DialogTitle>
+                  <DialogDescription>
+                    Review the selected message details and reply history.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {selectedMessage && messageDetailsPanel}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsDetailsDialogOpen(false)}
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {/* Announcements Tab */}
             <TabsContent value="announcements" className="p-6">

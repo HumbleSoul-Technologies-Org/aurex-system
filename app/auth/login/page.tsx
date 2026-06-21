@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/utils";
 import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function LoginPage() {
@@ -26,7 +27,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const newUser = await login(email, password);
+      const newUser = await login(email.trim(), password.trim());
       const role = newUser?.role?.toString().trim().toLowerCase();
 
       // Small delay to ensure storage/cookies settle and avoid navigation race
@@ -50,8 +51,8 @@ export default function LoginPage() {
       } else {
         setError("Unsupported account role. Please contact support.");
       }
-    } catch (err: any) {
-      setError(err?.message || "Invalid email or password");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Invalid email or password"));
     } finally {
       setIsLoading(false);
     }

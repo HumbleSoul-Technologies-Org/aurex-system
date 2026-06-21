@@ -28,6 +28,7 @@ export interface VisitRecord {
   purpose?: string;
   notes?: string;
   status: VisitStatus;
+  isArchived?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,10 +49,19 @@ export interface CreateVisitPayload {
   status: VisitStatus;
 }
 
+export interface UpdateVisitPayload {
+  status?: VisitStatus;
+  visitorPhone?: string;
+  purpose?: string;
+  notes?: string;
+  isArchived?: boolean;
+}
+
 export interface ListVisitsOptions {
   guardId?: string;
   search?: string;
   status?: string;
+  isArchived?: boolean;
   page?: number;
   limit?: number;
 }
@@ -103,13 +113,14 @@ export async function listVisits(
     if (options?.guardId) params.append("guardId", options.guardId);
     if (options?.search) params.append("search", options.search);
     if (options?.status) params.append("status", options.status);
+    if (typeof options?.isArchived !== "undefined") {
+      params.append("isArchived", String(options.isArchived));
+    }
     if (options?.page) params.append("page", String(options.page));
     if (options?.limit) params.append("limit", String(options.limit));
 
     const token = getAuthToken();
-    const endpoint = options?.guardId
-      ? `${API_PREFIX}/visits?${params.toString()}`
-      : `${API_PREFIX}/admin/visits?${params.toString()}`;
+    const endpoint = `${API_PREFIX}/visits?${params.toString()}`;
 
     const response = await fetch(endpoint, {
       method: "GET",
@@ -127,6 +138,58 @@ export async function listVisits(
     return await response.json();
   } catch (error) {
     console.error("Error listing visits:", error);
+    throw error;
+  }
+}
+
+export async function updateVisit(
+  id: string,
+  payload: UpdateVisitPayload,
+): Promise<{ success: boolean; data?: VisitRecord; error?: string }> {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_PREFIX}/visits/${id}/update`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to update visit");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error updating visit:", error);
+    throw error;
+  }
+}
+
+export async function deleteVisit(
+  id: string,
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const token = getAuthToken();
+    const response = await fetch(`${API_PREFIX}/admin/visits/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to delete visit");
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error deleting visit:", error);
     throw error;
   }
 }
